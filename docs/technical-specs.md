@@ -60,12 +60,12 @@ The major features of Project Fiji are:
 ### 2.5 Design and Implementation Constraints
 *   **Technology Stack:**
     *   Backend: Python, FastAPI
-    *   Frontend: Next.js, Bulma CSS
+    *   Frontend: Next.js, Tailwind UI
     *   Database: Google Firestore
     *   Authentication: Firebase Authentication
 *   Deployment: Google Cloud Run.
 *   CI/CD: Google Cloud Build.
-*   Separate Git repositories for backend (`fiji-backend`) and frontend (`fiji-frontend`).
+*   Repository Structure: monorepo (one repository, separate directories under the fiji repo) for backend and frontend.
 
 ## 3. System Features (Functional Requirements)
 
@@ -219,7 +219,7 @@ This section details the functional requirements of Project Fiji, grouped by maj
 
 ### 4.1 User Interfaces
 *   The system shall provide a responsive web-based user interface accessible via modern web browsers.
-*   The UI shall be developed using Next.js and styled with Bulma CSS.
+*   The UI shall be developed using Next.js and styled with Tailwind UI.
 *   The UI shall be intuitive and facilitate easy navigation and interaction for all user classes.
 *   Key UI components include:
     *   Login and Registration pages.
@@ -270,10 +270,10 @@ This section details the functional requirements of Project Fiji, grouped by maj
 
 ### 5.5 Maintainability Requirements
 *   The codebase shall be well-documented with inline comments and clear commit messages.
-*   Separate repositories for frontend and backend will facilitate independent development and maintenance.
+*   A monorepo structure will be used, with separate directories for frontend and backend under the main fiji repository, to facilitate cohesive development and maintenance.
 *   Automated CI/CD pipelines (including linting and testing) shall be used to ensure code quality and streamline deployments.
 *   Configuration should be managed through environment variables.
-*   Each repository should include a `README.md` with setup instructions for local development and an overview of the service.
+*   The monorepo should include a `README.md` with setup instructions for local development and an overview of the project, with specific READMEs in backend and frontend directories as needed.
 
 ## 6. Data Model
 
@@ -372,7 +372,7 @@ The system will utilize Google Firestore for data persistence. Key collections a
 
 ### 7.2 CI/CD
 *   Continuous Integration and Continuous Deployment (CI/CD) will be managed using Google Cloud Build.
-*   Separate `cloudbuild.yaml` configuration files will be maintained for the `fiji-backend` and `fiji-frontend` repositories.
+*   A `cloudbuild.yaml` configuration file will be maintained in the monorepo, potentially with triggers or configurations for backend and frontend specific build steps.
 *   CI/CD pipelines will include steps for:
     *   Linting.
     *   Automated testing.

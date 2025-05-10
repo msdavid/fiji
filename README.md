@@ -17,8 +17,20 @@ For detailed information about the project, please refer to the following docume
 ## Technology Stack Overview
 
 *   **Backend:** Python, FastAPI
-*   **Frontend:** Next.js, Bulma CSS
+*   **Frontend:** Next.js, Tailwind UI
 *   **Database:** Google Firestore
 *   **Authentication:** Firebase Authentication
 *   **Deployment:** Google Cloud Run (Dockerized applications)
 *   **CI/CD:** Google Cloud Build
+*   **Repository Structure:** Monorepo (one repository, separate directories for backend and frontend under the fiji repo)
+
+## Project Structure
+
+This project is organized as a monorepo with the following key directories:
+
+*   `backend/`: Contains the Python FastAPI backend application.
+*   `frontend/`: Contains the Next.js frontend application.
+*   `docs/`: Contains project documentation, including functional and technical specifications.
+*   `.Q/`: Contains internal project management and LLM-related documents.
+
+Refer to the `README.md` files within the `backend/` and `frontend/` directories for specific setup and development instructions for each service.
