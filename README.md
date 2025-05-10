@@ -31,6 +31,5 @@ This project is organized as a monorepo with the following key directories:
 *   `backend/`: Contains the Python FastAPI backend application.
 *   `frontend/`: Contains the Next.js frontend application.
 *   `docs/`: Contains project documentation, including functional and technical specifications.
-*   `.Q/`: Contains internal project management and LLM-related documents.
 
 Refer to the `README.md` files within the `backend/` and `frontend/` directories for specific setup and development instructions for each service.
