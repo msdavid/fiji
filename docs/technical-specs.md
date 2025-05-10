@@ -72,148 +72,148 @@ The major features of Project Fiji are:
 This section details the functional requirements of Project Fiji, grouped by major feature area.
 
 ### 3.1 User Management and Authentication
-    *   **3.1.1 User Registration:**
-        *   Users shall register for the system using an email-based invitation token.
-        *   The registration process shall require the user to provide their first name, last name, and set a password.
-        *   Upon successful registration via Firebase Authentication, a corresponding user profile shall be created in the system's database, linking to the Firebase UID.
-        *   Roles specified in the invitation shall be assigned to the user upon registration.
-    *   **3.1.2 User Login:**
-        *   Registered users shall be able to log in using their email and password via Firebase Authentication.
-        *   Upon successful login, the system shall grant access based on the user's assigned roles and privileges.
-    *   **3.1.3 User Profile Management:**
-        *   Authenticated users shall be able to view their own profile information.
-        *   Authenticated users shall be able to update their profile information, including first name, last name, phone number, skills, qualifications, availability, and preferences.
-    *   **3.1.4 Administrative User Management:**
-        *   Users with `users:create` privilege (typically Sysadmin) shall be able to create new user accounts directly.
-        *   Users with `users:view` privilege shall be able to list and view profiles of other users.
-        *   Users with `users:edit` privilege shall be able to update profiles of other users.
-        *   Users with `users:delete` privilege shall be able to delete user accounts.
-    *   **3.1.5 Firebase Authentication Integration:**
-        *   The system shall use Firebase Admin SDK on the backend to verify Firebase ID tokens for authenticating API requests.
-        *   The frontend shall use Firebase SDK for user sign-up and sign-in operations.
+*   **3.1.1 User Registration:**
+    *   Users shall register for the system using an email-based invitation token.
+    *   The registration process shall require the user to provide their first name, last name, and set a password.
+    *   Upon successful registration via Firebase Authentication, a corresponding user profile shall be created in the system's database, linking to the Firebase UID.
+    *   Roles specified in the invitation shall be assigned to the user upon registration.
+*   **3.1.2 User Login:**
+    *   Registered users shall be able to log in using their email and password via Firebase Authentication.
+    *   Upon successful login, the system shall grant access based on the user's assigned roles and privileges.
+*   **3.1.3 User Profile Management:**
+    *   Authenticated users shall be able to view their own profile information.
+    *   Authenticated users shall be able to update their profile information, including first name, last name, phone number, skills, qualifications, availability, and preferences.
+*   **3.1.4 Administrative User Management:**
+    *   Users with `users:create` privilege (typically Sysadmin) shall be able to create new user accounts directly.
+    *   Users with `users:view` privilege shall be able to list and view profiles of other users.
+    *   Users with `users:edit` privilege shall be able to update profiles of other users.
+    *   Users with `users:delete` privilege shall be able to delete user accounts.
+*   **3.1.5 Firebase Authentication Integration:**
+    *   The system shall use Firebase Admin SDK on the backend to verify Firebase ID tokens for authenticating API requests.
+    *   The frontend shall use Firebase SDK for user sign-up and sign-in operations.
 
 ### 3.2 Role-Based Access Control (RBAC)
-    *   **3.2.1 Role Definition:**
-        *   The system shall support a configurable set of user roles.
-        *   Each role shall have a name, description, and a defined set of privileges.
-        *   A `sysadmin` role with all privileges shall exist as a system role.
-    *   **3.2.2 Role Management (Sysadmin):**
-        *   Users with `sysadmin` role (or specific `roles` privileges like `roles:create`, `roles:view`, `roles:edit`, `roles:delete`) shall be able to perform CRUD operations on roles. System roles like `sysadmin` may have restrictions on modification or deletion.
-    *   **3.2.3 Privilege System:**
-        *   Privileges shall be defined for various resources (e.g., `events`, `users`, `roles`) and actions (e.g., `create`, `view`, `edit`, `delete`).
-        *   The backend shall consolidate privileges from all roles assigned to a user. The `sysadmin` role implies all privileges.
-    *   **3.2.4 Access Control Enforcement:**
-        *   Backend API endpoints shall be protected, requiring specific privileges for access.
-        *   Frontend UI elements (e.g., buttons, menu items) shall be conditionally rendered or disabled based on the authenticated user's privileges.
+*   **3.2.1 Role Definition:**
+    *   The system shall support a configurable set of user roles.
+    *   Each role shall have a name, description, and a defined set of privileges.
+    *   A `sysadmin` role with all privileges shall exist as a system role.
+*   **3.2.2 Role Management (Sysadmin):**
+    *   Users with `sysadmin` role (or specific `roles` privileges like `roles:create`, `roles:view`, `roles:edit`, `roles:delete`) shall be able to perform CRUD operations on roles. System roles like `sysadmin` may have restrictions on modification or deletion.
+*   **3.2.3 Privilege System:**
+    *   Privileges shall be defined for various resources (e.g., `events`, `users`, `roles`) and actions (e.g., `create`, `view`, `edit`, `delete`).
+    *   The backend shall consolidate privileges from all roles assigned to a user. The `sysadmin` role implies all privileges.
+*   **3.2.4 Access Control Enforcement:**
+    *   Backend API endpoints shall be protected, requiring specific privileges for access.
+    *   Frontend UI elements (e.g., buttons, menu items) shall be conditionally rendered or disabled based on the authenticated user's privileges.
 
 ### 3.3 Registration Invitations
-    *   **3.3.1 Invitation Creation:**
-        *   Users with `registrationInvitations:create` privilege (typically Sysadmin) shall be able to create registration invitations.
-        *   An invitation shall specify the invitee's email and the role(s) to be assigned upon successful registration.
-        *   The system shall generate a unique token for each invitation.
-    *   **3.3.2 Invitation Management:**
-        *   Users with `registrationInvitations:view` privilege shall be able to view existing invitations.
-        *   Users with `registrationInvitations:delete` privilege shall be able to delete pending invitations.
-        *   Invitations shall have a status (e.g., pending, accepted, expired) and an expiration time.
+*   **3.3.1 Invitation Creation:**
+    *   Users with `registrationInvitations:create` privilege (typically Sysadmin) shall be able to create registration invitations.
+    *   An invitation shall specify the invitee's email and the role(s) to be assigned upon successful registration.
+    *   The system shall generate a unique token for each invitation.
+*   **3.3.2 Invitation Management:**
+    *   Users with `registrationInvitations:view` privilege shall be able to view existing invitations.
+    *   Users with `registrationInvitations:delete` privilege shall be able to delete pending invitations.
+    *   Invitations shall have a status (e.g., pending, accepted, expired) and an expiration time.
 
 ### 3.4 Event Management
-    *   **3.4.1 Event Creation:**
-        *   Authorized users (with `events:create` privilege) shall be able to create new events.
-        *   Event creation shall include details such as event name, type, purpose, description, date/time, location, and number of volunteers required.
-    *   **3.4.2 Event Viewing:**
-        *   Authorized users (with `events:view` privilege, or public if configured) shall be able to list all events and view details of specific events.
-        *   Event listings may support filtering and pagination.
-    *   **3.4.3 Event Updates:**
-        *   Authorized users (with `events:edit` privilege) shall be able to update the details of existing events.
-    *   **3.4.4 Event Deletion:**
-        *   Authorized users (with `events:delete` privilege) shall be able to delete events.
+*   **3.4.1 Event Creation:**
+    *   Authorized users (with `events:create` privilege) shall be able to create new events.
+    *   Event creation shall include details such as event name, type, purpose, description, date/time, location, and number of volunteers required.
+*   **3.4.2 Event Viewing:**
+    *   Authorized users (with `events:view` privilege, or public if configured) shall be able to list all events and view details of specific events.
+    *   Event listings may support filtering and pagination.
+*   **3.4.3 Event Updates:**
+    *   Authorized users (with `events:edit` privilege) shall be able to update the details of existing events.
+*   **3.4.4 Event Deletion:**
+    *   Authorized users (with `events:delete` privilege) shall be able to delete events.
 
 ### 3.5 Event Participation and Assignments
-    *   **3.5.1 User Event Sign-up:**
-        *   Authenticated users shall be able to sign up for available events.
-        *   The system shall track event sign-ups, creating an assignment record.
-    *   **3.5.2 User Event Withdrawal:**
-        *   Users who have signed up for an event shall be able to withdraw their participation.
-    *   **3.5.3 Administrative Volunteer Assignment:**
-        *   Authorized users (with `eventAssignments:assign` privilege) shall be able to manually assign volunteers to events.
-    *   **3.5.4 Assignment Revocation:**
-        *   Authorized users (with `eventAssignments:revoke` privilege) shall be able to revoke a volunteer's assignment from an event.
-    *   **3.5.5 Assignment Tracking:**
-        *   The system shall track the status of assignments (e.g., pending_signup, confirmed, attended, no_show).
-        *   The system may track hours contributed and performance notes for assignments.
-    *   **3.5.6 Viewing Assignments:**
-        *   Users shall be able to view events they are assigned to.
-        *   Authorized users shall be able to view all assignments for a specific event.
+*   **3.5.1 User Event Sign-up:**
+    *   Authenticated users shall be able to sign up for available events.
+    *   The system shall track event sign-ups, creating an assignment record.
+*   **3.5.2 User Event Withdrawal:**
+    *   Users who have signed up for an event shall be able to withdraw their participation.
+*   **3.5.3 Administrative Volunteer Assignment:**
+    *   Authorized users (with `eventAssignments:assign` privilege) shall be able to manually assign volunteers to events.
+*   **3.5.4 Assignment Revocation:**
+    *   Authorized users (with `eventAssignments:revoke` privilege) shall be able to revoke a volunteer's assignment from an event.
+*   **3.5.5 Assignment Tracking:**
+    *   The system shall track the status of assignments (e.g., pending_signup, confirmed, attended, no_show).
+    *   The system may track hours contributed and performance notes for assignments.
+*   **3.5.6 Viewing Assignments:**
+    *   Users shall be able to view events they are assigned to.
+    *   Authorized users shall be able to view all assignments for a specific event.
 
 ### 3.6 Working Group Management
-    *   **3.6.1 Working Group Creation:**
-        *   Authorized users (with `workingGroups:create` privilege) shall be able to create new working groups.
-        *   Working groups shall have a name, description, and status.
-    *   **3.6.2 Working Group Viewing:**
-        *   Authorized users (with `workingGroups:view` privilege) shall be able to list working groups and view their details.
-    *   **3.6.3 Working Group Updates:**
-        *   Authorized users (with `workingGroups:edit` privilege) shall be able to update existing working groups.
-    *   **3.6.4 Working Group Deletion:**
-        *   Authorized users (with `workingGroups:delete` privilege) shall be able to delete working groups.
-    *   **3.6.5 Member Assignment:**
-        *   Authorized users (with `workingGroupAssignments:assign` privilege) shall be able to assign users to working groups.
-    *   **3.6.6 Member Revocation:**
-        *   Authorized users (with `workingGroupAssignments:revoke` privilege) shall be able to remove users from working groups.
-    *   **3.6.7 Viewing Memberships:**
-        *   Users shall be able to view the working groups they are members of.
-        *   Authorized users shall be able to view the list of members for a specific working group.
+*   **3.6.1 Working Group Creation:**
+    *   Authorized users (with `workingGroups:create` privilege) shall be able to create new working groups.
+    *   Working groups shall have a name, description, and status.
+*   **3.6.2 Working Group Viewing:**
+    *   Authorized users (with `workingGroups:view` privilege) shall be able to list working groups and view their details.
+*   **3.6.3 Working Group Updates:**
+    *   Authorized users (with `workingGroups:edit` privilege) shall be able to update existing working groups.
+*   **3.6.4 Working Group Deletion:**
+    *   Authorized users (with `workingGroups:delete` privilege) shall be able to delete working groups.
+*   **3.6.5 Member Assignment:**
+    *   Authorized users (with `workingGroupAssignments:assign` privilege) shall be able to assign users to working groups.
+*   **3.6.6 Member Revocation:**
+    *   Authorized users (with `workingGroupAssignments:revoke` privilege) shall be able to remove users from working groups.
+*   **3.6.7 Viewing Memberships:**
+    *   Users shall be able to view the working groups they are members of.
+    *   Authorized users shall be able to view the list of members for a specific working group.
 
 ### 3.7 Availability Management
-    *   **3.7.1 User Availability Specification:**
-        *   Users shall be able to specify their general availability (e.g., text description).
-        *   Users shall be able to specify their availability for specific dates or date ranges.
-        *   This information shall be updatable via their user profile.
+*   **3.7.1 User Availability Specification:**
+    *   Users shall be able to specify their general availability (e.g., text description).
+    *   Users shall be able to specify their availability for specific dates or date ranges.
+    *   This information shall be updatable via their user profile.
 
 ### 3.8 Donation Tracking
-    *   **3.8.1 Donation Recording:**
-        *   Authorized users (with `donations:create` privilege) shall be able to record new donations.
-        *   Donation records shall include details such as donor information (user or external name), donation type, amount (for monetary), description (for in-kind), quantity/hours (for time), donation date, and who recorded it.
-    *   **3.8.2 Donation Viewing:**
-        *   Authorized users (with `donations:view` privilege) shall be able to list donations and view details of specific donations.
-    *   **3.8.3 Donation Updates:**
-        *   Authorized users (with `donations:edit` privilege) shall be able to update existing donation records.
-    *   **3.8.4 Donation Deletion:**
-        *   Authorized users (with `donations:delete` privilege) shall be able to delete donation records.
-    *   **3.8.5 User-Specific Donation Viewing:**
-        *   Authorized users shall be able to list donations made by a specific registered user.
+*   **3.8.1 Donation Recording:**
+    *   Authorized users (with `donations:create` privilege) shall be able to record new donations.
+    *   Donation records shall include details such as donor information (user or external name), donation type, amount (for monetary), description (for in-kind), quantity/hours (for time), donation date, and who recorded it.
+*   **3.8.2 Donation Viewing:**
+    *   Authorized users (with `donations:view` privilege) shall be able to list donations and view details of specific donations.
+*   **3.8.3 Donation Updates:**
+    *   Authorized users (with `donations:edit` privilege) shall be able to update existing donation records.
+*   **3.8.4 Donation Deletion:**
+    *   Authorized users (with `donations:delete` privilege) shall be able to delete donation records.
+*   **3.8.5 User-Specific Donation Viewing:**
+    *   Authorized users shall be able to list donations made by a specific registered user.
 
 ### 3.9 Reporting
-    *   **3.9.1 Volunteer Hours Report:**
-        *   The system shall provide data for generating reports on volunteer hours, aggregated or by individual.
-        *   This requires `reports:generate` privilege.
-    *   **3.9.2 Event Participation Report:**
-        *   The system shall provide data for generating reports on event attendance and completion status.
-        *   This requires `reports:generate` privilege.
-    *   **3.9.3 Donation Summaries Report:**
-        *   The system shall provide data for generating reports on donation totals and trends.
-        *   This requires `reports:generate` privilege.
-    *   **3.9.4 Report Presentation:**
-        *   The frontend shall provide a section for authorized users to view these reports, typically in tabular format.
-        *   The system may offer an option to export report data (e.g., as CSV).
+*   **3.9.1 Volunteer Hours Report:**
+    *   The system shall provide data for generating reports on volunteer hours, aggregated or by individual.
+    *   This requires `reports:generate` privilege.
+*   **3.9.2 Event Participation Report:**
+    *   The system shall provide data for generating reports on event attendance and completion status.
+    *   This requires `reports:generate` privilege.
+*   **3.9.3 Donation Summaries Report:**
+    *   The system shall provide data for generating reports on donation totals and trends.
+    *   This requires `reports:generate` privilege.
+*   **3.9.4 Report Presentation:**
+    *   The frontend shall provide a section for authorized users to view these reports, typically in tabular format.
+    *   The system may offer an option to export report data (e.g., as CSV).
 
 ### 3.10 Notifications
-    *   **3.10.1 Email Notification Capability:**
-        *   The backend system shall be capable of sending emails for key events.
-    *   **3.10.2 Notification Triggers:**
-        *   The system shall send email notifications for:
-            *   Registration invitations.
-            *   Event assignment confirmation.
-            *   Event reminders (e.g., 24 hours before event start).
-            *   Schedule change alerts.
-    *   **3.10.3 In-App Notifications:**
-        *   The frontend may display in-app notifications or alerts for important updates (e.g., new assignments, upcoming events) on the user's dashboard.
+*   **3.10.1 Email Notification Capability:**
+    *   The backend system shall be capable of sending emails for key events.
+*   **3.10.2 Notification Triggers:**
+    *   The system shall send email notifications for:
+        *   Registration invitations.
+        *   Event assignment confirmation.
+        *   Event reminders (e.g., 24 hours before event start).
+        *   Schedule change alerts.
+*   **3.10.3 In-App Notifications:**
+    *   The frontend may display in-app notifications or alerts for important updates (e.g., new assignments, upcoming events) on the user's dashboard.
 
 ### 3.11 User Dashboard
-    *   **3.11.1 Personalized Information:**
-        *   Authenticated users shall have a dashboard displaying personalized information relevant to their role and activities.
-    *   **3.11.2 Key Information Display:**
-        *   The dashboard shall provide quick access to upcoming events, current assignments, and recent notifications.
-        *   It may display basic statistics related to the user's contributions (e.g., volunteer hours).
+*   **3.11.1 Personalized Information:**
+    *   Authenticated users shall have a dashboard displaying personalized information relevant to their role and activities.
+*   **3.11.2 Key Information Display:**
+    *   The dashboard shall provide quick access to upcoming events, current assignments, and recent notifications.
+    *   It may display basic statistics related to the user's contributions (e.g., volunteer hours).
 
 ## 4. External Interface Requirements
 
