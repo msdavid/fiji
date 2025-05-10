@@ -123,5 +123,7 @@ Desktop.ini
 *.bak
 *.tmp
 *.temp
+
 # Q Agent internal files
 .Q/
+.Q
