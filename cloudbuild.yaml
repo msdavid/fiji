@@ -1,0 +1,53 @@
+# /home/mauro/projects/fiji/cloudbuild.yaml
+# Initial Cloud Build configuration for the backend service.
+
+substitutions:
+  _REGION: asia-southeast1
+  _PROJECT_ID: fijian
+  _BACKEND_IMAGE_REPO: fiji-backend-images
+  _BACKEND_SERVICE_NAME: backend-service # Can be the same as the image name or different
+
+steps:
+  # 1. Build the Docker image for the backend service
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'build'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_BACKEND_IMAGE_REPO}/${_BACKEND_SERVICE_NAME}:$COMMIT_SHA'
+      - '-t'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_BACKEND_IMAGE_REPO}/${_BACKEND_SERVICE_NAME}:latest'
+      - './backend' # Path to the directory containing the Dockerfile for the backend
+    id: 'Build Backend Docker Image'
+
+  # 2. Push the Docker image to Google Artifact Registry
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_BACKEND_IMAGE_REPO}/${_BACKEND_SERVICE_NAME}:$COMMIT_SHA'
+    id: 'Push Backend Image (Commit SHA)'
+
+  - name: 'gcr.io/cloud-builders/docker'
+    args:
+      - 'push'
+      - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_BACKEND_IMAGE_REPO}/${_BACKEND_SERVICE_NAME}:latest'
+    id: 'Push Backend Image (Latest)'
+
+# Specify the images to be pushed to Artifact Registry
+images:
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_BACKEND_IMAGE_REPO}/${_BACKEND_SERVICE_NAME}:$COMMIT_SHA'
+  - '${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_BACKEND_IMAGE_REPO}/${_BACKEND_SERVICE_NAME}:latest'
+
+# Optional: Configure build triggers in the Google Cloud Console.
+# For example, trigger a build when changes are pushed to a specific branch
+# and filter for changes only in the 'backend/' directory.
+
+# Note: Deployment to Cloud Run is not included in this initial file.
+# This can be added as a later step or performed manually after the image is pushed.
+# Example Cloud Run deployment step (manual execution or add to Cloud Build later):
+# gcloud run deploy ${_BACKEND_SERVICE_NAME} \
+#   --image ${_REGION}-docker.pkg.dev/${_PROJECT_ID}/${_BACKEND_IMAGE_REPO}/${_BACKEND_SERVICE_NAME}:$COMMIT_SHA \
+#   --region ${_REGION} \
+#   --platform managed \
+#   --allow-unauthenticated \ # Or configure authentication as needed
+#   --project ${_PROJECT_ID} \
+#   --set-env-vars GOOGLE_CLOUD_PROJECT=${_PROJECT_ID} # Add other env vars as needed

@@ -258,6 +258,7 @@ This section details the functional requirements of Project Fiji, grouped by maj
 *   Input validation shall be performed on both client and server sides to prevent common vulnerabilities.
 *   Dependencies should be kept up-to-date to mitigate known vulnerabilities.
 *   Sensitive configuration data (e.g., API keys) for backend services should be managed securely, for example, using Google Secret Manager.
+*   Google Cloud services (e.g., Firestore, Firebase Admin SDK) shall be accessed using Application Default Credentials (ADC) where available, ensuring secure, keyless authentication from Google Cloud environments like Cloud Run.
 
 ### 5.3 Usability Requirements
 *   The user interface shall be intuitive and easy to learn for users with basic computer literacy.
