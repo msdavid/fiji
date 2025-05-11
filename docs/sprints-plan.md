@@ -16,7 +16,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
 
 ## Sprint 0: Project Setup & Core Backend Foundations (Completed)
 
-*   **Goal:** Establish the monorepo project structure, basic FastAPI application in the `backend` directory, Dockerization, initial CI/CD setup for the backend, and core data models for users and roles. Implement Firebase Authentication setup and initial user invitation/creation logic.
+*   **Goal:** Establish the monorepo project structure, basic FastAPI application in the `backend` directory, Dockerization, initial CI/CD setup for the backend, and core data models for users and roles. Implement Firebase Authentication setup and initial user invitation/creation logic. Establish a testing framework for the backend.
 *   **Key Deliverables:**
     *   Functional `fiji` monorepo with a `backend` directory containing a basic FastAPI application.
     *   Dockerfile for the backend (`backend/Dockerfile`).
@@ -25,6 +25,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
     *   Firebase Authentication enabled in the Firebase project.
     *   API endpoints for `sysadmin` to manage roles.
     *   API endpoints for handling registration invitations and user registration.
+    *   Initial `pytest` testing framework for the backend, with tests for core endpoints (e.g., health, roles).
 *   **Main Task Areas:**
     *   **Backend (FastAPI & Firestore):**
         *   Initialize project and FastAPI app structure.
@@ -35,6 +36,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
             *   Registration invitation creation.
             *   User registration via invitation.
         *   Implement basic authentication dependency for Firebase ID tokens.
+        *   Set up `pytest` for unit and integration testing of API endpoints, including mocking dependencies.
     *   **Infrastructure/DevOps (Backend):**
         *   Create `backend/Dockerfile` using `uv`.
         *   Create initial `cloudbuild.yaml` for backend builds and pushes to Artifact Registry.
@@ -185,7 +187,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
         *   Enhance User Dashboard with dynamic content based on role and activity.
     *   **Infrastructure/DevOps (Monorepo):**
         *   Finalize `cloudbuild.yaml`:
-            *   Add linting and testing steps for backend (using `uv`).
+            *   Add linting and testing steps for backend (using `uv` and `pytest`).
             *   Add linting and testing steps for frontend.
             *   Automate deployment to Cloud Run for both services.
         *   Verify environment variable setup, potentially using Google Secret Manager.
