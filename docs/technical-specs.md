@@ -25,6 +25,7 @@ The system will consist of a backend API, a frontend web application, and will u
 *   **UI:** User Interface
 *   **CRUD:** Create, Read, Update, Delete
 *   **Sysadmin:** System Administrator role with the highest level of privileges.
+*   **SSR:** Server-Side Rendering
 
 ## 2. Overall Description
 
@@ -52,7 +53,7 @@ The major features of Project Fiji are:
 
 ### 2.4 Operating Environment
 *   The backend will be a Dockerized FastAPI application running on Google Cloud Run.
-*   The frontend will be a Dockerized Next.js application running on Google Cloud Run.
+*   The frontend will be a Dockerized Next.js application (utilizing the App Router for **Server-Side Rendering - SSR**) running on Google Cloud Run.
 *   The system will use Google Firestore as its database.
 *   User authentication will be handled by Firebase Authentication.
 *   The system is designed to be accessed via modern web browsers.
@@ -60,7 +61,7 @@ The major features of Project Fiji are:
 ### 2.5 Design and Implementation Constraints
 *   **Technology Stack:**
     *   Backend: Python, FastAPI
-    *   Frontend: Next.js, Tailwind UI
+    *   Frontend: Next.js (with App Router for **SSR**), Tailwind UI
     *   Database: Google Firestore
     *   Authentication: Firebase Authentication
 *   Deployment: Google Cloud Run.
@@ -219,7 +220,7 @@ This section details the functional requirements of Project Fiji, grouped by maj
 
 ### 4.1 User Interfaces
 *   The system shall provide a responsive web-based user interface accessible via modern web browsers.
-*   The UI shall be developed using Next.js and styled with Tailwind UI.
+*   The UI shall be developed using Next.js (with App Router for **SSR**) and styled with Tailwind UI.
 *   The UI shall be intuitive and facilitate easy navigation and interaction for all user classes.
 *   Key UI components include:
     *   Login and Registration pages.
