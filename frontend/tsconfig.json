@@ -1,7 +1,10 @@
 {
   "compilerOptions": {
-    "target": "ES2017",
-    "lib": ["dom", "dom.iterable", "esnext"],
+    "lib": [
+      "dom",
+      "dom.iterable",
+      "esnext"
+    ],
     "allowJs": true,
     "skipLibCheck": true,
     "strict": true,
@@ -19,15 +22,21 @@
       }
     ],
     "paths": {
-      "@/*": ["./src/*"]
+      "@/*": [
+        "./src/*"
+      ]
     },
-    "types": []
+    "types": ["jest", "node"] // Added "jest"
   },
   "include": [
     "next-env.d.ts",
     "**/*.ts",
     "**/*.tsx",
-    ".next/types/**/*.ts"
+    ".next/types/**/*.ts",
+    "jest.setup.ts" // Ensure jest.setup.ts is included
   ],
-  "exclude": ["node_modules"]
+  "exclude": [
+    "node_modules",
+    "tests" // Exclude the tests directory from the main compilation if tests have their own tsconfig or are handled by Jest's ts-jest
+  ]
 }
