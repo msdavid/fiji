@@ -40,4 +40,31 @@ For detailed task tracking and technical logs, refer to `.Q/projectlog.md`.
 *   **Outcome:** Sprint 0 successfully established a solid foundation for the backend services. This includes core APIs, database interaction, authentication mechanisms, a robust testing framework with initial test coverage, and an enhanced CI/CD pipeline incorporating automated testing. The project is well-positioned to proceed with frontend development and further backend feature enhancements in subsequent sprints.
 
 ---
+
+### Sprint 1: Core Frontend Setup & User Authentication Flow
+*   **Status:** Completed
+*   **Completion Date:** 2024-07-29 (based on last relevant project log entry)
+*   **Goal:** Establish the frontend project structure in the `frontend` directory of the monorepo, basic Next.js application (using App Router for SSR), Dockerization, initial CI/CD for frontend. Implement Firebase SDK, login, registration (using invitation token), and basic dashboard layout with Tailwind UI. Connect frontend auth to backend.
+
+*   **Key Achievements:**
+    *   **Frontend Monorepo Setup:** The `frontend` directory was created within the `fiji` monorepo. A Next.js application was initialized using the App Router for Server-Side Rendering (SSR) and configured with Tailwind UI for styling.
+    *   **Firebase Frontend Integration:** The Firebase SDK was integrated into the Next.js application (`frontend/src/lib/firebaseConfig.ts`), configured using environment variables (`NEXT_PUBLIC_FIREBASE_...`) for client-side Firebase services.
+    *   **User Registration Flow:**
+        *   A `/register` page was developed, styled with Tailwind UI. It extracts the invitation token from the URL.
+        *   Client-side validation of the invitation token was implemented by calling a new backend endpoint (`GET /invitations/validate`) before displaying the registration form.
+        *   The registration form collects user details (first name, last name, password).
+        *   Upon submission, it creates a user in Firebase Authentication (`createUserWithEmailAndPassword`).
+        *   Successfully integrates with the backend `POST /register` endpoint, sending the Firebase ID token to create the user's profile in Firestore and associate roles.
+    *   **User Login Flow:** A `/login` page was implemented, styled with Tailwind UI, enabling users to sign in with email and password using Firebase Authentication (`signInWithEmailAndPassword`). Session management and redirection to a protected route upon successful login were confirmed.
+    *   **Basic Authenticated Dashboard:** A placeholder `/dashboard` page was created as a protected route, accessible only to authenticated users.
+    *   **Backend Enhancements for Frontend:**
+        *   CORS (Cross-Origin Resource Sharing) middleware was added to the FastAPI backend to allow requests from the frontend application.
+        *   A public backend endpoint (`GET /invitations/validate`) was created to allow the frontend to check the status of an invitation token without requiring user authentication.
+    *   **Containerization & CI/CD (Frontend):** As per the sprint plan, a `frontend/Dockerfile` was created for building the Next.js application, and the main `cloudbuild.yaml` was updated to include build and push steps for the frontend Docker image to Google Artifact Registry.
+    *   **Documentation:** The top-level `README.md` was significantly updated with a comprehensive guide on setting up GCP, Firebase, backend, and frontend environments from scratch, including initial data setup and secrets management.
+    *   **Successful End-to-End Testing:** The complete user onboarding flow (invitation, registration, login, access to protected routes, session persistence, logout, and handling of invalid/used tokens) was manually tested and confirmed to be working.
+
+*   **Outcome:** Sprint 1 successfully established the core frontend application and user authentication lifecycle. Key user-facing features like registration and login are functional, integrated with Firebase Authentication and the backend services. The frontend is containerized and has an initial CI/CD setup. This provides a strong foundation for building out further frontend features and user interactions.
+
+---
 *(Space for future sprint summaries)*
