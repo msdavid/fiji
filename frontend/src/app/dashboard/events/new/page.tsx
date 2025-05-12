@@ -19,12 +19,19 @@ interface EventFormData {
   status: string; // e.g., "draft", "open_for_signup"
 }
 
+// Helper function to get current datetime in YYYY-MM-DDTHH:mm format
+const getCurrentDateTimeLocal = () => {
+  const now = new Date();
+  now.setMinutes(now.getMinutes() - now.getTimezoneOffset()); // Adjust for local timezone
+  return now.toISOString().slice(0, 16);
+};
+
 const initialFormData: EventFormData = {
   eventName: '',
   eventType: '',
   purpose: '',
   description: '',
-  dateTime: '',
+  dateTime: getCurrentDateTimeLocal(), // Pre-fill with current date and time
   durationMinutes: 60,
   location: '',
   volunteersRequired: 1,
