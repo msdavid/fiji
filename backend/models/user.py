@@ -58,3 +58,14 @@ class UserRolesUpdate(BaseModel):
     assignedRoleIds: List[str] = Field(..., description="A list of role names (document IDs from 'roles' collection) to assign to the user. This will replace all existing roles.")
 
     model_config = ConfigDict(extra='forbid')
+
+class UserSearchResult(BaseModel):
+    """
+    Model for returning user data in search results.
+    """
+    uid: str = Field(..., description="Firebase Authentication User ID.")
+    firstName: str = Field(..., description="User's first name.")
+    lastName: str = Field(..., description="User's last name.")
+    email: EmailStr = Field(..., description="User's email address.")
+
+    model_config = ConfigDict(from_attributes=True)

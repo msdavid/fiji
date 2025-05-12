@@ -18,6 +18,7 @@ class EventBase(BaseModel):
         default="draft", 
         description="Status of the event (e.g., 'draft', 'open_for_signup', 'ongoing', 'completed', 'cancelled')."
     )
+    organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer.")
     # createdByUserId will be set automatically based on the authenticated user creating the event.
 
 class EventCreate(EventBase):
@@ -41,6 +42,7 @@ class EventUpdate(BaseModel):
     location: Optional[str] = Field(None, max_length=255)
     volunteersRequired: Optional[int] = Field(None, ge=0)
     status: Optional[str] = None # Consider specific validation for status transitions
+    organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer. Can be set to null to remove organizer.")
 
     model_config = ConfigDict(extra='forbid')
 
@@ -66,6 +68,10 @@ class EventResponse(EventInDBBase): # Inherits common fields from EventInDBBase
     Model for returning event data in API responses. Includes the eventId.
     """
     eventId: str = Field(..., description="Unique ID of the event (Firestore document ID).")
+    organizerFirstName: Optional[str] = Field(None, description="First name of the event organizer.")
+    organizerLastName: Optional[str] = Field(None, description="Last name of the event organizer.")
+    creatorFirstName: Optional[str] = Field(None, description="First name of the user who created the event.")
+    creatorLastName: Optional[str] = Field(None, description="Last name of the user who created the event.")
     
     # Potentially add calculated fields like 'volunteersSignedUp' or 'spotsAvailable' in the future
     # volunteersSignedUp: Optional[int] = Field(None, description="Number of volunteers currently signed up.")

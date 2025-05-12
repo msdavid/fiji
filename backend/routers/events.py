@@ -7,7 +7,7 @@ import datetime
 # Use direct imports from subdirectories of 'backend'
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
-from models.event import EventCreate, EventUpdate, EventResponse, EventWithSignupStatus
+from models.event import EventCreate, EventUpdate, EventResponse, EventWithSignupStatus 
 from models.assignment import AssignmentCreate, AssignmentResponse, AssignmentUpdate
 
 router = APIRouter(
@@ -17,9 +17,18 @@ router = APIRouter(
 
 EVENTS_COLLECTION = "events"
 ASSIGNMENTS_COLLECTION = "assignments"
-USERS_COLLECTION = "users" # For fetching user details for AssignmentResponse
+USERS_COLLECTION = "users" 
 
-# --- Event CRUD Endpoints (from previous step) ---
+async def _get_user_details(db: firestore.Client, user_id: str) -> dict:
+    """Helper function to fetch user details."""
+    if not user_id:
+        return {}
+    user_ref = db.collection(USERS_COLLECTION).document(user_id)
+    user_doc = user_ref.get() 
+    if user_doc.exists:
+        return user_doc.to_dict()
+    return {}
+
 @router.post(
     "", 
     response_model=EventResponse, 
@@ -37,6 +46,11 @@ async def create_event(
         new_event_dict["createdAt"] = firestore.SERVER_TIMESTAMP
         new_event_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
 
+        if new_event_dict.get("organizerUserId"):
+            organizer_doc = db.collection(USERS_COLLECTION).document(new_event_dict["organizerUserId"]).get()
+            if not organizer_doc.exists:
+                raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Organizer user with ID '{new_event_dict['organizerUserId']}' not found.")
+        
         doc_ref = db.collection(EVENTS_COLLECTION).document()
         doc_ref.set(new_event_dict)
 
@@ -44,9 +58,22 @@ async def create_event(
         if created_event_doc.exists:
             response_data = created_event_doc.to_dict()
             response_data['eventId'] = created_event_doc.id
+
+            # Fetch creator details for the response
+            creator_details = await _get_user_details(db, response_data["createdByUserId"])
+            response_data["creatorFirstName"] = creator_details.get("firstName")
+            response_data["creatorLastName"] = creator_details.get("lastName")
+
+            if response_data.get("organizerUserId"):
+                organizer_details = await _get_user_details(db, response_data["organizerUserId"])
+                response_data["organizerFirstName"] = organizer_details.get("firstName")
+                response_data["organizerLastName"] = organizer_details.get("lastName")
+            
             return EventResponse(**response_data)
         else:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve event after creation.")
+    except HTTPException as http_exc: 
+        raise http_exc
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
@@ -62,20 +89,47 @@ async def list_events(
             query = query.where(filter=FieldFilter("status", "==", status_filter))
         query = query.order_by("dateTime", direction=firestore.Query.ASCENDING)
         
-        docs = query.stream()
+        docs_snapshot = query.stream() 
         events_list = []
         user_assignments = {}
+
+        temp_event_data_list = []
+        all_user_ids_to_fetch = set()
+
+        for doc in docs_snapshot:
+            event_data = doc.to_dict()
+            event_data['eventId'] = doc.id
+            temp_event_data_list.append(event_data)
+            if event_data.get("organizerUserId"):
+                all_user_ids_to_fetch.add(event_data["organizerUserId"])
+            if event_data.get("createdByUserId"):
+                all_user_ids_to_fetch.add(event_data["createdByUserId"])
+        
+        user_details_map = {}
+        for uid in list(all_user_ids_to_fetch): 
+            details = await _get_user_details(db, uid)
+            user_details_map[uid] = details
+
         if current_rbac_user and current_rbac_user.uid:
             assignments_query = db.collection(ASSIGNMENTS_COLLECTION).where(filter=FieldFilter("userId", "==", current_rbac_user.uid)).where(filter=FieldFilter("assignableType", "==", "event"))
-            for assign_doc in assignments_query.stream():
+            for assign_doc in assignments_query.stream(): 
                 assign_data = assign_doc.to_dict()
                 user_assignments[assign_data.get("assignableId")] = assign_data.get("status", "unknown")
 
-        for doc in docs:
-            event_data = doc.to_dict()
-            event_data['eventId'] = doc.id
-            is_signed_up = user_assignments.get(doc.id) is not None if current_rbac_user else None
-            assignment_status = user_assignments.get(doc.id) if is_signed_up else None
+        for event_data in temp_event_data_list:
+            is_signed_up = user_assignments.get(event_data['eventId']) is not None if current_rbac_user else None
+            assignment_status = user_assignments.get(event_data['eventId']) if is_signed_up else None
+            
+            if event_data.get("createdByUserId"):
+                creator_details = user_details_map.get(event_data["createdByUserId"], {})
+                event_data["creatorFirstName"] = creator_details.get("firstName")
+                event_data["creatorLastName"] = creator_details.get("lastName")
+
+            if event_data.get("organizerUserId"):
+                org_details = user_details_map.get(event_data["organizerUserId"], {})
+                event_data["organizerFirstName"] = org_details.get("firstName")
+                event_data["organizerLastName"] = org_details.get("lastName")
+
             events_list.append(EventWithSignupStatus(**event_data, isCurrentUserSignedUp=is_signed_up, currentUserAssignmentStatus=assignment_status))
         return events_list
     except Exception as e:
@@ -89,12 +143,22 @@ async def get_event(
 ):
     try:
         doc_ref = db.collection(EVENTS_COLLECTION).document(event_id)
-        event_doc = doc_ref.get()
+        event_doc = doc_ref.get() 
         if not event_doc.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
         
         event_data = event_doc.to_dict()
         event_data['eventId'] = event_doc.id
+        
+        creator_details = await _get_user_details(db, event_data["createdByUserId"])
+        event_data["creatorFirstName"] = creator_details.get("firstName")
+        event_data["creatorLastName"] = creator_details.get("lastName")
+
+        if event_data.get("organizerUserId"):
+            organizer_details = await _get_user_details(db, event_data["organizerUserId"]) 
+            event_data["organizerFirstName"] = organizer_details.get("firstName")
+            event_data["organizerLastName"] = organizer_details.get("lastName")
+
         is_signed_up = None
         assignment_status = None
         if current_rbac_user and current_rbac_user.uid:
@@ -103,7 +167,7 @@ async def get_event(
                                  .where(filter=FieldFilter("assignableId", "==", event_id)) \
                                  .where(filter=FieldFilter("assignableType", "==", "event")) \
                                  .limit(1)
-            assignment_doc_snap = next(assignment_query.stream(), None)
+            assignment_doc_snap = next(assignment_query.stream(), None) 
             if assignment_doc_snap:
                 is_signed_up = True
                 assignment_status = assignment_doc_snap.to_dict().get("status")
@@ -117,80 +181,95 @@ async def update_event(
 ):
     try:
         doc_ref = db.collection(EVENTS_COLLECTION).document(event_id)
-        if not doc_ref.get().exists:
+        event_doc_snapshot = doc_ref.get() 
+        if not event_doc_snapshot.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
+        
         update_data = event_update_data.model_dump(exclude_unset=True)
         if not update_data:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
+
+        if "organizerUserId" in update_data:
+            org_uid = update_data["organizerUserId"]
+            if org_uid is not None: 
+                organizer_doc = db.collection(USERS_COLLECTION).document(org_uid).get() 
+                if not organizer_doc.exists:
+                    raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Organizer user with ID '{org_uid}' not found.")
+            
         update_data["updatedAt"] = firestore.SERVER_TIMESTAMP
         doc_ref.update(update_data)
-        updated_event_doc = doc_ref.get()
+        
+        updated_event_doc = doc_ref.get() 
         response_data = updated_event_doc.to_dict()
         response_data['eventId'] = updated_event_doc.id
+
+        creator_details = await _get_user_details(db, response_data["createdByUserId"])
+        response_data["creatorFirstName"] = creator_details.get("firstName")
+        response_data["creatorLastName"] = creator_details.get("lastName")
+
+        if response_data.get("organizerUserId"):
+            organizer_details = await _get_user_details(db, response_data["organizerUserId"]) 
+            response_data["organizerFirstName"] = organizer_details.get("firstName")
+            response_data["organizerLastName"] = organizer_details.get("lastName")
+            
         return EventResponse(**response_data)
+    except HTTPException as http_exc: 
+        raise http_exc
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
+# ... (rest of the file remains the same: delete_event and assignment endpoints)
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("events", "delete"))])
 async def delete_event(event_id: str, db: firestore.Client = Depends(get_db)):
     try:
         doc_ref = db.collection(EVENTS_COLLECTION).document(event_id)
-        if not doc_ref.get().exists:
+        if not doc_ref.get().exists: 
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
-        # Consider implications: delete related assignments or prevent deletion if assignments exist.
         doc_ref.delete()
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 
 # --- Event Assignment & Signup Endpoints ---
-
 @router.post("/{event_id}/signup", response_model=AssignmentResponse, status_code=status.HTTP_201_CREATED)
 async def self_signup_for_event(
     event_id: str,
     db: firestore.Client = Depends(get_db),
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac) # Requires authenticated user
+    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac) 
 ):
-    """
-    Allows the current authenticated user to self-signup for an event.
-    """
     event_ref = db.collection(EVENTS_COLLECTION).document(event_id)
-    event_doc = event_ref.get()
+    event_doc = event_ref.get() 
     if not event_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
     
     event_data = event_doc.to_dict()
-    if event_data.get("status") not in ["open_for_signup"]: # Add other statuses if applicable
+    if event_data.get("status") not in ["open_for_signup"]: 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event is not open for signups.")
 
-    # Check if user is already signed up
     existing_assignment_query = db.collection(ASSIGNMENTS_COLLECTION) \
         .where(filter=FieldFilter("userId", "==", current_rbac_user.uid)) \
         .where(filter=FieldFilter("assignableId", "==", event_id)) \
         .where(filter=FieldFilter("assignableType", "==", "event")) \
         .limit(1)
-    if next(existing_assignment_query.stream(), None):
+    if next(existing_assignment_query.stream(), None): 
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already signed up for this event.")
-
-    # TODO: Check volunteer capacity if volunteersRequired is set
 
     assignment_data = {
         "userId": current_rbac_user.uid,
         "assignableId": event_id,
         "assignableType": "event",
-        "status": "confirmed", # Or "pending_approval" if moderation is needed
-        "assignedByUserId": "self_signup", # Special marker for self-signup
+        "status": "confirmed", 
+        "assignedByUserId": "self_signup", 
         "assignmentDate": firestore.SERVER_TIMESTAMP,
     }
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document()
     assignment_ref.set(assignment_data)
     
-    created_assignment_doc = assignment_ref.get()
+    created_assignment_doc = assignment_ref.get() 
     response_data = created_assignment_doc.to_dict()
     response_data['assignmentId'] = created_assignment_doc.id
     
-    # Fetch user details for response enrichment
-    user_profile_doc = db.collection(USERS_COLLECTION).document(current_rbac_user.uid).get()
+    user_profile_doc = db.collection(USERS_COLLECTION).document(current_rbac_user.uid).get() 
     if user_profile_doc.exists:
         user_profile = user_profile_doc.to_dict()
         response_data['userFirstName'] = user_profile.get('firstName')
@@ -206,20 +285,15 @@ async def withdraw_event_signup(
     db: firestore.Client = Depends(get_db),
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
-    """
-    Allows the current authenticated user to withdraw their signup from an event.
-    """
     assignment_query = db.collection(ASSIGNMENTS_COLLECTION) \
         .where(filter=FieldFilter("userId", "==", current_rbac_user.uid)) \
         .where(filter=FieldFilter("assignableId", "==", event_id)) \
         .where(filter=FieldFilter("assignableType", "==", "event")) \
         .limit(1)
     
-    assignment_doc_snap = next(assignment_query.stream(), None)
+    assignment_doc_snap = next(assignment_query.stream(), None) 
     if not assignment_doc_snap:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Signup not found for this user and event.")
-
-    # TODO: Check event status or deadlines for withdrawal if applicable
     
     assignment_doc_snap.reference.delete()
     return None
@@ -228,14 +302,11 @@ async def withdraw_event_signup(
 @router.get(
     "/{event_id}/assignments", 
     response_model=List[AssignmentResponse],
-    dependencies=[Depends(require_permission("events", "manage_assignments"))] # Or a more specific permission
+    dependencies=[Depends(require_permission("events", "manage_assignments"))] 
 )
 async def list_event_assignments(event_id: str, db: firestore.Client = Depends(get_db)):
-    """
-    List all assignments for a specific event. Requires 'events:manage_assignments' permission.
-    """
     event_ref = db.collection(EVENTS_COLLECTION).document(event_id)
-    if not event_ref.get().exists:
+    if not event_ref.get().exists: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
 
     assignments_query = db.collection(ASSIGNMENTS_COLLECTION) \
@@ -243,20 +314,19 @@ async def list_event_assignments(event_id: str, db: firestore.Client = Depends(g
         .where(filter=FieldFilter("assignableType", "==", "event"))
     
     assignments_list = []
-    # Fetch all user details in a batch if possible for optimization, or one by one
-    user_cache = {} # Simple cache for user details within this request
+    user_cache = {} 
 
-    for assign_doc in assignments_query.stream():
+    for assign_doc in assignments_query.stream(): 
         assignment_data = assign_doc.to_dict()
         assignment_data['assignmentId'] = assign_doc.id
         
         user_id = assignment_data.get('userId')
         if user_id not in user_cache:
-            user_doc = db.collection(USERS_COLLECTION).document(user_id).get()
+            user_doc = db.collection(USERS_COLLECTION).document(user_id).get() 
             if user_doc.exists:
                 user_cache[user_id] = user_doc.to_dict()
             else:
-                user_cache[user_id] = {} # User not found
+                user_cache[user_id] = {} 
         
         user_profile = user_cache[user_id]
         assignment_data['userFirstName'] = user_profile.get('firstName')
@@ -279,26 +349,22 @@ async def create_event_assignment(
     db: firestore.Client = Depends(get_db),
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
-    """
-    Manually assign a user to an event. Requires 'events:manage_assignments' permission.
-    """
     event_ref = db.collection(EVENTS_COLLECTION).document(event_id)
-    if not event_ref.get().exists:
+    if not event_ref.get().exists: 
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
 
     user_ref = db.collection(USERS_COLLECTION).document(assignment_create_data.userId)
-    user_profile_doc = user_ref.get()
+    user_profile_doc = user_ref.get() 
     if not user_profile_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User to be assigned not found.")
     user_profile = user_profile_doc.to_dict()
 
-    # Check if user is already assigned
     existing_assignment_query = db.collection(ASSIGNMENTS_COLLECTION) \
         .where(filter=FieldFilter("userId", "==", assignment_create_data.userId)) \
         .where(filter=FieldFilter("assignableId", "==", event_id)) \
         .where(filter=FieldFilter("assignableType", "==", "event")) \
         .limit(1)
-    if next(existing_assignment_query.stream(), None):
+    if next(existing_assignment_query.stream(), None): 
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already assigned to this event.")
 
     assignment_data = {
@@ -312,7 +378,7 @@ async def create_event_assignment(
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document()
     assignment_ref.set(assignment_data)
     
-    created_assignment_doc = assignment_ref.get()
+    created_assignment_doc = assignment_ref.get() 
     response_data = created_assignment_doc.to_dict()
     response_data['assignmentId'] = created_assignment_doc.id
     response_data['userFirstName'] = user_profile.get('firstName')
@@ -328,16 +394,13 @@ async def create_event_assignment(
     dependencies=[Depends(require_permission("events", "manage_assignments"))]
 )
 async def update_event_assignment(
-    event_id: str, # For path consistency, though assignableId is in assignment_doc
+    event_id: str, 
     assignment_id: str,
     assignment_update_data: AssignmentUpdate,
     db: firestore.Client = Depends(get_db)
 ):
-    """
-    Update an existing assignment (e.g., status, hours, notes). Requires 'events:manage_assignments' permission.
-    """
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document(assignment_id)
-    assignment_doc = assignment_ref.get()
+    assignment_doc = assignment_ref.get() 
     if not assignment_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
     
@@ -349,14 +412,14 @@ async def update_event_assignment(
     if not update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
     
-    update_data["assignmentDate"] = firestore.SERVER_TIMESTAMP # Reflects last modification
+    update_data["assignmentDate"] = firestore.SERVER_TIMESTAMP 
     assignment_ref.update(update_data)
 
-    updated_assignment_doc = assignment_ref.get()
+    updated_assignment_doc = assignment_ref.get() 
     response_data = updated_assignment_doc.to_dict()
     response_data['assignmentId'] = updated_assignment_doc.id
 
-    user_profile_doc = db.collection(USERS_COLLECTION).document(response_data['userId']).get()
+    user_profile_doc = db.collection(USERS_COLLECTION).document(response_data['userId']).get() 
     if user_profile_doc.exists:
         user_profile = user_profile_doc.to_dict()
         response_data['userFirstName'] = user_profile.get('firstName')
@@ -372,15 +435,12 @@ async def update_event_assignment(
     dependencies=[Depends(require_permission("events", "manage_assignments"))]
 )
 async def delete_event_assignment(
-    event_id: str, # For path consistency
+    event_id: str, 
     assignment_id: str,
     db: firestore.Client = Depends(get_db)
 ):
-    """
-    Delete/cancel a specific assignment for an event. Requires 'events:manage_assignments' permission.
-    """
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document(assignment_id)
-    assignment_doc = assignment_ref.get()
+    assignment_doc = assignment_ref.get() 
     if not assignment_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
 

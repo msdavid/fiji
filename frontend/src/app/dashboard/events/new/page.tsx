@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, FormEvent } from 'react';
+import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -10,11 +10,19 @@ interface EventFormData {
   eventType: string;
   purpose: string;
   description: string;
-  dateTime: string; // ISO string format for datetime-local input
+  dateTime: string; 
   durationMinutes: number;
-  location: string;
+  location: string; // Field name remains 'location' for backend
   volunteersRequired: number;
-  status: string; // e.g., "draft", "open_for_signup"
+  status: string; 
+  organizerUserId: string | null; 
+}
+
+interface UserSearchResult {
+  uid: string;
+  firstName: string;
+  lastName: string;
+  email: string;
 }
 
 const initialFormData: EventFormData = {
@@ -22,30 +30,45 @@ const initialFormData: EventFormData = {
   eventType: '',
   purpose: '',
   description: '',
-  dateTime: '', // Reverted: No longer pre-filled
+  dateTime: '', 
   durationMinutes: 60,
-  location: '',
+  location: '', // Field name remains 'location'
   volunteersRequired: 1,
   status: 'draft',
+  organizerUserId: null, 
 };
+
+// Debounce helper function
+function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  return (...args: Parameters<F>): Promise<ReturnType<F>> =>
+    new Promise(resolve => {
+      if (timeout) {
+        clearTimeout(timeout);
+      }
+      timeout = setTimeout(() => resolve(func(...args)), waitFor);
+    });
+}
 
 export default function CreateEventPage() {
   const router = useRouter();
-  const { user, loading, userProfile } = useAuth(); // user object contains getIdToken
+  const { user, loading, userProfile } = useAuth(); 
   const [formData, setFormData] = useState<EventFormData>(initialFormData);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
 
+  const [organizerSearchQuery, setOrganizerSearchQuery] = useState('');
+  const [organizerSearchResults, setOrganizerSearchResults] = useState<UserSearchResult[]>([]);
+  const [selectedOrganizerName, setSelectedOrganizerName] = useState<string | null>(null);
+  const [isSearchingOrganizers, setIsSearchingOrganizers] = useState(false);
+
   useEffect(() => {
     if (!loading && !user) {
       router.push('/login');
     }
-    // Basic admin check, assuming only admins can create events
-    // This should ideally be enforced by backend RBAC primarily
     if (!loading && user && userProfile && !userProfile.assignedRoleIds?.includes('sysadmin')) {
        setError("You are not authorized to create events.");
-       // Optionally redirect: router.push('/dashboard');
     }
   }, [user, loading, userProfile, router]);
 
@@ -55,6 +78,54 @@ export default function CreateEventPage() {
       ...prev,
       [name]: type === 'number' ? parseInt(value, 10) : value,
     }));
+  };
+
+  const fetchUsers = async (query: string): Promise<UserSearchResult[]> => {
+    if (!user || query.trim().length < 2) { 
+      setOrganizerSearchResults([]);
+      return [];
+    }
+    setIsSearchingOrganizers(true);
+    try {
+      const token = await user.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/users/search?q=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        throw new Error('Failed to search users');
+      }
+      const results: UserSearchResult[] = await response.json();
+      setOrganizerSearchResults(results);
+      return results;
+    } catch (err) {
+      console.error("User search error:", err);
+      setOrganizerSearchResults([]);
+      return [];
+    } finally {
+      setIsSearchingOrganizers(false);
+    }
+  };
+
+  const debouncedUserSearch = useCallback(debounce(fetchUsers, 500), [user]);
+
+  const handleOrganizerSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setOrganizerSearchQuery(query);
+    setSelectedOrganizerName(null); 
+    setFormData(prev => ({ ...prev, organizerUserId: null })); 
+    if (query.trim().length >= 2) {
+      debouncedUserSearch(query);
+    } else {
+      setOrganizerSearchResults([]);
+    }
+  };
+
+  const handleSelectOrganizer = (organizer: UserSearchResult) => {
+    setFormData(prev => ({ ...prev, organizerUserId: organizer.uid }));
+    setSelectedOrganizerName(`${organizer.firstName} ${organizer.lastName} (${organizer.email})`);
+    setOrganizerSearchQuery(''); 
+    setOrganizerSearchResults([]); 
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -69,12 +140,13 @@ export default function CreateEventPage() {
       return;
     }
     
-    // Ensure dateTime is not empty if required, or handle appropriately
     if (!formData.dateTime) {
         setError("Date and Time is required.");
         setSubmitting(false);
         return;
     }
+
+    const payload = { ...formData }; 
 
     try {
       const token = await user.getIdToken();
@@ -86,7 +158,7 @@ export default function CreateEventPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(payload),
       });
 
       if (!response.ok) {
@@ -94,15 +166,12 @@ export default function CreateEventPage() {
         throw new Error(errorData.detail || `Failed to create event (status: ${response.status})`);
       }
       
-      // const createdEvent = await response.json(); // Process if needed
       setSuccessMessage('Event created successfully!');
-      // alert('Event created successfully!'); // Using state for message display
-
-      // Clear form or redirect
-      // setFormData(initialFormData); // Option to clear form
+      setFormData(initialFormData); 
+      setSelectedOrganizerName(null); 
       setTimeout(() => {
-        router.push('/dashboard/events'); // Redirect to event list on success
-      }, 1500); // Delay redirect to show success message
+        router.push('/dashboard/events'); 
+      }, 1500); 
 
     } catch (err: any) {
       setError(err.message || 'An error occurred during submission.');
@@ -113,7 +182,6 @@ export default function CreateEventPage() {
   };
   
   if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
-  // No user check here, useEffect handles redirect. If error is set due to auth, it will show.
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
@@ -156,47 +224,67 @@ export default function CreateEventPage() {
             <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
-
           <div>
             <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
             <input type="text" name="eventType" id="eventType" value={formData.eventType} onChange={handleChange} 
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
-
           <div>
             <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Purpose</label>
             <textarea name="purpose" id="purpose" value={formData.purpose} onChange={handleChange} rows={3}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
           </div>
-
           <div>
             <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
             <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={4}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
           </div>
-
           <div>
             <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Date & Time</label>
             <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
-          
           <div>
             <label htmlFor="durationMinutes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Duration (Minutes)</label>
             <input type="number" name="durationMinutes" id="durationMinutes" value={formData.durationMinutes} onChange={handleChange} min="1" required
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
-
           <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Location</label>
+            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label> {/* Changed Label */}
             <input type="text" name="location" id="location" value={formData.location} onChange={handleChange}
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
-
           <div>
             <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
             <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+          </div>
+
+          <div className="relative">
+            <label htmlFor="organizerSearch" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Event Organizer {selectedOrganizerName ? `(Selected: ${selectedOrganizerName})` : '(Optional)'}
+            </label>
+            <input
+              type="text"
+              id="organizerSearch"
+              name="organizerSearch"
+              value={organizerSearchQuery}
+              onChange={handleOrganizerSearchChange}
+              placeholder="Search by name or email..."
+              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+            />
+            {isSearchingOrganizers && <p className="text-xs text-gray-500 dark:text-gray-400">Searching...</p>}
+            {organizerSearchResults.length > 0 && (
+              <ul className="absolute z-10 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                {organizerSearchResults.map(org => (
+                  <li key={org.uid} 
+                      onClick={() => handleSelectOrganizer(org)}
+                      className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
+                    {org.firstName} {org.lastName} ({org.email})
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
           
           <div>

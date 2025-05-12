@@ -4,7 +4,7 @@ import { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { format } from 'date-fns'; // For formatting dates
+import { format } from 'date-fns'; 
 
 // Define an interface for the event data expected from the backend
 interface Event {
@@ -13,26 +13,30 @@ interface Event {
   eventType?: string;
   purpose?: string;
   description?: string;
-  dateTime: string; // Assuming ISO string from backend
+  dateTime: string; 
   durationMinutes?: number;
-  location?: string;
+  location: string; // Field name remains 'location' for backend
   volunteersRequired?: number;
   status: string;
   createdByUserId: string;
-  createdAt: string; // Assuming ISO string
-  updatedAt: string; // Assuming ISO string
+  creatorFirstName?: string;
+  creatorLastName?: string;
+  createdAt: string; 
+  updatedAt: string; 
   isCurrentUserSignedUp?: boolean;
   currentUserAssignmentStatus?: string;
+  organizerUserId?: string;
+  organizerFirstName?: string;
+  organizerLastName?: string;
 }
 
 export default function EventsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile } = useAuth(); // Removed getIdToken from here
+  const { user, loading: authLoading, userProfile } = useAuth(); 
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  // Basic admin check for now, can be refined with specific event privileges later
   const isAdmin = userProfile?.assignedRoleIds?.includes('sysadmin');
 
   useEffect(() => {
@@ -47,7 +51,7 @@ export default function EventsPage() {
       setIsLoadingEvents(true);
       setError(null);
       try {
-        const token = await user.getIdToken(); // Corrected: Call getIdToken on the user object
+        const token = await user.getIdToken(); 
         if (!token) {
           throw new Error("Authentication token not available.");
         }
@@ -75,7 +79,7 @@ export default function EventsPage() {
     if (user) { 
       fetchEvents();
     }
-  }, [user, authLoading, router]); // Removed getIdToken from dependency array
+  }, [user, authLoading, router]); 
 
 
   if (authLoading || isLoadingEvents) {
@@ -149,10 +153,10 @@ export default function EventsPage() {
                         <Link href={`/dashboard/events/${event.eventId}`}>{event.eventName}</Link>
                       </h2>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {event.eventType} - {event.location}
+                        {event.eventType} - Venue: {event.location || 'N/A'} {/* Changed Label */}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Date: {format(new Date(event.dateTime), 'PPP p')} {/* Format: Oct 21, 2023, 4:30 PM */}
+                        Date: {format(new Date(event.dateTime), 'PPP p')} 
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         Status: <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -169,8 +173,6 @@ export default function EventsPage() {
                         <Link href={`/dashboard/events/${event.eventId}/edit`}>
                           <button className="text-sm py-1 px-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md">Edit</button>
                         </Link>
-                        {/* Delete button would require another handler */}
-                        {/* <button className="text-sm py-1 px-3 bg-red-500 hover:bg-red-600 text-white rounded-md">Delete</button> */}
                       </div>
                     )}
                   </div>

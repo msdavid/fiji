@@ -10,11 +10,12 @@ The scope of Project Fiji includes:
 *   User registration and authentication.
 *   Role-based access control (RBAC) for managing permissions.
 *   Management of user profiles and availability.
-*   Comprehensive event management, including creation, volunteer sign-ups, and assignments.
+*   Comprehensive event management, including creation (with organizer assignment), volunteer sign-ups, and assignments.
 *   Working group creation and member management.
 *   Tracking of donations.
 *   Basic reporting capabilities.
 *   Email notifications for key system events.
+*   User search functionality for administrative tasks.
 
 The system will consist of a backend API, a frontend web application, and will utilize Google Cloud services for database, authentication, and deployment.
 
@@ -34,9 +35,9 @@ Project Fiji is a self-contained system providing a dedicated platform for volun
 
 ### 2.2 Product Features
 The major features of Project Fiji are:
-*   User Account Management (Registration, Login, Profile)
+*   User Account Management (Registration, Login, Profile, Search)
 *   Role and Permission Management
-*   Event Lifecycle Management
+*   Event Lifecycle Management (including assigning an organizer)
 *   Volunteer Participation and Assignment Tracking
 *   Working Group Coordination
 *   Donation Recording
@@ -46,8 +47,8 @@ The major features of Project Fiji are:
 ### 2.3 User Classes and Characteristics
 *   **General Users/Volunteers:** Can register (via invitation), log in, manage their profile and availability, view and sign up for events, view their assignments and working groups.
 *   **Administrators (e.g., Sysadmin, Event Managers, Group Coordinators):** Users with elevated privileges, varying by assigned roles.
-    *   **System Administrator (Sysadmin):** Manages roles, users, registration invitations, system settings, and has oversight of all data.
-    *   **Event Managers (or users with event management privileges):** Can create, update, delete events, and manage volunteer assignments to events.
+    *   **System Administrator (Sysadmin):** Manages roles, users (including search), registration invitations, system settings, and has oversight of all data.
+    *   **Event Managers (or users with event management privileges):** Can create, update (including organizer), delete events, and manage volunteer assignments to events.
     *   **Working Group Coordinators (or users with group management privileges):** Can create, update, delete working groups, and manage member assignments.
     *   **Donation Managers (or users with donation privileges):** Can record, update, and delete donations.
 
@@ -92,6 +93,10 @@ This section details the functional requirements of Project Fiji, grouped by maj
 *   **3.1.5 Firebase Authentication Integration:**
     *   The system shall use Firebase Admin SDK on the backend to verify Firebase ID tokens for authenticating API requests.
     *   The frontend shall use Firebase SDK for user sign-up and sign-in operations.
+*   **3.1.6 User Search:**
+    *   The system shall provide an API endpoint (e.g., `GET /users/search?q={query}`) for searching users by name or email.
+    *   This functionality is primarily intended for administrative interfaces, such as selecting an organizer for an event.
+    *   The search should be case-insensitive and support partial matches. The backend implementation will determine the exact matching strategy (e.g., starts-with, contains).
 
 ### 3.2 Role-Based Access Control (RBAC)
 *   **3.2.1 Role Definition:**
@@ -120,12 +125,14 @@ This section details the functional requirements of Project Fiji, grouped by maj
 ### 3.4 Event Management
 *   **3.4.1 Event Creation:**
     *   Authorized users (with `events:create` privilege) shall be able to create new events.
-    *   Event creation shall include details such as event name, type, purpose, description, date/time, location, and number of volunteers required.
+    *   Event creation shall include details such as event name, type, purpose, description, date/time, **venue**, number of volunteers required, and an optional designated **organizer**.
+    *   The organizer is selected from existing users via a search interface provided in the frontend.
+    *   The `organizerUserId` (UID of the selected organizer) will be stored with the event.
 *   **3.4.2 Event Viewing:**
     *   Authorized users (with `events:view` privilege, or public if configured) shall be able to list all events and view details of specific events.
-    *   Event listings may support filtering and pagination.
+    *   Event listings may support filtering and pagination. API responses for event details will include creator and organizer names if available.
 *   **3.4.3 Event Updates:**
-    *   Authorized users (with `events:edit` privilege) shall be able to update the details of existing events.
+    *   Authorized users (with `events:edit` privilege) shall be able to update the details of existing events, including changing or clearing the designated organizer.
 *   **3.4.4 Event Deletion:**
     *   Authorized users (with `events:delete` privilege) shall be able to delete events.
 
@@ -226,7 +233,7 @@ This section details the functional requirements of Project Fiji, grouped by maj
     *   Login and Registration pages.
     *   User Dashboard.
     *   User Profile page.
-    *   Event Listing, Detail, and Creation/Edit pages.
+    *   Event Listing, Detail, and Creation/Edit pages (including organizer search/selection).
     *   Working Group management pages (for admins).
     *   Role management pages (for Sysadmin).
     *   Invitation management pages (for Sysadmin).
@@ -236,7 +243,10 @@ This section details the functional requirements of Project Fiji, grouped by maj
 ### 4.2 Software Interfaces
 *   **Firebase Authentication:** Used for user identity management (sign-up, sign-in, token verification).
 *   **Google Firestore:** Used as the primary NoSQL database for storing application data.
-*   **Backend API:** The frontend application will communicate with the backend via a RESTful API. The backend API will enforce business logic and data access rules.
+*   **Backend API:** The frontend application will communicate with the backend via a RESTful API. The backend API will enforce business logic and data access rules. Key endpoints include:
+    *   CRUD operations for users, roles, events, invitations, etc.
+    *   `GET /users/search?q={query}` for searching users.
+    *   Endpoints for event sign-up and withdrawal.
 
 ### 4.3 Hardware Interfaces
 *   No specific custom hardware interfaces are defined. The system relies on standard web client hardware (desktops, laptops, tablets, smartphones) and Google Cloud infrastructure.
@@ -320,14 +330,15 @@ The system will utilize Google Firestore for data persistence. Key collections a
 ### 6.4 `events` Collection
 *   `eventId` (String): Unique ID for the event.
 *   `eventName` (String): Name of the event.
-*   `eventType` (String): Type or category of the event.
-*   `purpose` (String): Purpose or goal of the event.
-*   `description` (String): Detailed description of the event.
+*   `eventType` (String, Optional): Type or category of the event.
+*   `purpose` (String, Optional): Purpose or goal of the event.
+*   `description` (String, Optional): Detailed description of the event.
 *   `dateTime` (Timestamp or String): Start date and time of the event.
-*   `location` (String or Map): Location of the event.
-*   `volunteersRequired` (Number): Number of volunteers needed.
+*   `venue` (String or Map, Optional): Venue or physical address of the event (formerly `location`).
+*   `volunteersRequired` (Number, Optional): Number of volunteers needed.
 *   `status` (String): Status of the event (e.g., "planned", "open_for_signup", "completed").
 *   `createdByUserId` (String): UID of the user who created the event.
+*   `organizerUserId` (String, Optional): UID of the user designated as the event organizer. References `users.uid`.
 *   `createdAt` (Timestamp).
 *   `updatedAt` (Timestamp).
 

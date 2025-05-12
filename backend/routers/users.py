@@ -1,13 +1,13 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Query # Added Query
 from firebase_admin import firestore
-from google.cloud.firestore_v1.base_query import FieldFilter # Import FieldFilter
-from typing import List, Optional, Any, Dict # Added Dict
+from google.cloud.firestore_v1.base_query import FieldFilter 
+from typing import List, Optional, Any, Dict 
 
 # Use direct imports from subdirectories of 'backend'
 from dependencies.database import get_db
 from dependencies.auth import get_firebase_user
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
-from models.user import UserCreateData, UserResponse, UserUpdate, UserRolesUpdate
+from models.user import UserCreateData, UserResponse, UserUpdate, UserRolesUpdate, UserSearchResult # Added UserSearchResult
 
 router = APIRouter(
     prefix="/users", 
@@ -164,6 +164,43 @@ async def update_users_me(
         return UserResponse(**response_data)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Could not update user profile.")
+
+@router.get("/search", response_model=List[UserSearchResult], dependencies=[Depends(require_permission("users", "list"))])
+async def search_users(
+    q: str = Query(..., min_length=1, description="Search query for first name, last name, or email."),
+    db: firestore.Client = Depends(get_db)
+):
+    if not q:
+        return []
+        
+    users_ref = db.collection(USERS_COLLECTION)
+    docs = users_ref.stream() # Fetch all users
+    
+    search_results = []
+    search_term_lower = q.lower()
+    
+    for doc in docs:
+        user_data = doc.to_dict()
+        user_data['uid'] = doc.id # Ensure uid is part of the data for the model
+
+        first_name = user_data.get("firstName", "").lower()
+        last_name = user_data.get("lastName", "").lower()
+        email = user_data.get("email", "").lower()
+
+        if search_term_lower in first_name or \
+           search_term_lower in last_name or \
+           search_term_lower in email:
+            try:
+                # Ensure all required fields for UserSearchResult are present
+                if "uid" in user_data and "firstName" in user_data and \
+                   "lastName" in user_data and "email" in user_data:
+                    search_results.append(UserSearchResult(**user_data))
+            except Exception as e: # Catch potential Pydantic validation errors if data is malformed
+                print(f"Skipping user {user_data.get('uid')} due to data issue: {e}")
+                continue 
+    
+    return search_results
+
 
 @router.get("", response_model=List[UserResponse], dependencies=[Depends(require_permission("users", "list"))])
 async def list_users(
