@@ -1,21 +1,11 @@
 import type { Metadata } from "next";
-import { Geist, Geist_Mono } from "next/font/google";
+import { GeistSans, GeistMono } from "geist/font";
 import "./globals.css";
 import { AuthProvider } from "@/context/AuthContext"; // Import AuthProvider
 
-const geistSans = Geist({
-  variable: "--font-geist-sans",
-  subsets: ["latin"],
-});
-
-const geistMono = Geist_Mono({
-  variable: "--font-geist-mono",
-  subsets: ["latin"],
-});
-
 export const metadata: Metadata = {
-  title: "Fiji Platform", // Updated title
-  description: "Volunteer and Event Management Platform", // Updated description
+  title: "Fiji Platform",
+  description: "Volunteer and Event Management Platform",
 };
 
 export default function RootLayout({
@@ -24,12 +14,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    
-
- {/* Wrap children with AuthProvider */}
+    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
+      <body>
+        <AuthProvider> {/* Wrap children with AuthProvider */}
           {children}
-        
-
-
+        </AuthProvider>
+      </body>
+    </html>
   );
 }

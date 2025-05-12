@@ -1,7 +1,8 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 import firebase_admin 
-from firebase_admin import firestore, auth # For firestore.SERVER_TIMESTAMP, auth, and type hinting Client
+from firebase_admin import firestore, auth
 import datetime
+from google.cloud.firestore_v1.base_query import FieldFilter # Import FieldFilter
 
 # Use relative imports from the 'backend' directory as root
 from dependencies.database import get_db
@@ -32,10 +33,14 @@ async def register_user_with_invitation(
                 detail="Invalid Firebase ID token: UID or email missing."
             )
 
-        invitation_query = db.collection(INVITATIONS_COLLECTION).where("token", "==", registration_data.invitationToken).where("status", "==", "pending").limit(1).stream()
+        # Updated Firestore query using FieldFilter
+        invitations_ref = db.collection(INVITATIONS_COLLECTION)
+        query = invitations_ref.where(filter=FieldFilter("token", "==", registration_data.invitationToken)) \
+                               .where(filter=FieldFilter("status", "==", "pending")) \
+                               .limit(1)
         
         invitation_doc_snapshot = None
-        for doc_snapshot in invitation_query:
+        for doc_snapshot in query.stream(): # Use the constructed query
             invitation_doc_snapshot = doc_snapshot
             break
         
@@ -82,7 +87,7 @@ async def register_user_with_invitation(
         created_user_doc_snapshot = user_doc_ref.get()
         if created_user_doc_snapshot.exists:
             response_data = created_user_doc_snapshot.to_dict()
-            response_data['uid'] = created_user_doc_snapshot.id
+            response_data['uid'] = created_user_doc_snapshot.id # Ensure UID is part of the response
             return UserResponse(**response_data)
         else:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve user profile after creation.")

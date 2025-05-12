@@ -30,3 +30,13 @@ class InvitationResponse(InvitationBase):
     expiresAt: datetime.datetime = Field(..., description="Timestamp of when the invitation will expire.")
 
     model_config = ConfigDict(from_attributes=True)
+
+class InvitationStatusResponse(BaseModel):
+    """
+    Model for responding to an invitation token validation request.
+    """
+    valid: bool = Field(..., description="Whether the token is valid for registration.")
+    reason: Optional[str] = Field(None, description="Reason why the token is not valid, if applicable.")
+    email: Optional[EmailStr] = Field(None, description="Email associated with the token, if found.")
+
+    model_config = ConfigDict(from_attributes=True)

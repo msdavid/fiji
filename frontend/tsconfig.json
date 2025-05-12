@@ -26,7 +26,12 @@
         "./src/*"
       ]
     },
-    "types": ["jest", "node"] // Added "jest"
+    "types": [
+      "jest",
+      "node"
+    ] // Added "jest"
+    ,
+    "target": "ES2017"
   },
   "include": [
     "next-env.d.ts",

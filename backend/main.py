@@ -2,19 +2,19 @@ import os
 import firebase_admin
 from firebase_admin import credentials, firestore
 from fastapi import FastAPI, HTTPException, Depends, Request
+from fastapi.middleware.cors import CORSMiddleware
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
 # Use relative imports from the 'backend' directory as root
 from dependencies.auth import get_firebase_user
 from routers import roles as roles_router
-from routers import invitations as invitations_router
+# Updated import for invitation routers
+from routers.invitations import admin_router as invitations_admin_router, public_router as invitations_public_router
 from routers import users as users_router
 
 # Load environment variables from .env file
-load_dotenv() # This should ideally be called before other modules if they depend on .env
-
-# --- Firebase Admin SDK Initialization (within lifespan) ---
+load_dotenv()
 
 @asynccontextmanager
 async def lifespan(app_instance: FastAPI):
@@ -60,9 +60,24 @@ app = FastAPI(
     lifespan=lifespan
 )
 
+# --- CORS Middleware Configuration ---
+origins = [
+    "http://localhost:3002", 
+    # "http://localhost:3000", # Uncomment if you also use this port
+]
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=origins,
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
 # Include routers
 app.include_router(roles_router.router)
-app.include_router(invitations_router.router)
+app.include_router(invitations_admin_router) # Renamed for clarity
+app.include_router(invitations_public_router) # New public router
 app.include_router(users_router.router)
 
 
@@ -100,8 +115,3 @@ async def health_check(request: Request):
 @app.get("/users/me", tags=["Users"])
 async def read_users_me(current_user: dict = Depends(get_firebase_user)):
     return {"user_info": current_user}
-
-# To run this application locally (ensure your current working directory is 'fiji/backend/'):
-# `uvicorn main:app --reload --port 8000`
-# or
-# `python -m uvicorn main:app --reload --port 8000`
