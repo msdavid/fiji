@@ -5,11 +5,11 @@ from fastapi import FastAPI, HTTPException, Depends, Request
 from dotenv import load_dotenv
 from contextlib import asynccontextmanager
 
-# Use absolute imports from 'backend'
-from backend.dependencies.auth import get_firebase_user
-from backend.routers import roles as roles_router
-from backend.routers import invitations as invitations_router
-from backend.routers import users as users_router
+# Use relative imports from the 'backend' directory as root
+from dependencies.auth import get_firebase_user
+from routers import roles as roles_router
+from routers import invitations as invitations_router
+from routers import users as users_router
 
 # Load environment variables from .env file
 load_dotenv() # This should ideally be called before other modules if they depend on .env
@@ -101,6 +101,7 @@ async def health_check(request: Request):
 async def read_users_me(current_user: dict = Depends(get_firebase_user)):
     return {"user_info": current_user}
 
-# To run this application locally (from the backend directory, if backend's parent is in PYTHONPATH):
-# Option 1: `python -m uvicorn backend.main:app --reload --port 8000` (run from project root /home/mauro/projects/fiji)
-# Option 2: `uvicorn main:app --reload --port 8000` (run from backend/, if PYTHONPATH is set up by uv or manually)
+# To run this application locally (ensure your current working directory is 'fiji/backend/'):
+# `uvicorn main:app --reload --port 8000`
+# or
+# `python -m uvicorn main:app --reload --port 8000`

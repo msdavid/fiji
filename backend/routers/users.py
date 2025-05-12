@@ -3,10 +3,10 @@ import firebase_admin
 from firebase_admin import firestore, auth # For firestore.SERVER_TIMESTAMP, auth, and type hinting Client
 import datetime
 
-# Use absolute imports from 'backend'
-from backend.dependencies.database import get_db
-from backend.dependencies.auth import get_firebase_user
-from backend.models.user import UserCreateData, UserResponse
+# Use relative imports from the 'backend' directory as root
+from dependencies.database import get_db
+from dependencies.auth import get_firebase_user
+from models.user import UserCreateData, UserResponse
 
 router = APIRouter(
     prefix="/users", 

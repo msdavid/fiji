@@ -4,8 +4,8 @@ from unittest.mock import MagicMock, patch
 import os
 import firebase_admin # Import for manipulating _apps
 
-# Use absolute import from 'backend'
-from backend.main import app  # The FastAPI application instance
+# Use relative import from 'backend' directory as root
+from main import app  # The FastAPI application instance
 
 # The actual default app name used by Firebase Admin SDK
 DEFAULT_APP_NAME_INTERNAL = "[DEFAULT]"
@@ -72,9 +72,9 @@ def client(db_mock):
 @pytest.fixture(autouse=True, scope="function")
 def mock_auth_dependencies(mocker):
     """
-    Mocks authentication-related dependencies using absolute paths.
+    Mocks authentication-related dependencies using relative paths from backend root.
     """
     default_mock_user = {"uid": "test-user-123", "email": "test.user@example.com", "name": "Test User"}
     
-    mocker.patch("backend.dependencies.auth.get_firebase_user", return_value=default_mock_user)
-    mocker.patch("backend.routers.roles.verify_sysadmin_role", return_value=default_mock_user)
+    mocker.patch("dependencies.auth.get_firebase_user", return_value=default_mock_user)
+    mocker.patch("routers.roles.verify_sysadmin_role", return_value=default_mock_user)
