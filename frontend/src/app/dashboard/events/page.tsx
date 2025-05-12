@@ -27,7 +27,7 @@ interface Event {
 
 export default function EventsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile, getIdToken } = useAuth();
+  const { user, loading: authLoading, userProfile } = useAuth(); // Removed getIdToken from here
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -42,12 +42,12 @@ export default function EventsPage() {
     }
 
     const fetchEvents = async () => {
-      if (!user) return; // Should not happen if authLoading is false and user is null (redirected)
+      if (!user) return; 
 
       setIsLoadingEvents(true);
       setError(null);
       try {
-        const token = await getIdToken();
+        const token = await user.getIdToken(); // Corrected: Call getIdToken on the user object
         if (!token) {
           throw new Error("Authentication token not available.");
         }
@@ -72,10 +72,10 @@ export default function EventsPage() {
       }
     };
 
-    if (user) { // Fetch events only if user is authenticated
+    if (user) { 
       fetchEvents();
     }
-  }, [user, authLoading, router, getIdToken]);
+  }, [user, authLoading, router]); // Removed getIdToken from dependency array
 
 
   if (authLoading || isLoadingEvents) {
