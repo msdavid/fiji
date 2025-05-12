@@ -3,8 +3,15 @@ from fastapi.testclient import TestClient
 from unittest.mock import MagicMock, patch
 import os
 import firebase_admin # Import for manipulating _apps
+import sys
 
-# Use relative import from 'backend' directory as root
+# Add the 'backend' directory to sys.path
+# This allows 'from main import app' to work when running pytest from the 'backend' directory
+# __file__ is tests/conftest.py
+# os.path.dirname(__file__) is tests/
+# os.path.dirname(os.path.dirname(__file__)) is backend/
+sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
 from main import app  # The FastAPI application instance
 
 # The actual default app name used by Firebase Admin SDK

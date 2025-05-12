@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional, Dict
 import datetime
 
@@ -35,6 +35,4 @@ class UserResponse(UserBase):
     updatedAt: datetime.datetime = Field(..., description="Timestamp of when the user was last updated in Firestore.")
     # Include other fields from UserBase via inheritance
 
-    class Config:
-        orm_mode = True # Pydantic V1
-        # from_attributes = True # Pydantic V2
+    model_config = ConfigDict(from_attributes=True)

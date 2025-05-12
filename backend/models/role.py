@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field
+from pydantic import BaseModel, Field, ConfigDict
 from typing import List, Dict, Optional
 import datetime
 
@@ -38,9 +38,4 @@ class RoleResponse(RoleBase):
     createdAt: datetime.datetime = Field(..., description="Timestamp of when the role was created.")
     updatedAt: datetime.datetime = Field(..., description="Timestamp of when the role was last updated.")
 
-    class Config:
-        # Pydantic V2: use `model_config` instead of `Config`
-        # For Pydantic V1 compatibility:
-        orm_mode = True # Allows Pydantic to work with ORM objects (like Firestore document snapshots)
-        # For Pydantic V2:
-        # from_attributes = True 
+    model_config = ConfigDict(from_attributes=True)

@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, EmailStr
+from pydantic import BaseModel, Field, EmailStr, ConfigDict
 from typing import List, Optional
 import datetime
 import uuid # For generating unique tokens
@@ -29,6 +29,4 @@ class InvitationResponse(InvitationBase):
     createdAt: datetime.datetime = Field(..., description="Timestamp of when the invitation was created.")
     expiresAt: datetime.datetime = Field(..., description="Timestamp of when the invitation will expire.")
 
-    class Config:
-        orm_mode = True # Pydantic V1
-        # from_attributes = True # Pydantic V2
+    model_config = ConfigDict(from_attributes=True)
