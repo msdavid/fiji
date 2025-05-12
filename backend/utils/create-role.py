@@ -5,9 +5,15 @@ import os
 import sys
 from google.cloud import firestore
 from firebase_admin import credentials, initialize_app
+from dotenv import load_dotenv # Import dotenv
 
 # Ensure the script can find modules in the 'backend' directory
 sys.path.append(os.path.abspath(os.path.join(os.path.dirname(__file__), '..')))
+
+# Load environment variables from .env file located in the parent directory (backend/.env)
+dotenv_path = os.path.abspath(os.path.join(os.path.dirname(__file__), '..', '.env'))
+load_dotenv(dotenv_path=dotenv_path)
+# print(f"Attempting to load .env from: {dotenv_path}") # Optional: for debugging .env loading
 
 # --- Firestore Initialization ---
 def initialize_firestore_client():
@@ -15,21 +21,28 @@ def initialize_firestore_client():
     try:
         project_id = os.getenv("GOOGLE_CLOUD_PROJECT")
         if not project_id:
-            raise ValueError("GOOGLE_CLOUD_PROJECT environment variable not set.")
+            raise ValueError("GOOGLE_CLOUD_PROJECT environment variable not set (checked .env and environment).")
 
         # Attempt to initialize with Application Default Credentials (ADC)
         # This is preferred for Cloud Run, Cloud Build, etc.
         try:
-            cred = credentials.ApplicationDefault()
-            initialize_app(cred, {'projectId': project_id})
-            print(f"Firebase Admin SDK initialized successfully for project: {project_id} using ADC.")
+            # Check if Firebase Admin SDK is already initialized to prevent re-initialization error
+            if not firebase_admin._apps:
+                cred = credentials.ApplicationDefault()
+                initialize_app(cred, {'projectId': project_id})
+                print(f"Firebase Admin SDK initialized successfully for project: {project_id} using ADC.")
+            else:
+                print(f"Firebase Admin SDK already initialized for project: {firebase_admin.get_app().project_id}.")
+
         except Exception as e_adc:
             print(f"Failed to initialize Firebase with ADC: {e_adc}. Checking for service account key...")
             # Fallback for local development if GOOGLE_APPLICATION_CREDENTIALS is set
             if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-                # initialize_app() will use GOOGLE_APPLICATION_CREDENTIALS if no cred object is passed
-                initialize_app(options={'projectId': project_id})
-                print(f"Firebase Admin SDK initialized successfully for project: {project_id} using GOOGLE_APPLICATION_CREDENTIALS.")
+                if not firebase_admin._apps:
+                    initialize_app(options={'projectId': project_id})
+                    print(f"Firebase Admin SDK initialized successfully for project: {project_id} using GOOGLE_APPLICATION_CREDENTIALS.")
+                else:
+                    print(f"Firebase Admin SDK already initialized for project: {firebase_admin.get_app().project_id}.")
             else:
                 raise ValueError(f"Firebase ADC failed and GOOGLE_APPLICATION_CREDENTIALS not set. Error: {e_adc}")
 
@@ -106,12 +119,9 @@ if __name__ == "__main__":
     )
 
     args = parser.parse_args()
-
-    # Ensure GOOGLE_CLOUD_PROJECT is set (can be done via .env file for local dev)
-    # from dotenv import load_dotenv
-    # load_dotenv(dotenv_path=os.path.join(os.path.dirname(__file__), '..', '.env'))
-    # print(f"Attempting to use project ID: {os.getenv('GOOGLE_CLOUD_PROJECT')}")
-
+    
+    # The GOOGLE_CLOUD_PROJECT is now loaded by load_dotenv() at the top if present in .env
+    # print(f"Attempting to use project ID: {os.getenv('GOOGLE_CLOUD_PROJECT')}") # Optional: for debugging
 
     db_client = initialize_firestore_client()
     create_role(db_client, args.roleName, args.description, args.privileges)
