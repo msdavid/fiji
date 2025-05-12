@@ -218,27 +218,26 @@ You'll need two separate terminal windows to run the backend and frontend simult
 
 To fully use the application, you'll need an administrative user and roles defined.
 
-1.  **Create a "sysadmin" Role in Firestore (Manual - One Time):**
-    *   Go to your Firebase Console > Firestore Database.
-    *   If it doesn't exist, create a collection named `roles`.
-    *   Add a new document to the `roles` collection. You can let Firestore auto-generate the Document ID, or you can specify one (e.g., `sysadmin_role`).
-    *   Add the following fields to this document:
-        *   `roleName`: (String) `sysadmin`
-        *   `description`: (String) `System Administrator with full access.`
-        *   `permissions`: (Array) Add relevant permission strings, e.g., `["manage_all_users", "configure_system"]` (or leave empty initially).
-        *   `createdAt`: (Timestamp) Set to the current time.
-    *   **Note the Document ID of this "sysadmin" role** (e.g., if auto-generated, copy it; if you set it, remember it).
+1.  **Initialize Firestore with Sysadmin Role (using `backend/utils/initialize_firestore.py`):**
+    *   This script creates/updates the `sysadmin` role in your Firestore `roles` collection. The script uses the `GOOGLE_CLOUD_PROJECT` environment variable defined in `backend/.env`.
+    *   Navigate to the `backend/` directory in your terminal.
+    *   Ensure your Application Default Credentials (ADC) are set up and `GOOGLE_CLOUD_PROJECT` is correctly configured in `backend/.env`.
+    *   Run the script:
+        ```bash
+        # In backend/ directory
+        uv run python utils/initialize_firestore.py
+        ```
+    *   The script should confirm successful creation/update of the `sysadmin` role. The Document ID for this role will be `sysadmin`.
 
 2.  **Create the First Admin User (using `backend/utils/add-admin-user.py`):**
     *   This script creates a user in Firebase Authentication and then creates a corresponding user profile in Firestore, assigning them the "sysadmin" role.
     *   Navigate to the `backend/` directory in your terminal.
-    *   Ensure your Application Default Credentials (ADC) are set up and `GOOGLE_CLOUD_PROJECT` is in your `backend/.env` file.
-    *   Run the script:
+    *   Run the script, using `sysadmin` as the role ID (as defined by `initialize_firestore.py`):
         ```bash
         # In backend/ directory
-        uv run python utils/add-admin-user.py your-admin-email@example.com YourAdminPassword SYSADMIN_ROLE_ID_FROM_FIRESTORE
+        uv run python utils/add-admin-user.py your-admin-email@example.com YourAdminPassword sysadmin
         ```
-        Replace `your-admin-email@example.com` with the desired admin email, `YourAdminPassword` with a strong password, and `SYSADMIN_ROLE_ID_FROM_FIRESTORE` with the actual Document ID of the sysadmin role you created in Firestore (Step 6.1).
+        Replace `your-admin-email@example.com` with the desired admin email and `YourAdminPassword` with a strong password.
     *   This script should confirm user creation in Firebase Auth and Firestore.
 
 3.  **Create an Invitation (using `backend/utils/create-invitation.py`):**
@@ -250,7 +249,7 @@ To fully use the application, you'll need an administrative user and roles defin
         uv run python utils/create-invitation.py newuser@example.com [--roles ROLE_ID_TO_ASSIGN_1,ROLE_ID_TO_ASSIGN_2]
         ```
         Replace `newuser@example.com` with the email of the user you want to invite.
-        Optionally, use `--roles` followed by a comma-separated list of Role Document IDs to assign to the user upon registration. If omitted, `rolesToAssignOnRegistration` will be empty.
+        Optionally, use `--roles` followed by a comma-separated list of Role Document IDs (e.g., `sysadmin` or other custom role IDs) to assign to the user upon registration. If omitted, `rolesToAssignOnRegistration` will be empty.
     *   The script will output an invitation token. This token can be used with the frontend registration page (e.g., `http://localhost:3002/register?token=THE_GENERATED_TOKEN`).
 
 ### 7. Key Configuration Files and Secrets Management
