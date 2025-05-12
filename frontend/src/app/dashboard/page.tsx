@@ -93,6 +93,14 @@ export default function DashboardPage() {
                   User Management
                 </Link>
               )}
+              {isAdmin && ( // Added Event Management link for admin
+                <Link 
+                  href="/dashboard/events" 
+                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+                >
+                  Event Management
+                </Link>
+              )}
               <span className="text-gray-700 dark:text-gray-300">
                 {user.email}
               </span>
