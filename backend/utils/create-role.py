@@ -4,6 +4,7 @@ import json
 import os
 import sys
 from google.cloud import firestore
+import firebase_admin # Import the firebase_admin module itself
 from firebase_admin import credentials, initialize_app
 from dotenv import load_dotenv # Import dotenv
 
@@ -27,7 +28,7 @@ def initialize_firestore_client():
         # This is preferred for Cloud Run, Cloud Build, etc.
         try:
             # Check if Firebase Admin SDK is already initialized to prevent re-initialization error
-            if not firebase_admin._apps:
+            if not firebase_admin._apps: # Now firebase_admin refers to the imported module
                 cred = credentials.ApplicationDefault()
                 initialize_app(cred, {'projectId': project_id})
                 print(f"Firebase Admin SDK initialized successfully for project: {project_id} using ADC.")
@@ -38,7 +39,7 @@ def initialize_firestore_client():
             print(f"Failed to initialize Firebase with ADC: {e_adc}. Checking for service account key...")
             # Fallback for local development if GOOGLE_APPLICATION_CREDENTIALS is set
             if os.getenv("GOOGLE_APPLICATION_CREDENTIALS"):
-                if not firebase_admin._apps:
+                if not firebase_admin._apps: # Now firebase_admin refers to the imported module
                     initialize_app(options={'projectId': project_id})
                     print(f"Firebase Admin SDK initialized successfully for project: {project_id} using GOOGLE_APPLICATION_CREDENTIALS.")
                 else:
