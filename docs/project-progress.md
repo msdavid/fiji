@@ -81,7 +81,6 @@ For detailed task tracking and technical logs, refer to `.Q/projectlog.md`.
         *   Implemented logic in `AuthContext` (`frontend/src/context/AuthContext.tsx`) to fetch and store the current user's profile, including their `assignedRoleIds`, from the backend (`/users/me`).
         *   Conditional rendering of a "User Management" link on the dashboard (`frontend/src/app/dashboard/page.tsx`) for users with the `sysadmin` role ID.
         *   Developed an admin page (`frontend/src/app/dashboard/admin/users/page.tsx`) for user management, accessible only to `sysadmin` users. This page includes a `RoleManagementModal` component.
-        *   Added a feature for `sysadmin` users to view other users' profiles in a read-only manner from the admin user list page (`/dashboard/admin/profile/[userId]`).
         *   Corrected import and authorization logic in admin-related frontend components to use `useAuth()` hook and `userProfile.assignedRoleIds`.
         *   Added a "← Back to Dashboard" link on the admin users page for better navigation.
     *   **Backend Import Resolution:** Resolved `ModuleNotFoundError` issues in the backend by changing imports to be direct from the `backend` directory's subfolders (e.g., `from dependencies...` instead of `from backend.dependencies...`).
@@ -90,31 +89,21 @@ For detailed task tracking and technical logs, refer to `.Q/projectlog.md`.
         *   Removed temporary `console.log` statements from frontend code.
     *   **Testing:** Confirmed successful completion of all tests for Sprint 2 features.
 
-*   **Outcome:** Sprint 2 successfully delivered user profile management capabilities and foundational RBAC features, including an admin interface for user role management and viewing user profiles. The frontend now dynamically adapts based on user roles, and key UI/UX issues have been addressed. The backend was also stabilized with import fixes.
+*   **Outcome:** Sprint 2 successfully delivered user profile management capabilities and foundational RBAC features, including an admin interface for user role management. The frontend now dynamically adapts based on user roles, and key UI/UX issues have been addressed. The backend was also stabilized with import fixes.
 
 ---
 
-### Sprint 3: Event Management (Backend & Frontend)
-*   **Status:** Completed
-*   **Completion Date:** 2024-08-02 (Date of testing confirmation)
-*   **Goal:** Implement backend and frontend functionalities for Event Management, including data models, API endpoints for CRUD operations on events, UI for event listing, creation, and viewing details, and user self-signup for events.
-*   **Key Achievements:**
-    *   **Backend (Completed previously):**
-        *   Defined `Event` and `Assignment` models (`backend/models/event.py`, `backend/models/assignment.py`).
-        *   Developed CRUD API endpoints in `backend/routers/events.py` for events.
-        *   Implemented API endpoints for event assignments: user self-signup (`POST /events/{event_id}/signup`), withdrawal (`DELETE /events/{event_id}/signup`), listing assignments for an event (`GET /events/{event_id}/assignments`), admin creation of assignments (`POST /events/{event_id}/assignments`), and admin update/deletion of assignments.
-        *   Integrated event and assignment endpoints with RBAC (e.g., `events:create`, `events:manage_assignments`).
-        *   Enhanced `EventResponse` and `EventWithSignupStatus` models to include user-specific signup status.
-    *   **Frontend:**
-        *   Developed an Event Listing page (`/dashboard/events`) to display available events, showing key details and the current user's signup status.
-        *   Implemented an Event Detail page (`/dashboard/events/{eventId}`) to show comprehensive information about a single event.
-        *   Enabled user self-signup and withdrawal from events via buttons on the event listing and detail pages.
-        *   Created an Event Creation/Edit form (`/dashboard/events/new`, `/dashboard/events/{eventId}/edit`) for authorized users (e.g., `sysadmin` or users with `events:create`/`events:edit` permissions) to manage events.
-        *   Styled all event-related pages and components using Tailwind UI.
-    *   **Testing:** All backend and frontend functionalities for event management, including CRUD operations, self-signup, and permission checks, were manually tested and confirmed to be working.
-
-*   **Outcome:** Sprint 3 successfully delivered comprehensive event management capabilities. Users can view, sign up for, and withdraw from events. Authorized administrators can create, edit, and manage events and their assignments. The system is now ready for further feature development, such as working group management.
-*   **Next Steps:** Proceed with Sprint 4 (Working Group Management - Backend & Frontend) or other prioritized tasks.
+### Sprint 3: Event Management (Backend)
+*   **Status:** Completed (Backend portion)
+*   **Completion Date:** 2024-07-30 (based on project log entry)
+*   **Goal:** Implement the backend functionalities for Event Management, including data models, API endpoints for CRUD operations on events, and necessary business logic.
+*   **Key Achievements (Backend):**
+    *   **Event Data Model:** Defined the `Event` model (`backend/models/event.py`) to store event details (e.g., name, date, description, location, attendees).
+    *   **API Endpoints:** Developed CRUD API endpoints in `backend/routers/events.py` for creating, reading, updating, and deleting events.
+    *   **Business Logic:** Implemented initial business logic related to event management, potentially including validation and user associations.
+    *   **Integration:** Ensured new event endpoints are integrated with authentication and authorization mechanisms.
+*   **Outcome:** The backend for event management is complete, providing the necessary APIs and data structures for the frontend to build upon in a subsequent sprint.
+*   **Next Steps (as per log):** Proceed with Sprint 4 (Event Management - Frontend).
 
 ---
 *(Space for future sprint summaries)*
