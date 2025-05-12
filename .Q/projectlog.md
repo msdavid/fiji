@@ -37,9 +37,7 @@
 
 ## Session: 2024-07-30 18:00:00 (Approx) - Debug Backend Imports
 **Goal:** Resolve `ModuleNotFoundError: No module named 'backend'` when running the backend application.
-**Issue:** Imports in router and dependency files were using an incorrect prefix (e.g., `from backend.dependencies...`) when the application is run from within the `backend` directory.
-**Resolution:** Changed imports to be direct from the `backend` directory's subfolders (e.g., `from dependencies...`).
-**Files Modified:** (Details in previous log entry)
+**Actions:** (Details in previous log entry)
 **Next Steps:** User to restart backend server and proceed with manual testing of Sprint 2 features.
 
 ## Session: 2024-07-31 (Approx) - User Profile Page Debugging & Refinement
@@ -72,32 +70,28 @@
 **Actions:** (Details in previous log entry)
 **Next Steps:** User to test the `create-role.py` script.
 
-## Session: 2024-08-05 (Sprint 3 Event Management - UI, Organizer Field, Name Display, Search)
+## Session: 2024-08-05 (Sprint 3 Event Management - UI, Organizer Field, Name Display, Search, Docs)
 
-**Goal:** Continue Sprint 3 Event Management: Implement UI, add "Organizer" field with search, display creator/organizer names, and refine UI labels.
+**Goal:** Implement Event Management UI, "Organizer" field with search, display creator/organizer names, refine UI labels, and update documentation.
 
 **Actions & Features Implemented/Updated:**
-*   **Event Management UI (Initial):**
-    *   Created frontend pages: event listing, creation, detail, edit.
+*   **Event Management UI (Core):**
+    *   Created/Updated frontend pages: event listing, creation, detail, edit.
     *   Connected forms to backend API endpoints.
-*   **Organizer Field (Phases 1 & 2):**
+    *   Implemented event signup/withdrawal on detail page.
+*   **Organizer Field & User Search:**
     *   Added `organizerUserId` to backend event models and router logic.
-    *   Added simple text input for `organizerUserId` in frontend event forms.
-    *   Updated event detail page to display `organizerUserId`.
+    *   Implemented `GET /users/search` backend endpoint.
+    *   Updated frontend event forms (`new`, `edit`) with a searchable input for selecting event organizer, including debounced search, result display, and a "Clear" button for the selection in the edit form.
 *   **Creator/Organizer Name Display:**
     *   Updated backend models (`event.py`) to include `organizerFirstName`, `organizerLastName`, `creatorFirstName`, `creatorLastName`.
     *   Updated backend router (`events.py`) to populate these name fields by fetching user details.
     *   Updated frontend event detail page (`[eventId]/page.tsx`) to display full names for creator and organizer.
-    *   Corrected `SyntaxError` in `backend/routers/events.py` and refined async calls in `_get_user_details`.
-*   **Organizer Search Functionality (Phase 3):**
-    *   Backend:
-        *   Defined `UserSearchResult` model in `backend/models/user.py`.
-        *   Implemented `GET /users/search` endpoint in `backend/routers/users.py` for searching users by name/email.
-    *   Frontend:
-        *   Updated "Create Event" form (`new/page.tsx`) to use a searchable input for selecting the event organizer, including debounced search and result display.
-        *   Updated "Edit Event" form (`edit/page.tsx`) with the same searchable input for organizer, including pre-filling the name and providing a "Clear" button for the selection.
 *   **UI Label Change:**
-    *   Changed "Location" label to "Venue" in event forms (create, edit) and event detail page.
+    *   Changed "Location" label to "Venue" in event forms and detail page.
+*   **Documentation:**
+    *   Updated `.Q/srs.md` and `docs/technical-specs.md` to reflect new features and changes.
+*   **Commits:** All related changes committed.
 
 **Files Modified/Created:**
 *   `backend/models/event.py`
@@ -107,7 +101,24 @@
 *   `frontend/src/app/dashboard/events/new/page.tsx`
 *   `frontend/src/app/dashboard/events/[eventId]/edit/page.tsx`
 *   `frontend/src/app/dashboard/events/[eventId]/page.tsx`
-*   `frontend/src/app/dashboard/events/page.tsx` (interface comment update)
+*   `frontend/src/app/dashboard/events/page.tsx`
+*   `.Q/srs.md`
+*   `docs/technical-specs.md`
 *   `.Q/projectlog.md` (this update)
 
-**Next Steps:** User to test the complete organizer search functionality, creator/organizer name display, and the "Venue" label change. Awaiting confirmation to commit all related changes.
+**Next Steps (Continuing Sprint 3 Test Plan - `tmp/sprint-3-event-management.md`):**
+*   **B.6:** `SysAdminUser` to create a second event (`Test Event Beta (Signup Test)`) with status "Open for Signup".
+*   **B.7:** `SysAdminUser` to check if UI for managing/viewing event assignments exists on event detail page (currently not explicitly implemented, may need to be added if required by test plan).
+*   **B.8:** `SysAdminUser` to logout.
+*   **Section C:** `RegularUser` login and testing:
+    *   View event list (check for no admin buttons).
+    *   View event details (check signup button availability based on status).
+    *   Self-signup for "Test Event Beta".
+    *   Attempt to sign up again (should fail or be disabled).
+    *   Withdraw from "Test Event Beta".
+    *   Attempt to access admin event actions (URLs for new/edit event - should be denied).
+    *   Logout.
+*   **Section D:** `SysAdminUser` login and testing (cleanup):
+    *   Verify `RegularUser`'s signup/withdrawal in admin view (if B.7 implemented).
+    *   Delete both test events.
+    *   Logout.
