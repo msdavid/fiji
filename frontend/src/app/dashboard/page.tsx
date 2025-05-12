@@ -2,17 +2,17 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
+import Link from 'next/link'; 
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebaseConfig';
-import { useAuth } from '@/context/AuthContext'; // Import useAuth
+import { useAuth } from '@/context/AuthContext'; 
 
 export default function DashboardPage() {
   const router = useRouter();
-  const { user, loading, error: authError } = useAuth(); // Use the AuthContext
+  const { user, loading, error: authError, userProfile } = useAuth();
 
   useEffect(() => {
     if (!loading && !user) {
-      // If not loading and no user, redirect to login
       router.push('/login');
     }
   }, [user, loading, router]);
@@ -20,16 +20,17 @@ export default function DashboardPage() {
   const handleLogout = async () => {
     try {
       await signOut(auth);
-      // AuthProvider will detect the state change and update the context.
-      // The useEffect above will then trigger redirection.
-      // Optionally, can still push to /login immediately for faster UI feedback.
       router.push('/login');
     } catch (error) {
       console.error('Logout Error:', error);
-      // Handle logout error (e.g., display a message to the user)
     }
   };
 
+  // Updated isAdmin check:
+  // Assumes 'sysadmin' is the ID of the sysadmin role in the assignedRoleIds array.
+  // If your sysadmin role ID is different (e.g., a UUID), replace 'sysadmin' with that ID.
+  const isAdmin = userProfile?.assignedRoleIds?.includes('sysadmin');
+  
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -39,7 +40,6 @@ export default function DashboardPage() {
   }
 
   if (authError) {
-    // Handle critical auth errors from context, e.g., token refresh failure
     return (
         <div className="flex flex-col items-center justify-center min-h-screen bg-red-50 dark:bg-red-900 p-4">
             <div className="bg-white dark:bg-gray-800 p-8 rounded-lg shadow-xl text-center">
@@ -59,8 +59,8 @@ export default function DashboardPage() {
   }
 
   if (!user) {
-    // This state should ideally be brief as useEffect handles redirection.
-    // It acts as a fallback or if redirection is in progress.
+    // This case should ideally be handled by the useEffect redirect,
+    // but it's a good fallback.
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
         <div>Redirecting to login...</div>
@@ -68,10 +68,8 @@ export default function DashboardPage() {
     );
   }
 
-  // User is authenticated and data is available
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
-      {/* Navbar */}
       <nav className="bg-white dark:bg-gray-900 shadow-sm">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
@@ -80,13 +78,27 @@ export default function DashboardPage() {
                 Fiji Platform
               </div>
             </div>
-            <div className="flex items-center">
-              <span className="text-gray-700 dark:text-gray-300 mr-4">
+            <div className="flex items-center space-x-4">
+              <Link 
+                href="/dashboard/profile" 
+                className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+              >
+                My Profile
+              </Link>
+              {isAdmin && (
+                <Link 
+                  href="/dashboard/admin/users" 
+                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+                >
+                  User Management
+                </Link>
+              )}
+              <span className="text-gray-700 dark:text-gray-300">
                 {user.email}
               </span>
               <button
                 onClick={handleLogout}
-                className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                className="py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
                 Logout
               </button>
@@ -95,7 +107,6 @@ export default function DashboardPage() {
         </div>
       </nav>
 
-      {/* Main Content Area */}
       <main>
         <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
           <div className="px-4 py-6 sm:px-0">
@@ -109,7 +120,12 @@ export default function DashboardPage() {
               <p className="mt-4 text-gray-600 dark:text-gray-300">
                 This is a placeholder for your dashboard content. More features will be added soon.
               </p>
-              {/* Dashboard content will go here */}
+              {/* You can also display userProfile details here for quick verification */}
+              {/* {userProfile && (
+                <pre className="mt-4 p-2 bg-gray-200 dark:bg-gray-700 rounded text-sm overflow-x-auto">
+                  {JSON.stringify(userProfile, null, 2)}
+                </pre>
+              )} */}
             </div>
           </div>
         </div>

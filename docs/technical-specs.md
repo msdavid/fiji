@@ -289,12 +289,12 @@ The system will utilize Google Firestore for data persistence. Key collections a
 *   `assignedRoleIds` (Array of Strings): List of IDs of roles assigned to the user.
 *   `status` (String): User account status (e.g., "active", "invited", "disabled").
 *   `phoneNumber` (String, Optional).
-*   `skills` (Array of Strings or Map, Optional).
-*   `qualifications` (Array of Strings or Map, Optional).
+*   `skills` (String, Optional, multi-line text for free-form skills entry).
+*   `qualifications` (String, Optional, multi-line text for free-form qualifications entry).
 *   `availability` (Map, Optional):
     *   `general` (String, Optional): Text description of general availability.
     *   `specificDates` (Array of Maps/Strings, Optional): Specific dates/times of availability.
-*   `preferences` (Map, Optional).
+*   `preferences` (String, Optional, multi-line text for free-form preferences entry).
 *   `createdAt` (Timestamp).
 *   `updatedAt` (Timestamp).
 

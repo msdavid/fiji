@@ -8,6 +8,10 @@ export default {
   ],
   theme: {
     extend: {
+      fontFamily: {
+        sans: ['var(--font-sans)', 'Arial', 'Helvetica', 'sans-serif'], // Use the CSS variable from globals.css
+        mono: ['var(--font-mono)', 'monospace'], // Use the CSS variable from globals.css
+      },
       // You can extend the default Tailwind theme here
       // For example, adding custom colors, fonts, etc.
       // colors: {

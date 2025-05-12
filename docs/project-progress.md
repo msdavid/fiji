@@ -67,4 +67,43 @@ For detailed task tracking and technical logs, refer to `.Q/projectlog.md`.
 *   **Outcome:** Sprint 1 successfully established the core frontend application and user authentication lifecycle. Key user-facing features like registration and login are functional, integrated with Firebase Authentication and the backend services. The frontend is containerized and has an initial CI/CD setup. This provides a strong foundation for building out further frontend features and user interactions.
 
 ---
+
+### Sprint 2: User Profile Management & RBAC Implementation
+*   **Status:** Completed
+*   **Completion Date:** 2024-08-01 (based on project log entry confirming test completion)
+*   **Goal:** Implement user profile management (view/edit) on the frontend, and Role-Based Access Control (RBAC) features, including UI for sysadmin to manage user roles.
+*   **Key Achievements:**
+    *   **User Profile Management (Frontend & Backend):**
+        *   Developed a `/dashboard/profile` page allowing authenticated users to view and update their profile information (first name, last name, phone number, skills, qualifications, preferences).
+        *   Backend `User` model (`backend/models/user.py`) and `/users/me` (GET) and `/users/me` (PUT) endpoints (`backend/routers/users.py`) were enhanced to support these new profile fields.
+        *   `skills` and `qualifications` fields were refactored from comma-separated lists to free-text textareas on the frontend, with corresponding backend model updates.
+    *   **Role-Based Access Control (RBAC) & Admin UI:**
+        *   Implemented logic in `AuthContext` (`frontend/src/context/AuthContext.tsx`) to fetch and store the current user's profile, including their `assignedRoleIds`, from the backend (`/users/me`).
+        *   Conditional rendering of a "User Management" link on the dashboard (`frontend/src/app/dashboard/page.tsx`) for users with the `sysadmin` role ID.
+        *   Developed an admin page (`frontend/src/app/dashboard/admin/users/page.tsx`) for user management, accessible only to `sysadmin` users. This page includes a `RoleManagementModal` component.
+        *   Corrected import and authorization logic in admin-related frontend components to use `useAuth()` hook and `userProfile.assignedRoleIds`.
+        *   Added a "← Back to Dashboard" link on the admin users page for better navigation.
+    *   **Backend Import Resolution:** Resolved `ModuleNotFoundError` issues in the backend by changing imports to be direct from the `backend` directory's subfolders (e.g., `from dependencies...` instead of `from backend.dependencies...`).
+    *   **UI/UX Enhancements & Bug Fixes:**
+        *   Resolved font preloading warnings related to `GeistSans` by updating `globals.css` and `tailwind.config.ts` and clearing Next.js cache.
+        *   Removed temporary `console.log` statements from frontend code.
+    *   **Testing:** Confirmed successful completion of all tests for Sprint 2 features.
+
+*   **Outcome:** Sprint 2 successfully delivered user profile management capabilities and foundational RBAC features, including an admin interface for user role management. The frontend now dynamically adapts based on user roles, and key UI/UX issues have been addressed. The backend was also stabilized with import fixes.
+
+---
+
+### Sprint 3: Event Management (Backend)
+*   **Status:** Completed (Backend portion)
+*   **Completion Date:** 2024-07-30 (based on project log entry)
+*   **Goal:** Implement the backend functionalities for Event Management, including data models, API endpoints for CRUD operations on events, and necessary business logic.
+*   **Key Achievements (Backend):**
+    *   **Event Data Model:** Defined the `Event` model (`backend/models/event.py`) to store event details (e.g., name, date, description, location, attendees).
+    *   **API Endpoints:** Developed CRUD API endpoints in `backend/routers/events.py` for creating, reading, updating, and deleting events.
+    *   **Business Logic:** Implemented initial business logic related to event management, potentially including validation and user associations.
+    *   **Integration:** Ensured new event endpoints are integrated with authentication and authorization mechanisms.
+*   **Outcome:** The backend for event management is complete, providing the necessary APIs and data structures for the frontend to build upon in a subsequent sprint.
+*   **Next Steps (as per log):** Proceed with Sprint 4 (Event Management - Frontend).
+
+---
 *(Space for future sprint summaries)*
