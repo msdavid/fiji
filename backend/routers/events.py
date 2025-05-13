@@ -68,6 +68,7 @@ async def create_event(
                 organizer_details = await _get_user_details(db, response_data["organizerUserId"])
                 response_data["organizerFirstName"] = organizer_details.get("firstName")
                 response_data["organizerLastName"] = organizer_details.get("lastName")
+                response_data["organizerEmail"] = organizer_details.get("email")
             
             return EventResponse(**response_data)
         else:
@@ -129,6 +130,7 @@ async def list_events(
                 org_details = user_details_map.get(event_data["organizerUserId"], {})
                 event_data["organizerFirstName"] = org_details.get("firstName")
                 event_data["organizerLastName"] = org_details.get("lastName")
+                event_data["organizerEmail"] = org_details.get("email")
 
             events_list.append(EventWithSignupStatus(**event_data, isCurrentUserSignedUp=is_signed_up, currentUserAssignmentStatus=assignment_status))
         return events_list
@@ -158,6 +160,7 @@ async def get_event(
             organizer_details = await _get_user_details(db, event_data["organizerUserId"]) 
             event_data["organizerFirstName"] = organizer_details.get("firstName")
             event_data["organizerLastName"] = organizer_details.get("lastName")
+            event_data["organizerEmail"] = organizer_details.get("email")
 
         is_signed_up = None
         assignment_status = None
@@ -211,6 +214,7 @@ async def update_event(
             organizer_details = await _get_user_details(db, response_data["organizerUserId"]) 
             response_data["organizerFirstName"] = organizer_details.get("firstName")
             response_data["organizerLastName"] = organizer_details.get("lastName")
+            response_data["organizerEmail"] = organizer_details.get("email")
             
         return EventResponse(**response_data)
     except HTTPException as http_exc: 
@@ -218,7 +222,6 @@ async def update_event(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
-# ... (rest of the file remains the same: delete_event and assignment endpoints)
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("events", "delete"))])
 async def delete_event(event_id: str, db: firestore.Client = Depends(get_db)):
     try:
@@ -412,7 +415,7 @@ async def update_event_assignment(
     if not update_data:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
     
-    update_data["assignmentDate"] = firestore.SERVER_TIMESTAMP 
+    update_data["assignmentDate"] = firestore.SERVER_TIMESTAMP # Consider if this should always be updated
     assignment_ref.update(update_data)
 
     updated_assignment_doc = assignment_ref.get() 

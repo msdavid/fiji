@@ -12,7 +12,7 @@ class EventBase(BaseModel):
     description: Optional[str] = Field(None, description="Detailed description of the event.")
     dateTime: datetime.datetime = Field(..., description="Date and time of the event. Frontend sends ISO string, Pydantic converts.")
     durationMinutes: Optional[int] = Field(None, gt=0, description="Duration of the event in minutes.")
-    location: Optional[str] = Field(None, max_length=255, description="Location of the event.")
+    location: Optional[str] = Field(None, max_length=255, description="Location of the event.") # Renamed from venue in SRS for consistency with existing code
     volunteersRequired: Optional[int] = Field(None, ge=0, description="Number of volunteers required for the event.")
     status: str = Field(
         default="draft", 
@@ -39,7 +39,7 @@ class EventUpdate(BaseModel):
     description: Optional[str] = Field(None)
     dateTime: Optional[datetime.datetime] = None
     durationMinutes: Optional[int] = Field(None, gt=0)
-    location: Optional[str] = Field(None, max_length=255)
+    location: Optional[str] = Field(None, max_length=255) # Renamed from venue
     volunteersRequired: Optional[int] = Field(None, ge=0)
     status: Optional[str] = None # Consider specific validation for status transitions
     organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer. Can be set to null to remove organizer.")
@@ -70,6 +70,7 @@ class EventResponse(EventInDBBase): # Inherits common fields from EventInDBBase
     eventId: str = Field(..., description="Unique ID of the event (Firestore document ID).")
     organizerFirstName: Optional[str] = Field(None, description="First name of the event organizer.")
     organizerLastName: Optional[str] = Field(None, description="Last name of the event organizer.")
+    organizerEmail: Optional[str] = Field(None, description="Email of the event organizer.")
     creatorFirstName: Optional[str] = Field(None, description="First name of the user who created the event.")
     creatorLastName: Optional[str] = Field(None, description="Last name of the user who created the event.")
     
