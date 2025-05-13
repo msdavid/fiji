@@ -101,7 +101,7 @@
 **Sprint 4 Status: Completed.**
 **Next Steps:** Awaiting user confirmation to proceed with Sprint 5 or manual testing of Sprint 4.
 
-## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Sprint 4 Manual Testing & Debugging
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Sprint 4 Manual Testing & Debugging)
 
 **Goal:** Conduct manual testing for Sprint 4 features and address any bugs found.
 
@@ -136,3 +136,34 @@
 **Next Steps:**
 *   User to confirm prerequisites for Sprint 4 testing are met (users assigned roles, test events created).
 *   Continue with manual execution of test cases from `tmp/sprint-4-test-plan.md`, starting with EP.1.
+
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Create Dashboard Navigation Menu & Refactor Pages
+
+**Goal:** Create a reusable navigation menu for the user dashboard section and refactor relevant pages to use it, removing redundant navigation elements.
+
+**Activities:**
+*   Identified that the dashboard navigation was previously part of the main dashboard page (`frontend/src/app/dashboard/page.tsx`).
+*   Proposed and implemented a refactor to extract navigation into a dedicated component and a new dashboard layout file.
+*   Created `frontend/src/components/dashboard/DashboardNav.tsx` to house the navigation logic and links.
+    *   Navigation links include: My Profile, Users (admin), Working Groups (admin), Events (all users).
+    *   Includes user email display and logout button.
+*   Created `frontend/src/app/dashboard/layout.tsx` to serve as the layout for all `/dashboard/*` routes.
+    *   This layout imports and renders `DashboardNav`.
+    *   It centralizes authentication checks (loading, error, redirect to login if not authenticated) for the dashboard section.
+*   Modified `frontend/src/app/dashboard/page.tsx` to remove the embedded navigation and rely on the new `DashboardLayout`.
+*   Identified and removed redundant `<nav>` elements and outer layout `divs` from:
+    *   `frontend/src/app/dashboard/events/page.tsx`
+    *   `frontend/src/app/dashboard/admin/working-groups/page.tsx`
+*   Adjusted the "New Working Group" button placement in `frontend/src/app/dashboard/admin/working-groups/page.tsx` for consistency.
+
+**Files Modified/Created:**
+*   `frontend/src/components/dashboard/DashboardNav.tsx` (created)
+*   `frontend/src/app/dashboard/layout.tsx` (created)
+*   `frontend/src/app/dashboard/page.tsx` (modified)
+*   `frontend/src/app/dashboard/events/page.tsx` (modified)
+*   `frontend/src/app/dashboard/admin/working-groups/page.tsx` (modified)
+*   `.Q/projectlog.md` (this update)
+
+**Next Steps:**
+*   User to test the updated dashboard pages to ensure single navigation and correct layout.
+*   Proceed with further development or testing as instructed.
