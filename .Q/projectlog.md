@@ -168,7 +168,7 @@
 *   User to test the updated dashboard pages to ensure single navigation and correct layout.
 *   Proceed with further development or testing as instructed.
 
-## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Update Dashboard Navigation Profile Link
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Previous Session) - Update Dashboard Navigation Profile Link
 
 **Goal:** Modify the dashboard navigation to display the user's first name (linking to their profile) instead of their email, and remove the separate "My Profile" link.
 
@@ -186,4 +186,25 @@
 
 **Next Steps:**
 *   User to test the updated dashboard navigation.
+*   Commit and push changes.
+
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Add Separators to Dashboard Navigation Links
+
+**Goal:** Add visual separators "|" between links in the dashboard navigation bar for better readability.
+
+**Activities:**
+*   Modified `frontend/src/components/dashboard/DashboardNav.tsx`:
+    *   Imported `React` for creating JSX elements within an array.
+    *   Programmatically built an array of navigation `Link` components.
+    *   Iterated through this array to render the links, inserting a styled `<span>|</span>` separator between each link.
+    *   The separator is styled with `text-gray-400 dark:text-gray-500 select-none`.
+    *   Adjusted the `space-x` utility on the parent `div` to `space-x-3` to accommodate separators.
+*   Updated `.Q/projectlog.md` to reflect these changes.
+
+**Files Modified/Created:**
+*   `frontend/src/components/dashboard/DashboardNav.tsx` (modified)
+*   `.Q/projectlog.md` (this update)
+
+**Next Steps:**
+*   User to test the updated dashboard navigation with separators.
 *   Commit and push changes.

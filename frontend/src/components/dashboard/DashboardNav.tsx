@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebaseConfig'; // Ensure this path is correct
 import { useAuth } from '@/context/AuthContext';
+import React from 'react'; // Import React for JSX elements in array and keys
 
 export default function DashboardNav() {
   const router = useRouter();
@@ -43,10 +44,48 @@ export default function DashboardNav() {
     return null;
   }
 
-  // Determine display name for profile link
-  // Fallback chain: userProfile.firstName -> user.email -> "Profile"
-  // user is guaranteed to be non-null here.
   const displayName = userProfile?.firstName ? userProfile.firstName : (user.email || "Profile");
+
+  const linkClassName = "text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400";
+  const separatorClassName = "text-gray-400 dark:text-gray-500 select-none"; // Added select-none
+
+  const navLinkComponents = [];
+
+  if (isAdmin) {
+    navLinkComponents.push(
+      <Link key="users" href="/dashboard/admin/users" className={linkClassName}>
+        Users
+      </Link>
+    );
+    navLinkComponents.push(
+      <Link key="wg" href="/dashboard/admin/working-groups" className={linkClassName}>
+        Working Groups
+      </Link>
+    );
+  }
+
+  navLinkComponents.push(
+    <Link key="events" href="/dashboard/events" className={linkClassName}>
+      Events
+    </Link>
+  );
+  navLinkComponents.push(
+    <Link key="profile" href="/dashboard/profile" className={linkClassName}>
+      {displayName}
+    </Link>
+  );
+
+  const renderedNavItems = [];
+  navLinkComponents.forEach((item, index) => {
+    renderedNavItems.push(item);
+    if (index < navLinkComponents.length - 1) {
+      renderedNavItems.push(
+        <span key={`sep-${index}`} className={separatorClassName}>
+          |
+        </span>
+      );
+    }
+  });
 
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-sm">
@@ -57,37 +96,9 @@ export default function DashboardNav() {
                 Fiji Platform
             </Link>
           </div>
-          <div className="flex items-center space-x-4">
-            {/* "My Profile" link has been removed */}
-            {isAdmin && (
-              <>
-                <Link
-                  href="/dashboard/admin/users"
-                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
-                >
-                  Users
-                </Link>
-                <Link
-                  href="/dashboard/admin/working-groups"
-                  className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
-                >
-                  Working Groups
-                </Link>
-              </>
-            )}
-            <Link
-              href="/dashboard/events" // Events link for all authenticated users
-              className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
-            >
-              Events
-            </Link>
-            {/* User's display name (First Name or email) as a link to their profile */}
-            <Link
-              href="/dashboard/profile"
-              className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
-            >
-              {displayName}
-            </Link>
+          {/* Using space-x-3 for spacing around links and separators */}
+          <div className="flex items-center space-x-3"> 
+            {renderedNavItems}
             <button
               onClick={handleLogout}
               className="py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
