@@ -10,7 +10,7 @@ The scope of Project Fiji includes:
 *   User registration and authentication.
 *   Role-based access control (RBAC) for managing permissions.
 *   Management of user profiles and availability.
-*   Comprehensive event management, including creation (with organizer assignment), volunteer sign-ups, and assignments.
+*   Comprehensive event management, including creation (with organizer assignment, start and end times), volunteer sign-ups, and assignments.
 *   Working group creation and member management.
 *   Tracking of donations.
 *   Basic reporting capabilities.
@@ -37,7 +37,7 @@ Project Fiji is a self-contained system providing a dedicated platform for volun
 The major features of Project Fiji are:
 *   User Account Management (Registration, Login, Profile, Search)
 *   Role and Permission Management
-*   Event Lifecycle Management (including assigning an organizer)
+*   Event Lifecycle Management (including assigning an organizer, defining start and end times)
 *   Volunteer Participation and Assignment Tracking
 *   Working Group Coordination
 *   Donation Recording
@@ -48,7 +48,7 @@ The major features of Project Fiji are:
 *   **General Users/Volunteers:** Can register (via invitation), log in, manage their profile and availability, view and sign up for events, view their assignments and working groups.
 *   **Administrators (e.g., Sysadmin, Event Managers, Group Coordinators):** Users with elevated privileges, varying by assigned roles.
     *   **System Administrator (Sysadmin):** Manages roles, users (including search), registration invitations, system settings, and has oversight of all data.
-    *   **Event Managers (or users with event management privileges):** Can create, update (including organizer), delete events, and manage volunteer assignments to events.
+    *   **Event Managers (or users with event management privileges):** Can create, update (including organizer, start/end times), delete events, and manage volunteer assignments to events.
     *   **Working Group Coordinators (or users with group management privileges):** Can create, update, delete working groups, and manage member assignments.
     *   **Donation Managers (or users with donation privileges):** Can record, update, and delete donations.
 
@@ -125,14 +125,14 @@ This section details the functional requirements of Project Fiji, grouped by maj
 ### 3.4 Event Management
 *   **3.4.1 Event Creation:**
     *   Authorized users (with `events:create` privilege) shall be able to create new events.
-    *   Event creation shall include details such as event name, type, purpose, description, date/time, **venue**, number of volunteers required, and an optional designated **organizer**.
+    *   Event creation shall include details such as event name, type, purpose, description, start date/time, end date/time, **venue**, number of volunteers required, and an optional designated **organizer**.
     *   The organizer is selected from existing users via a search interface provided in the frontend.
     *   The `organizerUserId` (UID of the selected organizer) will be stored with the event.
 *   **3.4.2 Event Viewing:**
     *   Authorized users (with `events:view` privilege, or public if configured) shall be able to list all events and view details of specific events.
     *   Event listings may support filtering and pagination. API responses for event details will include creator and organizer names if available.
 *   **3.4.3 Event Updates:**
-    *   Authorized users (with `events:edit` privilege) shall be able to update the details of existing events, including changing or clearing the designated organizer.
+    *   Authorized users (with `events:edit` privilege) shall be able to update the details of existing events, including changing or clearing the designated organizer, and modifying start/end times.
 *   **3.4.4 Event Deletion:**
     *   Authorized users (with `events:delete` privilege) shall be able to delete events.
 
@@ -233,7 +233,7 @@ This section details the functional requirements of Project Fiji, grouped by maj
     *   Login and Registration pages.
     *   User Dashboard.
     *   User Profile page.
-    *   Event Listing, Detail, and Creation/Edit pages (including organizer search/selection).
+    *   Event Listing, Detail, and Creation/Edit pages (including organizer search/selection, start and end time inputs).
     *   Working Group management pages (for admins).
     *   Role management pages (for Sysadmin).
     *   Invitation management pages (for Sysadmin).
@@ -334,6 +334,7 @@ The system will utilize Google Firestore for data persistence. Key collections a
 *   `purpose` (String, Optional): Purpose or goal of the event.
 *   `description` (String, Optional): Detailed description of the event.
 *   `dateTime` (Timestamp or String): Start date and time of the event.
+*   `endTime` (Timestamp or String): End date and time of the event.
 *   `venue` (String or Map, Optional): Venue or physical address of the event (formerly `location`).
 *   `volunteersRequired` (Number, Optional): Number of volunteers needed.
 *   `status` (String): Status of the event (e.g., "planned", "open_for_signup", "completed").

@@ -36,11 +36,12 @@ async def _get_user_details(db: firestore.Client, user_id: str) -> dict:
     dependencies=[Depends(require_permission("events", "create"))]
 )
 async def create_event(
-    event_data: EventCreate,
+    event_data: EventCreate, # EventCreate now has endTime and validator
     db: firestore.Client = Depends(get_db),
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
     try:
+        # Pydantic model EventCreate already validates dateTime < endTime
         new_event_dict = event_data.model_dump()
         new_event_dict["createdByUserId"] = current_rbac_user.uid
         new_event_dict["createdAt"] = firestore.SERVER_TIMESTAMP
@@ -59,7 +60,6 @@ async def create_event(
             response_data = created_event_doc.to_dict()
             response_data['eventId'] = created_event_doc.id
 
-            # Fetch creator details for the response
             creator_details = await _get_user_details(db, response_data["createdByUserId"])
             response_data["creatorFirstName"] = creator_details.get("firstName")
             response_data["creatorLastName"] = creator_details.get("lastName")
@@ -73,6 +73,8 @@ async def create_event(
             return EventResponse(**response_data)
         else:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve event after creation.")
+    except ValueError as ve: # Catch Pydantic validation errors (like endTime <= dateTime)
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(ve))
     except HTTPException as http_exc: 
         raise http_exc
     except Exception as e:
@@ -188,19 +190,34 @@ async def update_event(
         if not event_doc_snapshot.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
         
-        update_data = event_update_data.model_dump(exclude_unset=True)
-        if not update_data:
+        existing_event_data = event_doc_snapshot.to_dict()
+        update_data_dict = event_update_data.model_dump(exclude_unset=True)
+
+        if not update_data_dict:
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
 
-        if "organizerUserId" in update_data:
-            org_uid = update_data["organizerUserId"]
+        # Validate dateTime and endTime coherence
+        final_start_time = update_data_dict.get("dateTime", existing_event_data.get("dateTime"))
+        final_end_time = update_data_dict.get("endTime", existing_event_data.get("endTime"))
+
+        # Ensure they are datetime objects if present
+        if isinstance(final_start_time, str):
+            final_start_time = datetime.datetime.fromisoformat(final_start_time)
+        if isinstance(final_end_time, str):
+            final_end_time = datetime.datetime.fromisoformat(final_end_time)
+        
+        if final_start_time and final_end_time and final_end_time <= final_start_time:
+            raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail="End time must be after start time.")
+
+        if "organizerUserId" in update_data_dict: # Handles setting to None as well
+            org_uid = update_data_dict["organizerUserId"]
             if org_uid is not None: 
                 organizer_doc = db.collection(USERS_COLLECTION).document(org_uid).get() 
                 if not organizer_doc.exists:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Organizer user with ID '{org_uid}' not found.")
             
-        update_data["updatedAt"] = firestore.SERVER_TIMESTAMP
-        doc_ref.update(update_data)
+        update_data_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
+        doc_ref.update(update_data_dict)
         
         updated_event_doc = doc_ref.get() 
         response_data = updated_event_doc.to_dict()
@@ -217,6 +234,8 @@ async def update_event(
             response_data["organizerEmail"] = organizer_details.get("email")
             
         return EventResponse(**response_data)
+    except ValueError as ve: # Catch Pydantic validation errors
+        raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=str(ve))
     except HTTPException as http_exc: 
         raise http_exc
     except Exception as e:

@@ -4,16 +4,16 @@ import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { format } from 'date-fns';
+// import { format } from 'date-fns'; // Not strictly needed if using datetime-local and ISO strings
 
 interface EventFormData {
   eventName: string;
   eventType: string;
   purpose: string;
   description: string;
-  dateTime: string; 
-  durationMinutes: number;
-  location: string; // Field name remains 'location' for backend
+  dateTime: string; // Represents Start Date & Time
+  endTime: string;  // New field for End Date & Time
+  location: string; 
   volunteersRequired: number;
   status: string;
   organizerUserId: string | null; 
@@ -26,7 +26,9 @@ interface UserSearchResult {
   email: string;
 }
 
-const formatDateTimeForInput = (date: Date): string => {
+const formatDateTimeForInput = (dateString: string | Date): string => {
+  if (!dateString) return '';
+  const date = new Date(dateString);
   const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
@@ -82,10 +84,16 @@ export default function EditEventPage() {
         throw new Error(errData.detail || "Failed to fetch event data for editing.");
       }
       const eventData = await response.json();
-      const formattedDateTime = eventData.dateTime ? formatDateTimeForInput(new Date(eventData.dateTime)) : '';
+      const formattedDateTime = eventData.dateTime ? formatDateTimeForInput(eventData.dateTime) : '';
+      const formattedEndTime = eventData.endTime ? formatDateTimeForInput(eventData.endTime) : '';
+      
+      // Remove durationMinutes if it exists in eventData from older backend versions
+      const { durationMinutes, ...restOfEventData } = eventData;
+
       setFormData({ 
-        ...eventData, 
+        ...restOfEventData, 
         dateTime: formattedDateTime,
+        endTime: formattedEndTime, // Set endTime
         organizerUserId: eventData.organizerUserId || null, 
       });
       
@@ -152,10 +160,9 @@ export default function EditEventPage() {
     const query = e.target.value;
     setOrganizerSearchQuery(query);
     if (query.trim().length === 0) { 
-        // setSelectedOrganizerName(null); // Keep selected name until explicitly cleared or new selection
-        // setFormData(prev => ({ ...prev, organizerUserId: null }));
+        // Keep selected name until explicitly cleared or new selection
     } else if (query.trim().length >= 2) {
-        if (formData.organizerUserId || selectedOrganizerName) { // If one is already selected, clear it before new search
+        if (formData.organizerUserId || selectedOrganizerName) { 
             setSelectedOrganizerName(null);
             setFormData(prev => ({ ...prev, organizerUserId: null }));
         }
@@ -204,7 +211,17 @@ export default function EditEventPage() {
       return;
     }
      if (!formData.dateTime) {
-        setError("Date and Time is required.");
+        setError("Start Date & Time is required.");
+        setSubmitting(false);
+        return;
+    }
+    if (!formData.endTime) {
+        setError("End Date & Time is required.");
+        setSubmitting(false);
+        return;
+    }
+    if (new Date(formData.endTime) <= new Date(formData.dateTime)) {
+        setError("End Date & Time must be after Start Date & Time.");
         setSubmitting(false);
         return;
     }
@@ -213,11 +230,15 @@ export default function EditEventPage() {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       
-      const { eventName, eventType, purpose, description, dateTime, durationMinutes, location, volunteersRequired, status, organizerUserId } = formData;
+      // Destructure only the fields defined in the updated EventFormData
+      const { eventName, eventType, purpose, description, dateTime, endTime, location, volunteersRequired, status, organizerUserId } = formData;
       const updatePayload = { 
-          eventName, eventType, purpose, description, dateTime, durationMinutes, location, volunteersRequired, status, 
+          eventName, eventType, purpose, description, dateTime, endTime, location, volunteersRequired, status, 
           organizerUserId: organizerUserId || null 
       };
+      // Ensure durationMinutes is not part of the payload
+      // delete (updatePayload as any).durationMinutes;
+
 
       const response = await fetch(`${backendUrl}/events/${eventId}`, {
         method: 'PUT',
@@ -305,17 +326,17 @@ export default function EditEventPage() {
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
             </div>
             <div>
-              <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Date & Time</label>
+              <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
               <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime || ''} onChange={handleChange} required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
             </div>
             <div>
-              <label htmlFor="durationMinutes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Duration (Minutes)</label>
-              <input type="number" name="durationMinutes" id="durationMinutes" value={formData.durationMinutes || 60} onChange={handleChange} min="1" required
+              <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
+              <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime || ''} onChange={handleChange} required
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
             </div>
             <div>
-              <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label> {/* Changed Label */}
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
               <input type="text" name="location" id="location" value={formData.location || ''} onChange={handleChange}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
             </div>

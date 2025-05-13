@@ -1,4 +1,4 @@
-from pydantic import BaseModel, Field, ConfigDict
+from pydantic import BaseModel, Field, ConfigDict, model_validator
 from typing import Optional, List
 import datetime
 
@@ -10,8 +10,8 @@ class EventBase(BaseModel):
     eventType: Optional[str] = Field(None, max_length=50, description="Type or category of the event (e.g., 'Fundraiser', 'Workshop').")
     purpose: Optional[str] = Field(None, max_length=500, description="Purpose or brief description of the event.")
     description: Optional[str] = Field(None, description="Detailed description of the event.")
-    dateTime: datetime.datetime = Field(..., description="Date and time of the event. Frontend sends ISO string, Pydantic converts.")
-    durationMinutes: Optional[int] = Field(None, gt=0, description="Duration of the event in minutes.")
+    dateTime: datetime.datetime = Field(..., description="Start date and time of the event. Frontend sends ISO string, Pydantic converts.")
+    endTime: datetime.datetime = Field(..., description="End date and time of the event. Frontend sends ISO string, Pydantic converts.")
     location: Optional[str] = Field(None, max_length=255, description="Location of the event.") # Renamed from venue in SRS for consistency with existing code
     volunteersRequired: Optional[int] = Field(None, ge=0, description="Number of volunteers required for the event.")
     status: str = Field(
@@ -21,11 +21,18 @@ class EventBase(BaseModel):
     organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer.")
     # createdByUserId will be set automatically based on the authenticated user creating the event.
 
+    @model_validator(mode='after')
+    def check_end_time_after_start_time(cls, values):
+        start_time, end_time = values.dateTime, values.endTime
+        if start_time and end_time and end_time <= start_time:
+            raise ValueError("End time must be after start time.")
+        return values
+
 class EventCreate(EventBase):
     """
     Model for creating a new event.
-    The frontend will send dateTime as a string from datetime-local input.
-    Pydantic will parse it into a datetime.datetime object.
+    The frontend will send dateTime and endTime as strings from datetime-local input.
+    Pydantic will parse them into datetime.datetime objects.
     """
     pass
 
@@ -38,13 +45,27 @@ class EventUpdate(BaseModel):
     purpose: Optional[str] = Field(None, max_length=500)
     description: Optional[str] = Field(None)
     dateTime: Optional[datetime.datetime] = None
-    durationMinutes: Optional[int] = Field(None, gt=0)
+    endTime: Optional[datetime.datetime] = None
     location: Optional[str] = Field(None, max_length=255) # Renamed from venue
     volunteersRequired: Optional[int] = Field(None, ge=0)
     status: Optional[str] = None # Consider specific validation for status transitions
     organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer. Can be set to null to remove organizer.")
 
     model_config = ConfigDict(extra='forbid')
+
+    @model_validator(mode='after')
+    def check_end_time_after_start_time_update(cls, values):
+        # This validator needs to handle partial updates carefully.
+        # If only one of dateTime or endTime is provided, we can't validate against the other
+        # unless we fetch the existing record. For simplicity in Pydantic model,
+        # this validation might be better handled at the router level for updates
+        # where the existing record's values are known.
+        # However, if both are provided in an update, we should validate.
+        start_time, end_time = values.dateTime, values.endTime
+        if start_time and end_time and end_time <= start_time:
+            raise ValueError("End time must be after start time.")
+        # If only one is provided, we assume the router will handle validation against the stored value.
+        return values
 
 class EventInDBBase(EventBase):
     """
@@ -74,9 +95,6 @@ class EventResponse(EventInDBBase): # Inherits common fields from EventInDBBase
     creatorFirstName: Optional[str] = Field(None, description="First name of the user who created the event.")
     creatorLastName: Optional[str] = Field(None, description="Last name of the user who created the event.")
     
-    # Potentially add calculated fields like 'volunteersSignedUp' or 'spotsAvailable' in the future
-    # volunteersSignedUp: Optional[int] = Field(None, description="Number of volunteers currently signed up.")
-
     model_config = ConfigDict(from_attributes=True)
 
 class EventWithSignupStatus(EventResponse):

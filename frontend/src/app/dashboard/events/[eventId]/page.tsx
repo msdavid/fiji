@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { format } from 'date-fns';
+import { format, parseISO } from 'date-fns'; // Added parseISO
 
 // Define an interface for the event data expected from the backend
 interface Event {
@@ -13,9 +13,9 @@ interface Event {
   eventType?: string;
   purpose?: string;
   description?: string;
-  dateTime: string; 
-  durationMinutes?: number;
-  location: string; // Field name remains 'location' for backend
+  dateTime: string; // Represents Start Date & Time
+  endTime?: string;  // New field for End Date & Time
+  location: string; 
   volunteersRequired?: number;
   status: string;
   createdByUserId: string;
@@ -208,9 +208,9 @@ export default function EventDetailPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 text-sm text-gray-700 dark:text-gray-300">
               <p><strong>Type:</strong> {event.eventType || 'N/A'}</p>
-              <p><strong>Date & Time:</strong> {format(new Date(event.dateTime), 'PPP p')}</p>
-              <p><strong>Venue:</strong> {event.location || 'N/A'}</p> {/* Changed Label */}
-              <p><strong>Duration:</strong> {event.durationMinutes ? `${event.durationMinutes} minutes` : 'N/A'}</p>
+              <p><strong>Start Date & Time:</strong> {event.dateTime ? format(parseISO(event.dateTime), 'PPP p') : 'N/A'}</p>
+              <p><strong>Venue:</strong> {event.location || 'N/A'}</p>
+              <p><strong>End Date & Time:</strong> {event.endTime ? format(parseISO(event.endTime), 'PPP p') : 'N/A'}</p>
               <p><strong>Status:</strong> 
                 <span className={`ml-2 px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
                     event.status === 'open_for_signup' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' :

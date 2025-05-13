@@ -10,9 +10,9 @@ interface EventFormData {
   eventType: string;
   purpose: string;
   description: string;
-  dateTime: string; 
-  durationMinutes: number;
-  location: string; // Field name remains 'location' for backend
+  dateTime: string; // Will represent Start Date & Time
+  endTime: string;   // New field for End Date & Time
+  location: string; 
   volunteersRequired: number;
   status: string; 
   organizerUserId: string | null; 
@@ -31,8 +31,8 @@ const initialFormData: EventFormData = {
   purpose: '',
   description: '',
   dateTime: '', 
-  durationMinutes: 60,
-  location: '', // Field name remains 'location'
+  endTime: '',   // Initialize endTime
+  location: '', 
   volunteersRequired: 1,
   status: 'draft',
   organizerUserId: null, 
@@ -141,12 +141,24 @@ export default function CreateEventPage() {
     }
     
     if (!formData.dateTime) {
-        setError("Date and Time is required.");
+        setError("Start Date & Time is required.");
+        setSubmitting(false);
+        return;
+    }
+    if (!formData.endTime) {
+        setError("End Date & Time is required.");
+        setSubmitting(false);
+        return;
+    }
+    if (new Date(formData.endTime) <= new Date(formData.dateTime)) {
+        setError("End Date & Time must be after Start Date & Time.");
         setSubmitting(false);
         return;
     }
 
-    const payload = { ...formData }; 
+    // Remove durationMinutes if it somehow still exists, ensure endTime is used
+    const { ...payloadWithoutDuration } = formData;
+    // delete (payloadWithoutDuration as any).durationMinutes; // Ensure it's removed if interface was slow to update
 
     try {
       const token = await user.getIdToken();
@@ -158,7 +170,7 @@ export default function CreateEventPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(payload),
+        body: JSON.stringify(payloadWithoutDuration), // Use payload with endTime
       });
 
       if (!response.ok) {
@@ -240,17 +252,17 @@ export default function CreateEventPage() {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
           </div>
           <div>
-            <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Date & Time</label>
+            <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
             <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
           <div>
-            <label htmlFor="durationMinutes" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Duration (Minutes)</label>
-            <input type="number" name="durationMinutes" id="durationMinutes" value={formData.durationMinutes} onChange={handleChange} min="1" required
+            <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
+            <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime} onChange={handleChange} required
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
           <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label> {/* Changed Label */}
+            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
             <input type="text" name="location" id="location" value={formData.location} onChange={handleChange}
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
