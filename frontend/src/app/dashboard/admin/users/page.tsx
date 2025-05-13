@@ -23,7 +23,7 @@ interface User {
 // Custom hook for admin-specific authentication and authorization logic
 const useAdminAuthCheck = () => {
   const { user, idToken, userProfile, loading: authLoading, error: authError } = useAuth();
-  
+
   // Check if the user has the 'sysadmin' role ID.
   const hasAdminRole = userProfile?.assignedRoleIds?.includes('sysadmin');
 
@@ -40,7 +40,7 @@ const AdminUserManagementPage = () => {
   const [users, setUsers] = useState<User[]>([]);
   const [isLoading, setIsLoading] = useState(true); // For data fetching specific to this page
   const [error, setError] = useState<string | null>(null); // For errors specific to this page's operations
-  
+
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUserForRoles, setSelectedUserForRoles] = useState<User | null>(null);
 
@@ -65,7 +65,7 @@ const AdminUserManagementPage = () => {
       // Optionally, redirect: router.push('/dashboard');
       return;
     }
-    
+
     // Ensure ID token is available for API calls
     if (!idToken) {
         setError("Authentication token not available. Cannot fetch users.");
@@ -116,14 +116,14 @@ const AdminUserManagementPage = () => {
 
 
   if (authLoading || (isLoading && users.length === 0 && !error)) {
-    return <div className="flex justify-center items-center h-screen"><p className="text-lg">Loading user management...</p></div>;
+    return <div className="flex justify-center items-center h-screen"><p className="text-lg">Loading users...</p></div>;
   }
 
   // If there was an auth error or access is denied, show a clear message
   if (authError || !canAccessPage) {
     return (
       <div className="container mx-auto p-6 max-w-4xl text-center">
-        <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-gray-200">User Management</h1>
+        <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-gray-200">Users</h1>
         <p className="text-red-500 text-lg">{error || authError?.message || "Access Denied. You do not have permission to view this page."}</p>
         <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-6 inline-block text-lg">
           Go to Dashboard
@@ -131,12 +131,12 @@ const AdminUserManagementPage = () => {
       </div>
     );
   }
-  
+
   // If there's a page-specific error after successful auth (e.g., failed to fetch users)
   if (error && users.length === 0) {
      return (
       <div className="container mx-auto p-6 max-w-4xl text-center">
-        <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-gray-200">User Management</h1>
+        <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-gray-200">Users</h1>
         <p className="text-red-500 text-lg">Error: {error}</p>
         <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-6 inline-block text-lg">
           Go to Dashboard
@@ -144,11 +144,11 @@ const AdminUserManagementPage = () => {
       </div>
     );
   }
-  
+
   return (
     <div className="container mx-auto p-4 sm:p-6">
       <div className="flex justify-between items-center mb-2"> {/* Reduced mb for tighter spacing with new link */}
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-200">User Management</h1>
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-200">Users</h1>
       </div>
       <div className="mb-6"> {/* New div for the link */}
         <Link href="/dashboard" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
@@ -188,7 +188,7 @@ const AdminUserManagementPage = () => {
                     {userEntry.assignedRoleIds.join(', ') || 'N/A'}
                   </td>
                   <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button 
+                    <button
                       onClick={() => handleOpenModal(userEntry)}
                       className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
                       disabled={!canManageUserRoles} // Disable if current admin cannot manage roles
@@ -213,7 +213,7 @@ const AdminUserManagementPage = () => {
           onClose={handleCloseModal}
           onRolesUpdated={handleRolesUpdated}
           // Pass idToken if RoleManagementModal makes its own API calls
-          // currentAdminIdToken={idToken} 
+          // currentAdminIdToken={idToken}
         />
       )}
     </div>

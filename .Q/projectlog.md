@@ -85,104 +85,54 @@
 ## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Implement Event Deletion, Complete Sprint 3 Testing & Update Docs
 
 **Goal:** Implement event deletion functionality, complete the remaining steps of the Sprint 3 test plan (`tmp/sprint-3-event-management.md`), and update relevant documentation.
+**Actions & Features Implemented/Updated:** (Details in previous log entry)
+**Session End.** Awaiting user instructions for the next session.
 
-**Actions & Features Implemented/Updated:**
-*   **Event Deletion Functionality:**
-    *   Verified existing backend `DELETE /events/{event_id}` endpoint.
-    *   Moved event deletion UI from event detail page to the event edit page (`frontend/src/app/dashboard/events/[eventId]/edit/page.tsx`).
-    *   Verified `AuthContext.tsx` relies on `sysadmin` role check for delete privilege.
-*   **Sprint 3 Test Plan Completion:** Successfully executed all remaining steps (B.6-D.4) of the test plan, including testing event creation, signup/withdrawal, admin action restrictions, and event deletion.
-*   **Documentation Updates:**
-    *   Updated `.Q/srs.md` to include FR3.3.4 for Event Deletion and related UX notes. (Not committed due to .gitignore)
-    *   Updated `docs/project-progress.md` with a comprehensive summary for Sprint 3 completion.
-    *   Confirmed `docs/technical-specs.md` and `.Q/sprints.md` did not require changes for this feature.
-    *   Committed changes to `docs/project-progress.md` and `docs/technical-specs.md` (commit `5009443`).
-*   **Project Log Update:** This entry.
-
-**Files Modified/Created (during this session):**
-*   `frontend/src/app/dashboard/events/[eventId]/page.tsx` (reverted earlier delete changes)
-*   `frontend/src/app/dashboard/events/[eventId]/edit/page.tsx` (added delete functionality)
-*   `.Q/srs.md` (updated, not committed)
-*   `docs/project-progress.md` (updated and committed)
-*   `.Q/projectlog.md` (this update, not committed)
-
-**Session End.**
-Awaiting user instructions for the next session.
-
-## Session: {{YYYY-MM-DD HH:MM:SS}} (New Session) - Initiate Sprint 4
-
-**Goal:** Begin Sprint 4.
-
-**Actions:**
-*   User requested to start Sprint 4.
-*   Reviewed `.Q/projectlog.md`; Sprint 3 is marked as complete.
-*   The previously loaded content of `.Q/sprints.md` did not include the definition for Sprint 4.
-*   Action: Requesting the definition of Sprint 4 from the user to proceed.
-
-**Next Steps:**
-*   Obtain Sprint 4 definition from `.Q/sprints.md`.
-*   Update this log entry with Sprint 4's official goal.
-*   Outline Sprint 4 tasks and begin implementation.
-
-## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Update Sprint Definitions
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Previous Session) - Update Sprint Definitions
 
 **Goal:** Read relevant project documentation and update `.Q/sprints.md` with missing sprint definitions (Sprints 4-7).
+**Actions:** Updated `.Q/sprints.md` with definitions for Sprints 3-7.
+**Next Steps:** Awaiting user instructions.
 
-**Actions:**
-*   Read `.Q/srs.md`.
-*   Read `.Q/projectlog.md`.
-*   Read `.Q/sprints.md` and identified missing definitions for Sprints 3-7 (Sprint 3 was present but its definition was consolidated and re-inserted for completeness).
-*   Drafted definitions for Sprints 3, 4, 5, 6, and 7 based on SRS, project log, and existing sprint structures.
-*   User approved the drafted definitions.
-*   Updated `.Q/sprints.md` with the new definitions, replacing the placeholder text.
-*   Updated this project log.
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Sprint 4 Implementation)
 
-**Files Modified/Created (during this session):**
-*   `.Q/sprints.md` (updated with definitions for Sprints 3-7)
+**Goal:** Complete Sprint 4: Event Participation & Working Group Management (Initial).
+**Key Actions & Features Implemented:** (Details in previous log entry - commit `25d8e7b`)
+**Sprint 4 Status: Completed.**
+**Next Steps:** Awaiting user confirmation to proceed with Sprint 5 or manual testing of Sprint 4.
+
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Sprint 4 Manual Testing & Debugging
+
+**Goal:** Conduct manual testing for Sprint 4 features and address any bugs found.
+
+**Activities:**
+*   **Debugging `AttributeError` in `rbac.py`**:
+    *   Identified missing `await` for Firestore calls in `get_current_user_with_rbac`.
+    *   Updated `backend/dependencies/rbac.py` to make `get_current_user_with_rbac` and `_permission_checker` async, and added `await` for Firestore operations.
+*   **Debugging Pydantic Validation Error for `EventWithSignupStatus` and `AttributeError` in `users.py`**:
+    *   Identified `eventId` vs `id` mismatch between Pydantic models and router data construction for events.
+    *   Updated `backend/models/event.py`: Changed `eventId` to `id` in `EventInDB`, `EventResponse`, `EventWithSignupStatus`. Changed `location` to `venue`.
+    *   Identified missing `await` for Firestore calls and incorrect `firestore.Client` type hint in `backend/routers/users.py`.
+    *   Updated `backend/routers/users.py` to use `await` for all Firestore calls and `firestore.AsyncClient`.
+*   **Debugging Frontend Key Prop Warning and "Event not found" for Assignments**:
+    *   Identified `eventId` vs `id` and `location` vs `venue` mismatch in `Event` interface in `frontend/src/app/dashboard/events/page.tsx`. Updated interface and usage.
+    *   Refined `fetchEventAssignments` in `frontend/src/app/dashboard/events/[eventId]/page.tsx` to improve reliability of `eventId` used.
+*   **Debugging "Create New Event" Button Visibility**:
+    *   Identified that frontend `UserProfile` in `AuthContext` was missing `is_sysadmin` and `privileges`.
+    *   Simplified privilege check in `frontend/src/app/dashboard/events/page.tsx` to rely on `assignedRoleIds.includes('sysadmin')` for `SysAdminUser` to see "Create New Event" and "Edit" buttons as an interim solution.
+*   **Sprint 4 Test Plan Execution Initiated**:
+    *   Reviewed prerequisites from `tmp/sprint-4-test-plan.md`.
+    *   Used `backend/utils/create-role.py` to create `event_manager` and `volunteer_basic` roles in Firestore.
+    *   Currently awaiting user to confirm setup of users with these roles and creation of test events before proceeding with EP.1.
+
+**Files Modified/Created (during this session for debugging & test prep):**
+*   `backend/dependencies/rbac.py`
+*   `backend/models/event.py`
+*   `backend/routers/users.py`
+*   `frontend/src/app/dashboard/events/page.tsx`
+*   `frontend/src/app/dashboard/events/[eventId]/page.tsx`
 *   `.Q/projectlog.md` (this update)
 
 **Next Steps:**
-*   Awaiting user instructions. This may include proceeding with Sprint 4 tasks.
-
-## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Sprint 4 Kick-off
-
-**Goal:** Initiate Sprint 4: Event Participation & Working Group Management (Initial).
-The primary objective is to implement backend and frontend functionalities for managing volunteer participation in events (self-signup, manual assignment) and initial CRUD operations for Working Groups.
-
-**Key Deliverables (Sprint 4):**
-*   `assignments` collection in Firestore for tracking event/group participation.
-*   Backend API endpoints for event signup, withdrawal, and admin assignment/removal of volunteers.
-*   Frontend UI for volunteers to join/leave events and for admins to manage event rosters.
-*   Backend API endpoints for basic CRUD operations on working groups.
-*   Frontend UI for listing and creating basic working groups.
-
-**Sprint Plan Outline:**
-*   **Phase 1: Backend - Event Participation & Assignments Collection**
-    1.  Update Project Log (This step).
-    2.  Define `assignments` Collection.
-    3.  Implement `Assignment` Model.
-    4.  Implement Backend API Endpoints for Event Participation.
-    5.  Add RBAC.
-    6.  Write Tests.
-*   **Phase 2: Backend - Working Group Management (Initial)**
-    7.  Define `workingGroups` Collection.
-    8.  Implement `WorkingGroup` Model.
-    9.  Implement Backend API Endpoints for Working Group CRUD.
-    10. Implement Backend API Endpoints for Assigning Users to Working Groups.
-    11. Add RBAC.
-    12. Write Tests.
-*   **Phase 3: Frontend - Event Participation**
-    13. Implement UI for Event Signup/Withdrawal.
-    14. Implement UI for Event Roster Management.
-    15. Integrate with Backend.
-*   **Phase 4: Frontend - Working Group Management (Initial)**
-    16. Create Pages for Working Group Management.
-    17. Implement UI for Assigning Users to Working Groups.
-    18. Integrate with Backend.
-*   **Phase 5: Documentation & Review**
-    19. Update Documentation.
-    20. Commit Changes.
-    21. Update Project Log (Mark Sprint 4 complete).
-
-**Next Steps:**
-*   Proceed with Sprint 4, Phase 1, Step 2: Define `assignments` Collection by reviewing `.Q/srs.md`.
+*   User to confirm prerequisites for Sprint 4 testing are met (users assigned roles, test events created).
+*   Continue with manual execution of test cases from `tmp/sprint-4-test-plan.md`, starting with EP.1.

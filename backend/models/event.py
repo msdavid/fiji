@@ -12,18 +12,19 @@ class EventBase(BaseModel):
     description: Optional[str] = Field(None, description="Detailed description of the event.")
     dateTime: datetime.datetime = Field(..., description="Start date and time of the event. Frontend sends ISO string, Pydantic converts.")
     endTime: datetime.datetime = Field(..., description="End date and time of the event. Frontend sends ISO string, Pydantic converts.")
-    location: Optional[str] = Field(None, max_length=255, description="Location of the event.") # Renamed from venue in SRS for consistency with existing code
+    venue: Optional[str] = Field(None, max_length=255, description="Venue or physical address of the event.") # Changed from location to venue
     volunteersRequired: Optional[int] = Field(None, ge=0, description="Number of volunteers required for the event.")
     status: str = Field(
         default="draft", 
         description="Status of the event (e.g., 'draft', 'open_for_signup', 'ongoing', 'completed', 'cancelled')."
     )
     organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer.")
-    # createdByUserId will be set automatically based on the authenticated user creating the event.
 
     @model_validator(mode='after')
     def check_end_time_after_start_time(cls, values):
-        start_time, end_time = values.dateTime, values.endTime
+        # Ensure dateTime and endTime are present before accessing them
+        start_time = values.dateTime
+        end_time = values.endTime
         if start_time and end_time and end_time <= start_time:
             raise ValueError("End time must be after start time.")
         return values
@@ -31,8 +32,6 @@ class EventBase(BaseModel):
 class EventCreate(EventBase):
     """
     Model for creating a new event.
-    The frontend will send dateTime and endTime as strings from datetime-local input.
-    Pydantic will parse them into datetime.datetime objects.
     """
     pass
 
@@ -46,25 +45,21 @@ class EventUpdate(BaseModel):
     description: Optional[str] = Field(None)
     dateTime: Optional[datetime.datetime] = None
     endTime: Optional[datetime.datetime] = None
-    location: Optional[str] = Field(None, max_length=255) # Renamed from venue
+    venue: Optional[str] = Field(None, max_length=255) # Changed from location to venue
     volunteersRequired: Optional[int] = Field(None, ge=0)
-    status: Optional[str] = None # Consider specific validation for status transitions
+    status: Optional[str] = None 
     organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer. Can be set to null to remove organizer.")
 
     model_config = ConfigDict(extra='forbid')
 
     @model_validator(mode='after')
     def check_end_time_after_start_time_update(cls, values):
-        # This validator needs to handle partial updates carefully.
-        # If only one of dateTime or endTime is provided, we can't validate against the other
-        # unless we fetch the existing record. For simplicity in Pydantic model,
-        # this validation might be better handled at the router level for updates
-        # where the existing record's values are known.
-        # However, if both are provided in an update, we should validate.
         start_time, end_time = values.dateTime, values.endTime
+        # This validator only runs if both are provided in the update payload.
+        # If one is None (not provided in update), this check won't trigger an error here.
+        # The router should handle validation against existing stored values if only one is updated.
         if start_time and end_time and end_time <= start_time:
             raise ValueError("End time must be after start time.")
-        # If only one is provided, we assume the router will handle validation against the stored value.
         return values
 
 class EventInDBBase(EventBase):
@@ -80,15 +75,15 @@ class EventInDB(EventInDBBase):
     Model representing a complete event document in Firestore, including its ID.
     This model is typically used internally in the backend.
     """
-    eventId: str = Field(..., description="Unique ID of the event (Firestore document ID).")
+    id: str = Field(..., description="Unique ID of the event (Firestore document ID).") # Changed from eventId to id
     model_config = ConfigDict(from_attributes=True)
 
 
-class EventResponse(EventInDBBase): # Inherits common fields from EventInDBBase
+class EventResponse(EventInDBBase): 
     """
-    Model for returning event data in API responses. Includes the eventId.
+    Model for returning event data in API responses. Includes the event ID.
     """
-    eventId: str = Field(..., description="Unique ID of the event (Firestore document ID).")
+    id: str = Field(..., description="Unique ID of the event (Firestore document ID).") # Changed from eventId to id
     organizerFirstName: Optional[str] = Field(None, description="First name of the event organizer.")
     organizerLastName: Optional[str] = Field(None, description="Last name of the event organizer.")
     organizerEmail: Optional[str] = Field(None, description="Email of the event organizer.")

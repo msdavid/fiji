@@ -37,9 +37,9 @@ interface Assignment {
   assignableType: 'event' | 'workingGroup';
   status: string;
   assignedByUserId?: string;
-  assignmentDate: string; // Assuming ISO string from backend
-  createdAt: string;      // Assuming ISO string from backend
-  updatedAt: string;      // Assuming ISO string from backend
+  assignmentDate: string; 
+  createdAt: string;      
+  updatedAt: string;      
   userFirstName?: string;
   userLastName?: string;
   userEmail?: string;
@@ -51,60 +51,71 @@ interface Assignment {
 export default function EventDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const eventId = params.eventId as string; 
+  const pageEventId = params.eventId as string; // ID from URL params
 
   const { user, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [isLoadingEvent, setIsLoadingEvent] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState(false);
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
-  const [assignUserId, setAssignUserId] = useState(''); // For the assign form
+  const [assignUserId, setAssignUserId] = useState(''); 
 
   const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('events', 'manage_assignments') : userProfile.assignedRoleIds?.includes('sysadmin'));
 
   const fetchEventDetails = useCallback(async () => {
-    if (!user || !eventId) return;
+    if (!user || !pageEventId) return;
     setIsLoadingEvent(true);
     setError(null);
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${eventId}`, {
+      const response = await fetch(`${backendUrl}/events/${pageEventId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error((await response.json()).detail || 'Failed to fetch event details');
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || 'Failed to fetch event details');
+      }
       const data: EventDetail = await response.json();
       setEvent(data);
     } catch (err: any) {
       setError(err.message);
+      setEvent(null); // Clear event on error
     } finally {
       setIsLoadingEvent(false);
     }
-  }, [user, eventId]);
+  }, [user, pageEventId]);
 
-  const fetchEventAssignments = useCallback(async () => {
-    if (!user || !eventId || !canManageAssignments) return; // Only fetch if user can manage
+  const fetchEventAssignments = useCallback(async (currentEventId: string) => { // Take eventId as param
+    if (!user || !currentEventId || !canManageAssignments) return; 
+    
+    console.log("Fetching assignments for event ID:", currentEventId); // Log the ID being used
     setIsLoadingAssignments(true);
+    setAssignmentsError(null);
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${eventId}/assignments`, {
+      const response = await fetch(`${backendUrl}/events/${currentEventId}/assignments`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error((await response.json()).detail || 'Failed to fetch event assignments');
+      if (!response.ok) {
+        const errData = await response.json();
+        throw new Error(errData.detail || 'Failed to fetch event assignments');
+      }
       const data: Assignment[] = await response.json();
       setAssignments(data);
     } catch (err: any) {
-      setError(err.message); // Or a specific assignment error state
+      setAssignmentsError(err.message); 
       console.error("Fetch assignments error:", err);
     } finally {
       setIsLoadingAssignments(false);
     }
-  }, [user, eventId, canManageAssignments]);
+  }, [user, canManageAssignments]); // Removed eventId from deps, pass as arg
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -114,15 +125,25 @@ export default function EventDetailPage() {
     if (user && !userProfile) {
         fetchUserProfile();
     }
-    if (user && eventId) {
+    if (user && pageEventId) { // Use pageEventId from params
       fetchEventDetails();
-      if (canManageAssignments) { // Fetch assignments if user has permission
-        fetchEventAssignments();
-      }
     }
-  }, [user, authLoading, eventId, router, fetchEventDetails, fetchEventAssignments, userProfile, fetchUserProfile, canManageAssignments]);
+  }, [user, authLoading, pageEventId, router, fetchEventDetails, userProfile, fetchUserProfile]);
 
-  const handleSignup = async () => { /* ... (same as before, ensure event.id) ... */ 
+  // New useEffect to fetch assignments when event is loaded and user can manage them
+  useEffect(() => {
+    if (event && event.id && canManageAssignments) {
+        if (event.id === pageEventId) { // Ensure consistency
+            fetchEventAssignments(event.id);
+        } else {
+            console.warn("Mismatch between pageEventId and loaded event.id", pageEventId, event.id);
+            // Potentially handle this case, e.g. by refetching event details or showing an error
+        }
+    }
+  }, [event, canManageAssignments, fetchEventAssignments, pageEventId]);
+
+
+  const handleSignup = async () => { 
     if (!user || !event) return;
     setActionInProgress(true); setError(null);
     try {
@@ -135,7 +156,7 @@ export default function EventDetailPage() {
     finally { setActionInProgress(false); }
   };
 
-  const handleWithdraw = async () => { /* ... (same as before, ensure event.id) ... */ 
+  const handleWithdraw = async () => { 
     if (!user || !event) return;
     setActionInProgress(true); setError(null);
     try {
@@ -151,7 +172,7 @@ export default function EventDetailPage() {
   const handleAssignVolunteer = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!user || !event || !assignUserId.trim()) return;
-    setActionInProgress(true); setError(null);
+    setActionInProgress(true); setError(null); setAssignmentsError(null);
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -161,16 +182,16 @@ export default function EventDetailPage() {
         body: JSON.stringify({ userId: assignUserId, assignableId: event.id, assignableType: 'event', status: 'confirmed_admin' }),
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'Failed to assign volunteer');
-      setAssignUserId(''); // Clear input
-      await fetchEventAssignments(); // Refresh assignments list
-      await fetchEventDetails(); // Refresh event details (e.g. if it affects volunteer count display)
-    } catch (err: any) { setError(err.message); }
+      setAssignUserId(''); 
+      await fetchEventAssignments(event.id); 
+      await fetchEventDetails(); 
+    } catch (err: any) { setAssignmentsError(err.message); } // Use assignmentsError
     finally { setActionInProgress(false); }
   };
 
   const handleRemoveAssignment = async (assignmentId: string) => {
     if (!user || !event || !confirm("Are you sure you want to remove this volunteer?")) return;
-    setActionInProgress(true); setError(null);
+    setActionInProgress(true); setError(null); setAssignmentsError(null);
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -178,18 +199,20 @@ export default function EventDetailPage() {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!response.ok) throw new Error((await response.json()).detail || 'Failed to remove volunteer');
-      await fetchEventAssignments(); // Refresh assignments list
+      if (!response.ok && response.status !== 204) { // Handle 204 No Content
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to remove volunteer assignment' }));
+        throw new Error(errorData.detail || 'Failed to remove volunteer assignment');
+      }
+      await fetchEventAssignments(event.id); 
       await fetchEventDetails();
-    } catch (err: any) { setError(err.message); }
+    } catch (err: any) { setAssignmentsError(err.message); } // Use assignmentsError
     finally { setActionInProgress(false); }
   };
 
-
-  if (authLoading || isLoadingEvent) { /* ... (same as before) ... */ 
+  if (authLoading || isLoadingEvent || (!userProfile && user)) { 
     return <div className="flex items-center justify-center min-h-screen"><p>Loading event details...</p></div>;
   }
-  if (error && !event) { /* ... (same as before) ... */ 
+  if (error && !event) { 
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
         <Link href="/dashboard/events" className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 mb-4 inline-block">← Back to Events</Link>
@@ -200,12 +223,12 @@ export default function EventDetailPage() {
       </div>
     );
   }
-  if (!event) { /* ... (same as before) ... */ 
+  if (!event) { 
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
         <Link href="/dashboard/events" className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 mb-4 inline-block">← Back to Events</Link>
         <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 text-center">
-          <p className="text-gray-600 dark:text-gray-300">Event data not available.</p>
+          <p className="text-gray-600 dark:text-gray-300">Event data not available. It might have been deleted or an error occurred.</p>
         </div>
       </div>
     );
@@ -218,7 +241,7 @@ export default function EventDetailPage() {
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
-      <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6"> {/* ... (same as before) ... */} 
+      <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6"> 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/dashboard" className="flex-shrink-0 text-xl font-bold text-indigo-600 dark:text-indigo-400">Fiji Platform</Link>
@@ -230,17 +253,17 @@ export default function EventDetailPage() {
       <main className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg overflow-hidden">
           <div className="p-6 sm:p-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4"> {/* ... (same as before, use event.id) ... */} 
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4"> 
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-0">{event.eventName}</h1>
               {canEditEvent && (<Link href={`/dashboard/events/${event.id}/edit`}><button className="py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-md">Edit Event</button></Link>)}
             </div>
             
             {error && !actionInProgress && <p className="text-red-500 text-sm mt-2 mb-4">{error}</p>}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 text-sm text-gray-700 dark:text-gray-300"> {/* ... (same as before, use event.venue) ... */} 
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 text-sm text-gray-700 dark:text-gray-300"> 
               <p><strong>Type:</strong> {event.eventType || 'N/A'}</p>
               <p><strong>Start Date & Time:</strong> {event.dateTime ? format(parseISO(event.dateTime), 'PPP p') : 'N/A'}</p>
-              <p><strong>Venue:</strong> {event.venue || 'N/A'}</p>
+              <p><strong>Venue:</strong> {event.venue || 'N/A'}</p> 
               <p><strong>End Date & Time:</strong> {event.endTime ? format(parseISO(event.endTime), 'PPP p') : 'N/A'}</p>
               <p><strong>Status:</strong> <span className={`ml-2 px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${ event.status === 'open_for_signup' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' : event.status === 'draft' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100' : event.status === 'completed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100' : event.status === 'cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100' }`}>{event.status.replace(/_/g, ' ')}</span></p>
               <p><strong>Volunteers Required:</strong> {event.volunteersRequired ?? 'N/A'}</p>
@@ -248,10 +271,10 @@ export default function EventDetailPage() {
               <p><strong>Created By:</strong> {creatorName}</p>
             </div>
 
-            {event.purpose && ( /* ... (same as before) ... */ <div className="mb-6"><h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Purpose</h2><p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{event.purpose}</p></div>)}
-            {event.description && ( /* ... (same as before) ... */ <div className="mb-6"><h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Description</h2><p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{event.description}</p></div>)}
+            {event.purpose && ( <div className="mb-6"><h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Purpose</h2><p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{event.purpose}</p></div>)}
+            {event.description && ( <div className="mb-6"><h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Description</h2><p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{event.description}</p></div>)}
             
-            {user && !canEditEvent && ( /* ... (same as before for signup/withdraw) ... */ 
+            {user && !canEditEvent && ( 
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                     {event.isCurrentUserSignedUp ? (
                         <div>
@@ -266,7 +289,6 @@ export default function EventDetailPage() {
                 </div>
             )}
 
-            {/* Event Roster Management Section */}
             {canManageAssignments && (
               <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Manage Volunteers</h2>
@@ -286,7 +308,7 @@ export default function EventDetailPage() {
                       {actionInProgress ? 'Assigning...' : 'Assign'}
                     </button>
                   </div>
-                  {error && actionInProgress && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                  {assignmentsError && <p className="text-red-500 text-sm mt-2">{assignmentsError}</p>}
                 </form>
 
                 <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Assigned Volunteers ({assignments.length})</h3>
@@ -313,6 +335,7 @@ export default function EventDetailPage() {
                 ) : (
                   <p className="text-gray-500 dark:text-gray-400">No volunteers currently assigned to this event.</p>
                 )}
+                 {assignmentsError && !isLoadingAssignments && assignments.length === 0 && <p className="text-red-500 text-sm mt-2">{assignmentsError}</p>}
               </div>
             )}
           </div>

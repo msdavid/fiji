@@ -1,28 +1,27 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { format } from 'date-fns'; 
+import { format, parseISO } from 'date-fns';
 
-// Define an interface for the event data expected from the backend
 interface Event {
-  eventId: string;
+  id: string;
   eventName: string;
   eventType?: string;
   purpose?: string;
   description?: string;
-  dateTime: string; 
-  durationMinutes?: number;
-  location: string; // Field name remains 'location' for backend
+  dateTime: string;
+  endTime?: string;
+  venue: string;
   volunteersRequired?: number;
   status: string;
   createdByUserId: string;
   creatorFirstName?: string;
   creatorLastName?: string;
-  createdAt: string; 
-  updatedAt: string; 
+  createdAt: string;
+  updatedAt: string;
   isCurrentUserSignedUp?: boolean;
   currentUserAssignmentStatus?: string;
   organizerUserId?: string;
@@ -32,64 +31,71 @@ interface Event {
 
 export default function EventsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile } = useAuth(); 
+  const { user, loading: authLoading, userProfile, fetchUserProfile } = useAuth();
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isAdmin = userProfile?.assignedRoleIds?.includes('sysadmin');
+  // Simplified privilege check: if 'sysadmin' role ID is present, grant general admin rights for this page.
+  // For more granular control, the backend /users/me should return a privileges map or is_sysadmin flag.
+  const isSysAdminUser = userProfile?.assignedRoleIds?.includes('sysadmin');
+  const canCreateEvents = isSysAdminUser; // Sysadmin can create events
+  const canEditEvents = isSysAdminUser; // Sysadmin can edit events (adjust if other roles can edit)
+
+
+  const fetchEvents = useCallback(async () => {
+    if (!user) return;
+
+    setIsLoadingEvents(true);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      if (!token) {
+        throw new Error("Authentication token not available.");
+      }
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/events`, {
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || `Failed to fetch events (status: ${response.status})`);
+      }
+      const data: Event[] = await response.json();
+      setEvents(data);
+    } catch (err: any) {
+      setError(err.message || 'An unexpected error occurred while fetching events.');
+      console.error("Fetch events error:", err);
+    } finally {
+      setIsLoadingEvents(false);
+    }
+  }, [user]); // Dependency: user
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
       return;
     }
-
-    const fetchEvents = async () => {
-      if (!user) return; 
-
-      setIsLoadingEvents(true);
-      setError(null);
-      try {
-        const token = await user.getIdToken(); 
-        if (!token) {
-          throw new Error("Authentication token not available.");
-        }
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-        const response = await fetch(`${backendUrl}/events`, {
-          headers: {
-            'Authorization': `Bearer ${token}`,
-          },
-        });
-
-        if (!response.ok) {
-          const errorData = await response.json();
-          throw new Error(errorData.detail || `Failed to fetch events (status: ${response.status})`);
-        }
-        const data: Event[] = await response.json();
-        setEvents(data);
-      } catch (err: any) {
-        setError(err.message || 'An unexpected error occurred while fetching events.');
-        console.error("Fetch events error:", err);
-      } finally {
-        setIsLoadingEvents(false);
-      }
-    };
-
-    if (user) { 
+    if (user && !userProfile) {
+        fetchUserProfile();
+    }
+    if (user && userProfile) {
       fetchEvents();
     }
-  }, [user, authLoading, router]); 
+  }, [user, authLoading, router, userProfile, fetchUserProfile, fetchEvents]);
 
 
-  if (authLoading || isLoadingEvents) {
+  if (authLoading || isLoadingEvents || (!userProfile && user)) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900">
         <p className="text-gray-700 dark:text-gray-300">Loading events...</p>
       </div>
     );
   }
-  
+
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
       <nav className="bg-white dark:bg-gray-900 shadow-sm">
@@ -104,9 +110,9 @@ export default function EventsPage() {
                 <Link href="/dashboard" className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400">
                     Dashboard
                 </Link>
-                {isAdmin && (
+                {isSysAdminUser && ( // Show User Management only for sysadmin
                     <Link href="/dashboard/admin/users" className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400">
-                        User Management
+                        Users
                     </Link>
                 )}
             </div>
@@ -118,9 +124,9 @@ export default function EventsPage() {
         <div className="px-4 py-6 sm:px-0">
           <div className="flex justify-between items-center mb-6">
             <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
-              Event Management
+              Events
             </h1>
-            {isAdmin && (
+            {canCreateEvents && (
               <Link href="/dashboard/events/new">
                 <button className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md">
                   Create New Event
@@ -138,7 +144,7 @@ export default function EventsPage() {
           {events.length === 0 && !isLoadingEvents && !error && (
             <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 text-center">
               <p className="text-gray-600 dark:text-gray-300">
-                No events found. {isAdmin ? "Try creating one!" : ""}
+                No events found. {canCreateEvents ? "Try creating one!" : ""}
               </p>
             </div>
           )}
@@ -146,17 +152,17 @@ export default function EventsPage() {
           {events.length > 0 && (
             <div className="space-y-4">
               {events.map((event) => (
-                <div key={event.eventId} className="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
+                <div key={event.id} className="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
                   <div className="flex justify-between items-start">
                     <div>
                       <h2 className="text-xl font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                        <Link href={`/dashboard/events/${event.eventId}`}>{event.eventName}</Link>
+                        <Link href={`/dashboard/events/${event.id}`}>{event.eventName}</Link>
                       </h2>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        {event.eventType} - Venue: {event.location || 'N/A'} {/* Changed Label */}
+                        {event.eventType || 'General Event'} - Venue: {event.venue || 'N/A'}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
-                        Date: {format(new Date(event.dateTime), 'PPP p')} 
+                        Date: {format(parseISO(event.dateTime), 'PPP p')}
                       </p>
                       <p className="text-sm text-gray-500 dark:text-gray-400">
                         Status: <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
@@ -168,9 +174,9 @@ export default function EventsPage() {
                         }`}>{event.status.replace(/_/g, ' ')}</span>
                       </p>
                     </div>
-                    {isAdmin && (
+                    {canEditEvents && (
                       <div className="flex space-x-2">
-                        <Link href={`/dashboard/events/${event.eventId}/edit`}>
+                        <Link href={`/dashboard/events/${event.id}/edit`}>
                           <button className="text-sm py-1 px-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md">Edit</button>
                         </Link>
                       </div>

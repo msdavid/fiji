@@ -2,10 +2,10 @@
 
 import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; 
+import Link from 'next/link';
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebaseConfig';
-import { useAuth } from '@/context/AuthContext'; 
+import { useAuth } from '@/context/AuthContext';
 
 export default function DashboardPage() {
   const router = useRouter();
@@ -30,7 +30,7 @@ export default function DashboardPage() {
   // Assumes 'sysadmin' is the ID of the sysadmin role in the assignedRoleIds array.
   // If your sysadmin role ID is different (e.g., a UUID), replace 'sysadmin' with that ID.
   const isAdmin = userProfile?.assignedRoleIds?.includes('sysadmin');
-  
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
@@ -79,26 +79,26 @@ export default function DashboardPage() {
               </div>
             </div>
             <div className="flex items-center space-x-4">
-              <Link 
-                href="/dashboard/profile" 
+              <Link
+                href="/dashboard/profile"
                 className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
               >
                 My Profile
               </Link>
               {isAdmin && (
-                <Link 
-                  href="/dashboard/admin/users" 
+                <Link
+                  href="/dashboard/admin/users"
                   className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
                 >
-                  User Management
+                  Users
                 </Link>
               )}
               {isAdmin && ( // Added Event Management link for admin
-                <Link 
-                  href="/dashboard/events" 
+                <Link
+                  href="/dashboard/events"
                   className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
                 >
-                  Event Management
+                  Events
                 </Link>
               )}
               <span className="text-gray-700 dark:text-gray-300">

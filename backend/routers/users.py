@@ -1,13 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends, status, Query # Added Query
-from firebase_admin import firestore
+from fastapi import APIRouter, HTTPException, Depends, status, Query 
+from firebase_admin import firestore # For type hinting AsyncClient
 from google.cloud.firestore_v1.base_query import FieldFilter 
 from typing import List, Optional, Any, Dict 
 
-# Use direct imports from subdirectories of 'backend'
 from dependencies.database import get_db
 from dependencies.auth import get_firebase_user
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
-from models.user import UserCreateData, UserResponse, UserUpdate, UserRolesUpdate, UserSearchResult # Added UserSearchResult
+from models.user import UserCreateData, UserResponse, UserUpdate, UserRolesUpdate, UserSearchResult
 
 router = APIRouter(
     prefix="/users", 
@@ -19,10 +18,6 @@ INVITATIONS_COLLECTION = "registrationInvitations"
 ROLES_COLLECTION = "roles"
 
 def _convert_user_data_for_response(user_data: Dict[str, Any]) -> Dict[str, Any]:
-    """
-    Helper function to convert skills/qualifications from list (old format) 
-    to string for UserResponse model compatibility.
-    """
     if 'skills' in user_data and isinstance(user_data['skills'], list):
         user_data['skills'] = '\n'.join(user_data['skills'])
     elif 'skills' not in user_data or user_data['skills'] is None: 
@@ -42,7 +37,7 @@ def _convert_user_data_for_response(user_data: Dict[str, Any]) -> Dict[str, Any]
 async def register_user_with_invitation(
     registration_data: UserCreateData,
     firebase_user_claims: dict = Depends(get_firebase_user),
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db) # Use AsyncClient
 ):
     try:
         firebase_uid = firebase_user_claims.get("uid")
@@ -60,7 +55,7 @@ async def register_user_with_invitation(
                                .limit(1)
         
         invitation_doc_snapshot = None
-        for doc_snapshot in query.stream():
+        async for doc_snapshot in query.stream(): # Use async for
             invitation_doc_snapshot = doc_snapshot
             break
         
@@ -79,7 +74,8 @@ async def register_user_with_invitation(
             )
 
         user_doc_ref = db.collection(USERS_COLLECTION).document(firebase_uid)
-        if user_doc_ref.get().exists:
+        user_doc_check = await user_doc_ref.get() # await
+        if user_doc_check.exists:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=f"User with UID {firebase_uid} already exists in Firestore."
@@ -99,16 +95,16 @@ async def register_user_with_invitation(
             "qualifications": None, 
             "preferences": None, 
         }
-        user_doc_ref.set(new_user_data)
+        await user_doc_ref.set(new_user_data) # await
 
-        db.collection(INVITATIONS_COLLECTION).document(invitation_doc_snapshot.id).update({
+        await db.collection(INVITATIONS_COLLECTION).document(invitation_doc_snapshot.id).update({ # await
             "status": "accepted",
             "updatedAt": firestore.SERVER_TIMESTAMP,
             "acceptedByUserId": firebase_uid,
             "acceptedAt": firestore.SERVER_TIMESTAMP
         })
         
-        created_user_doc_snapshot = user_doc_ref.get()
+        created_user_doc_snapshot = await user_doc_ref.get() # await
         if created_user_doc_snapshot.exists:
             response_data = created_user_doc_snapshot.to_dict()
             response_data['uid'] = created_user_doc_snapshot.id
@@ -126,10 +122,10 @@ async def register_user_with_invitation(
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac),
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db) # Use AsyncClient
 ):
     user_doc_ref = db.collection(USERS_COLLECTION).document(current_rbac_user.uid)
-    user_doc = user_doc_ref.get()
+    user_doc = await user_doc_ref.get() # await
     if not user_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Current user not found in Firestore.")
     
@@ -142,7 +138,7 @@ async def read_users_me(
 async def update_users_me(
     user_update_data: UserUpdate,
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac),
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db) # Use AsyncClient
 ):
     user_doc_ref = db.collection(USERS_COLLECTION).document(current_rbac_user.uid)
     
@@ -153,8 +149,8 @@ async def update_users_me(
     update_payload["updatedAt"] = firestore.SERVER_TIMESTAMP
 
     try:
-        user_doc_ref.update(update_payload)
-        updated_doc = user_doc_ref.get()
+        await user_doc_ref.update(update_payload) # await
+        updated_doc = await user_doc_ref.get() # await
         if not updated_doc.exists: 
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="User not found after update.")
         
@@ -168,20 +164,20 @@ async def update_users_me(
 @router.get("/search", response_model=List[UserSearchResult], dependencies=[Depends(require_permission("users", "list"))])
 async def search_users(
     q: str = Query(..., min_length=1, description="Search query for first name, last name, or email."),
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db) # Use AsyncClient
 ):
     if not q:
         return []
         
     users_ref = db.collection(USERS_COLLECTION)
-    docs = users_ref.stream() # Fetch all users
+    docs_stream = users_ref.stream() # stream() is an async iterator with AsyncClient
     
     search_results = []
     search_term_lower = q.lower()
     
-    for doc in docs:
+    async for doc in docs_stream: # Use async for
         user_data = doc.to_dict()
-        user_data['uid'] = doc.id # Ensure uid is part of the data for the model
+        user_data['uid'] = doc.id 
 
         first_name = user_data.get("firstName", "").lower()
         last_name = user_data.get("lastName", "").lower()
@@ -191,11 +187,10 @@ async def search_users(
            search_term_lower in last_name or \
            search_term_lower in email:
             try:
-                # Ensure all required fields for UserSearchResult are present
                 if "uid" in user_data and "firstName" in user_data and \
                    "lastName" in user_data and "email" in user_data:
                     search_results.append(UserSearchResult(**user_data))
-            except Exception as e: # Catch potential Pydantic validation errors if data is malformed
+            except Exception as e: 
                 print(f"Skipping user {user_data.get('uid')} due to data issue: {e}")
                 continue 
     
@@ -204,13 +199,13 @@ async def search_users(
 
 @router.get("", response_model=List[UserResponse], dependencies=[Depends(require_permission("users", "list"))])
 async def list_users(
-    db: firestore.Client = Depends(get_db),
+    db: firestore.AsyncClient = Depends(get_db), # Use AsyncClient
 ):
     users_ref = db.collection(USERS_COLLECTION)
-    docs = users_ref.stream()
+    docs_stream = users_ref.stream() # stream() is an async iterator
     
     user_list = []
-    for doc in docs:
+    async for doc in docs_stream: # Use async for
         user_data = doc.to_dict()
         user_data['uid'] = doc.id
         user_data = _convert_user_data_for_response(user_data)
@@ -220,10 +215,10 @@ async def list_users(
 @router.get("/{user_id}", response_model=UserResponse, dependencies=[Depends(require_permission("users", "view"))])
 async def get_user(
     user_id: str,
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db) # Use AsyncClient
 ):
     user_doc_ref = db.collection(USERS_COLLECTION).document(user_id)
-    user_doc = user_doc_ref.get()
+    user_doc = await user_doc_ref.get() # await
     if not user_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with ID {user_id} not found.")
     
@@ -236,11 +231,12 @@ async def get_user(
 async def update_user(
     user_id: str,
     user_update_data: UserUpdate, 
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db) # Use AsyncClient
 ):
     user_doc_ref = db.collection(USERS_COLLECTION).document(user_id)
     
-    if not user_doc_ref.get().exists:
+    user_doc_check = await user_doc_ref.get() # await
+    if not user_doc_check.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with ID {user_id} not found.")
 
     update_payload = user_update_data.model_dump(exclude_unset=True)
@@ -250,8 +246,8 @@ async def update_user(
     update_payload["updatedAt"] = firestore.SERVER_TIMESTAMP
 
     try:
-        user_doc_ref.update(update_payload)
-        updated_doc = user_doc_ref.get()
+        await user_doc_ref.update(update_payload) # await
+        updated_doc = await user_doc_ref.get() # await
         
         response_data = updated_doc.to_dict()
         response_data['uid'] = updated_doc.id
@@ -264,26 +260,27 @@ async def update_user(
 async def update_user_roles(
     user_id: str,
     roles_update_data: UserRolesUpdate,
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db) # Use AsyncClient
 ):
     user_doc_ref = db.collection(USERS_COLLECTION).document(user_id)
-    user_doc = user_doc_ref.get()
+    user_doc = await user_doc_ref.get() # await
     if not user_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with ID {user_id} not found.")
 
     valid_role_ids = []
     invalid_role_ids = []
-    for role_name in roles_update_data.assignedRoleIds:
-        role_doc_ref = db.collection(ROLES_COLLECTION).document(role_name)
-        if role_doc_ref.get().exists:
-            valid_role_ids.append(role_name)
+    for role_id_to_check in roles_update_data.assignedRoleIds: # Renamed variable for clarity
+        role_doc_ref = db.collection(ROLES_COLLECTION).document(role_id_to_check)
+        role_doc_check = await role_doc_ref.get() # await
+        if role_doc_check.exists:
+            valid_role_ids.append(role_id_to_check)
         else:
-            invalid_role_ids.append(role_name)
+            invalid_role_ids.append(role_id_to_check)
     
     if invalid_role_ids:
         raise HTTPException(
             status_code=status.HTTP_400_BAD_REQUEST,
-            detail=f"The following role names are invalid or do not exist: {', '.join(invalid_role_ids)}."
+            detail=f"The following role IDs are invalid or do not exist: {', '.join(invalid_role_ids)}."
         )
 
     update_payload = {
@@ -292,8 +289,8 @@ async def update_user_roles(
     }
 
     try:
-        user_doc_ref.update(update_payload)
-        updated_doc = user_doc_ref.get()
+        await user_doc_ref.update(update_payload) # await
+        updated_doc = await user_doc_ref.get() # await
         
         response_data = updated_doc.to_dict()
         response_data['uid'] = updated_doc.id
