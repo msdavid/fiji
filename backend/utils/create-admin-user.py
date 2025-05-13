@@ -1,3 +1,5 @@
+#!/usr/bin/env python3
+
 import argparse
 import firebase_admin
 from firebase_admin import credentials, auth, firestore
