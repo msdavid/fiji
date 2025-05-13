@@ -125,5 +125,5 @@ Desktop.ini
 *.temp
 
 # Q Agent internal files
-.Q/
+.Q/*
 .Q

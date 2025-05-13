@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { format, parseISO } from 'date-fns'; // Added parseISO
+import { format, parseISO } from 'date-fns'; 
 
 // Define an interface for the event data expected from the backend
 interface Event {
@@ -39,14 +39,14 @@ export default function EventDetailPage() {
   const params = useParams();
   const eventId = params.eventId as string; 
 
-  const { user, loading: authLoading, userProfile } = useAuth();
+  const { user, loading: authLoading, userProfile, hasPrivilege } = useAuth(); // Retain hasPrivilege for canEditEvent
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [isLoadingEvent, setIsLoadingEvent] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState(false);
 
-
-  const isAdmin = userProfile?.assignedRoleIds?.includes('sysadmin');
+  // Use hasPrivilege for edit if available, otherwise fallback to sysadmin check
+  const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
 
   const fetchEventDetails = useCallback(async () => {
     if (!user || !eventId) return;
@@ -108,6 +108,7 @@ export default function EventDetailPage() {
         fetchEventDetails(); 
     } catch (err: any) {
         setError(err.message);
+        alert(`Error: ${err.message}`);
     } finally {
         setActionInProgress(false);
     }
@@ -132,17 +133,17 @@ export default function EventDetailPage() {
         fetchEventDetails(); 
     } catch (err: any) {
         setError(err.message);
+        alert(`Error: ${err.message}`);
     } finally {
         setActionInProgress(false);
     }
   };
 
-
   if (authLoading || isLoadingEvent) {
     return <div className="flex items-center justify-center min-h-screen"><p>Loading event details...</p></div>;
   }
 
-  if (error) {
+  if (error && !event) { 
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
         <Link href="/dashboard/events" className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 mb-4 inline-block">← Back to Events</Link>
@@ -159,7 +160,7 @@ export default function EventDetailPage() {
       <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
         <Link href="/dashboard/events" className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 mb-4 inline-block">← Back to Events</Link>
         <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 text-center">
-          <p className="text-gray-600 dark:text-gray-300">Event data not available.</p>
+          <p className="text-gray-600 dark:text-gray-300">Event data not available. It might have been deleted or an error occurred.</p>
         </div>
       </div>
     );
@@ -175,7 +176,6 @@ export default function EventDetailPage() {
   const creatorName = event.creatorFirstName && event.creatorLastName
     ? `${event.creatorFirstName} ${event.creatorLastName}`
     : event.createdByUserId;
-
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
@@ -197,7 +197,7 @@ export default function EventDetailPage() {
           <div className="p-6 sm:p-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-0">{event.eventName}</h1>
-              {isAdmin && (
+              {canEditEvent && ( // Only show Edit button based on its own privilege
                 <Link href={`/dashboard/events/${event.eventId}/edit`}>
                   <button className="py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-md">
                     Edit Event
@@ -205,6 +205,8 @@ export default function EventDetailPage() {
                 </Link>
               )}
             </div>
+            
+            {error && <p className="text-red-500 text-sm mt-2 mb-4">{error}</p>}
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 text-sm text-gray-700 dark:text-gray-300">
               <p><strong>Type:</strong> {event.eventType || 'N/A'}</p>
@@ -239,7 +241,8 @@ export default function EventDetailPage() {
               </div>
             )}
             
-            {!isAdmin && user && (
+            {/* Show signup/withdraw only if the user cannot edit the event */}
+            {!canEditEvent && user && (
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                     {event.isCurrentUserSignedUp ? (
                         <div>
@@ -271,10 +274,9 @@ export default function EventDetailPage() {
                             </p>
                         )
                     )}
-                    {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                    {error && actionInProgress && <p className="text-red-500 text-sm mt-2">{error}</p>}
                 </div>
             )}
-
           </div>
         </div>
       </main>

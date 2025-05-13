@@ -4,7 +4,6 @@ import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-// import { format } from 'date-fns'; // Not strictly needed if using datetime-local and ISO strings
 
 interface EventFormData {
   eventName: string;
@@ -54,19 +53,23 @@ export default function EditEventPage() {
   const params = useParams();
   const eventId = params.eventId as string;
 
-  const { user, loading: authLoading, userProfile } = useAuth();
+  const { user, loading: authLoading, userProfile, hasPrivilege } = useAuth(); // Added hasPrivilege
   const [formData, setFormData] = useState<Partial<EventFormData>>({}); 
   const [isLoadingEvent, setIsLoadingEvent] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [submitting, setSubmitting] = useState(false);
+  const [submitting, setSubmitting] = useState(false); // For save
+  const [deleting, setDeleting] = useState(false); // For delete
 
   const [organizerSearchQuery, setOrganizerSearchQuery] = useState('');
   const [organizerSearchResults, setOrganizerSearchResults] = useState<UserSearchResult[]>([]);
   const [selectedOrganizerName, setSelectedOrganizerName] = useState<string | null>(null);
   const [isSearchingOrganizers, setIsSearchingOrganizers] = useState(false);
 
-  const isAdmin = userProfile?.assignedRoleIds?.includes('sysadmin');
+  // Check for specific privileges, fallback to isAdmin if hasPrivilege is not fully implemented/available
+  const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
+  const canDeleteEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'delete') : userProfile.assignedRoleIds?.includes('sysadmin'));
+
 
   const fetchEventData = useCallback(async () => {
     if (!user || !eventId) return;
@@ -87,20 +90,21 @@ export default function EditEventPage() {
       const formattedDateTime = eventData.dateTime ? formatDateTimeForInput(eventData.dateTime) : '';
       const formattedEndTime = eventData.endTime ? formatDateTimeForInput(eventData.endTime) : '';
       
-      // Remove durationMinutes if it exists in eventData from older backend versions
-      const { durationMinutes, ...restOfEventData } = eventData;
+      const { durationMinutes, ...restOfEventData } = eventData; // durationMinutes might not exist anymore
 
       setFormData({ 
         ...restOfEventData, 
         dateTime: formattedDateTime,
-        endTime: formattedEndTime, // Set endTime
+        endTime: formattedEndTime, 
         organizerUserId: eventData.organizerUserId || null, 
       });
       
       if (eventData.organizerUserId && eventData.organizerFirstName && eventData.organizerLastName) {
         setSelectedOrganizerName(`${eventData.organizerFirstName} ${eventData.organizerLastName} (${eventData.organizerEmail || 'email missing'})`);
       } else if (eventData.organizerUserId) {
-        setSelectedOrganizerName(`UID: ${eventData.organizerUserId}`);
+        // Fallback if name/email not directly on eventData from GET /events/{id}
+        // This might require fetching organizer details separately if not already included
+        setSelectedOrganizerName(`UID: ${eventData.organizerUserId}`); 
       } else {
         setSelectedOrganizerName(null);
       }
@@ -117,14 +121,15 @@ export default function EditEventPage() {
       router.push('/login');
       return;
     }
-    if (!authLoading && user && !isAdmin) {
+    if (!authLoading && user && !canEditEvent) { // Check specific edit privilege
         setError("You are not authorized to edit events.");
+        // Potentially redirect or disable form
         return;
     }
-    if (user && eventId && isAdmin) {
+    if (user && eventId && canEditEvent) {
       fetchEventData();
     }
-  }, [user, authLoading, eventId, router, isAdmin, fetchEventData]);
+  }, [user, authLoading, eventId, router, canEditEvent, fetchEventData]);
 
 
   const fetchUsers = async (query: string): Promise<UserSearchResult[]> => {
@@ -160,14 +165,17 @@ export default function EditEventPage() {
     const query = e.target.value;
     setOrganizerSearchQuery(query);
     if (query.trim().length === 0) { 
-        // Keep selected name until explicitly cleared or new selection
+        // Clear results if input is empty
+        setOrganizerSearchResults([]);
     } else if (query.trim().length >= 2) {
+        // If user types new query and an organizer is already selected, clear selection
         if (formData.organizerUserId || selectedOrganizerName) { 
             setSelectedOrganizerName(null);
             setFormData(prev => ({ ...prev, organizerUserId: null }));
         }
         debouncedUserSearch(query);
     } else {
+        // Query too short, clear results
         setOrganizerSearchResults([]);
     }
   };
@@ -189,15 +197,33 @@ export default function EditEventPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'number' ? parseInt(value, 10) : value,
-    }));
+
+    if (name === 'dateTime') {
+      const newDateTime = value;
+      let newEndTime = formData.endTime || ''; 
+      if (newDateTime) {
+        const startDate = new Date(newDateTime);
+        if (!isNaN(startDate.getTime())) {
+          const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); 
+          newEndTime = formatDateTimeForInput(endDate);
+        }
+      }
+      setFormData(prev => ({
+        ...prev,
+        dateTime: newDateTime,
+        endTime: newEndTime, 
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'number' ? parseInt(value, 10) : value,
+      }));
+    }
   };
 
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!isAdmin) {
+    if (!canEditEvent) {
         setError("Unauthorized action.");
         return;
     }
@@ -230,14 +256,19 @@ export default function EditEventPage() {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       
-      // Destructure only the fields defined in the updated EventFormData
       const { eventName, eventType, purpose, description, dateTime, endTime, location, volunteersRequired, status, organizerUserId } = formData;
-      const updatePayload = { 
-          eventName, eventType, purpose, description, dateTime, endTime, location, volunteersRequired, status, 
-          organizerUserId: organizerUserId || null 
-      };
-      // Ensure durationMinutes is not part of the payload
-      // delete (updatePayload as any).durationMinutes;
+      const updatePayload: Partial<EventFormData> = {};
+
+      if (eventName !== undefined) updatePayload.eventName = eventName;
+      if (eventType !== undefined) updatePayload.eventType = eventType;
+      if (purpose !== undefined) updatePayload.purpose = purpose;
+      if (description !== undefined) updatePayload.description = description;
+      if (dateTime !== undefined) updatePayload.dateTime = dateTime;
+      if (endTime !== undefined) updatePayload.endTime = endTime;
+      if (location !== undefined) updatePayload.location = location;
+      if (volunteersRequired !== undefined) updatePayload.volunteersRequired = volunteersRequired;
+      if (status !== undefined) updatePayload.status = status;
+      if (organizerUserId !== undefined) updatePayload.organizerUserId = organizerUserId;
 
 
       const response = await fetch(`${backendUrl}/events/${eventId}`, {
@@ -263,6 +294,37 @@ export default function EditEventPage() {
       setError(err.message);
     } finally {
       setSubmitting(false);
+    }
+  };
+
+  const handleDelete = async () => {
+    if (!user || !eventId || !canDeleteEvent) return;
+
+    if (window.confirm(`Are you sure you want to delete the event "${formData.eventName || 'this event'}"? This action cannot be undone.`)) {
+      setDeleting(true);
+      setError(null);
+      setSuccessMessage(null);
+      try {
+        const token = await user.getIdToken();
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        const response = await fetch(`${backendUrl}/events/${eventId}`, {
+          method: 'DELETE',
+          headers: { 'Authorization': `Bearer ${token}` },
+        });
+
+        if (!response.ok && response.status !== 204) { // 204 is success for DELETE
+            const errorData = await response.json().catch(() => ({ detail: "Failed to delete event and parse error." }));
+            throw new Error(errorData.detail || `Failed to delete event (status: ${response.status})`);
+        }
+        
+        alert('Event deleted successfully!'); // Use alert for immediate feedback before navigation
+        router.push('/dashboard/events'); 
+      } catch (err: any) {
+        setError(err.message);
+        alert(`Error: ${err.message}`); // Show error in alert as well
+      } finally {
+        setDeleting(false);
+      }
     }
   };
   
@@ -297,14 +359,15 @@ export default function EditEventPage() {
           </div>
         )}
         
-        {!isAdmin && !authLoading && !isLoadingEvent && (
+        {!canEditEvent && !authLoading && !isLoadingEvent && ( // Check canEditEvent
              <div className="mb-4 p-4 text-sm text-yellow-700 bg-yellow-100 rounded-lg dark:bg-yellow-200 dark:text-yellow-800" role="alert">
                 You are not authorized to edit this event.
              </div>
         )}
 
-        {isAdmin && formData.eventName !== undefined && ( 
+        {canEditEvent && formData.eventName !== undefined && ( 
           <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-900 p-8 rounded-lg shadow">
+            {/* Form fields remain the same */}
             <div>
               <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Name</label>
               <input type="text" name="eventName" id="eventName" value={formData.eventName || ''} onChange={handleChange} required 
@@ -399,16 +462,30 @@ export default function EditEventPage() {
               </select>
             </div>
 
-            <div className="flex justify-end space-x-3">
-              <Link href={`/dashboard/events/${eventId}`}>
-                  <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                      Cancel
-                  </button>
-              </Link>
-              <button type="submit" disabled={submitting || !isAdmin}
-                      className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
-                {submitting ? 'Saving...' : 'Save Changes'}
-              </button>
+            <div className="flex justify-between items-center pt-4 border-t dark:border-gray-700">
+                <div>
+                    {canDeleteEvent && (
+                        <button 
+                            type="button" 
+                            onClick={handleDelete}
+                            disabled={deleting || submitting}
+                            className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                        >
+                            {deleting ? 'Deleting...' : 'Delete Event'}
+                        </button>
+                    )}
+                </div>
+                <div className="flex space-x-3">
+                    <Link href={`/dashboard/events/${eventId}`}>
+                        <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                            Cancel
+                        </button>
+                    </Link>
+                    <button type="submit" disabled={submitting || deleting || !canEditEvent}
+                            className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+                        {submitting ? 'Saving...' : 'Save Changes'}
+                    </button>
+                </div>
             </div>
           </form>
         )}

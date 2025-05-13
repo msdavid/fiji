@@ -38,6 +38,15 @@ const initialFormData: EventFormData = {
   organizerUserId: null, 
 };
 
+const formatDateTimeForInput = (date: Date): string => {
+  const year = date.getFullYear();
+  const month = (date.getMonth() + 1).toString().padStart(2, '0');
+  const day = date.getDate().toString().padStart(2, '0');
+  const hours = date.getHours().toString().padStart(2, '0');
+  const minutes = date.getMinutes().toString().padStart(2, '0');
+  return `${year}-${month}-${day}T${hours}:${minutes}`;
+};
+
 // Debounce helper function
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
   let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -74,10 +83,28 @@ export default function CreateEventPage() {
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
-    setFormData(prev => ({
-      ...prev,
-      [name]: type === 'number' ? parseInt(value, 10) : value,
-    }));
+
+    if (name === 'dateTime') {
+      const newDateTime = value;
+      let newEndTime = '';
+      if (newDateTime) {
+        const startDate = new Date(newDateTime);
+        if (!isNaN(startDate.getTime())) {
+          const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Add 60 minutes
+          newEndTime = formatDateTimeForInput(endDate);
+        }
+      }
+      setFormData(prev => ({
+        ...prev,
+        dateTime: newDateTime,
+        endTime: newEndTime,
+      }));
+    } else {
+      setFormData(prev => ({
+        ...prev,
+        [name]: type === 'number' ? parseInt(value, 10) : value,
+      }));
+    }
   };
 
   const fetchUsers = async (query: string): Promise<UserSearchResult[]> => {
@@ -156,9 +183,7 @@ export default function CreateEventPage() {
         return;
     }
 
-    // Remove durationMinutes if it somehow still exists, ensure endTime is used
     const { ...payloadWithoutDuration } = formData;
-    // delete (payloadWithoutDuration as any).durationMinutes; // Ensure it's removed if interface was slow to update
 
     try {
       const token = await user.getIdToken();
@@ -170,7 +195,7 @@ export default function CreateEventPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(payloadWithoutDuration), // Use payload with endTime
+        body: JSON.stringify(payloadWithoutDuration), 
       });
 
       if (!response.ok) {
