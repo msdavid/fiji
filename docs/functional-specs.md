@@ -12,7 +12,7 @@ This document outlines the functional requirements of Project Fiji. It serves as
 Fiji will be a web-based application enabling TWC2 to effectively manage its volunteer workforce. The system will facilitate tracking volunteer participation, monitoring contributions, and coordinating events.
 
 ## 3. Permissions and Roles
-The system will implement Role-Based Access Control (RBAC) to ensure users can only access features and data relevant to their assigned roles.
+The system implements a robust Role-Based Access Control (RBAC) mechanism. As a system administrator, you have granular control over user access. You can define **arbitrary roles** tailored to the specific operational needs of your organization, going beyond predefined templates. For each role you create—whether it's "Content Moderator," "Financial Analyst," or "Regional Event Coordinator"—you can precisely assign permissions. These permissions dictate which **actions** (e.g., `create`, `read`, `update`, `delete`, `list`, `approve`, `publish`) a user with that role can perform on specific **resources** within Fiji (e.g., `events`, `user_profiles`, `working_groups`, `financial_reports`, `system_settings`). This allows you to implement the principle of least privilege effectively, ensuring users only have the access necessary for their responsibilities. This dynamic and customizable approach is significantly more flexible and secure than traditional systems with fixed, unchangeable roles, as it allows you to adapt the access control model precisely to your organization's structure and evolving requirements, simplifying user management and reducing the risk of unauthorized access.
 
 ### 3.1. Roles
 Roles define a set of permissions and privileges within the system.
