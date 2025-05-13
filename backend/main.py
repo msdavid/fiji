@@ -11,7 +11,8 @@ from dependencies.auth import get_firebase_user
 from routers import roles as roles_router
 from routers.invitations import admin_router as invitations_admin_router, public_router as invitations_public_router
 from routers import users as users_router
-from routers import events as events_router # Import the new events router
+from routers import events as events_router
+from routers import working_groups as working_groups_router # Import the new working_groups router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -46,8 +47,9 @@ async def lifespan(app_instance: FastAPI):
             project_id = firebase_admin.get_app().project_id
             print(f"Firebase Admin SDK already initialized for project: {project_id}")
 
-        app_instance.state.db = firestore.client()
-        print("Firestore client initialized and stored in app.state.db.")
+        # Use firestore.AsyncClient for async operations
+        app_instance.state.db = firestore.AsyncClient()
+        print("Async Firestore client initialized and stored in app.state.db.")
 
     except ValueError as e:
         print(f"Error initializing Firebase Admin SDK (ValueError): {e}")
@@ -59,7 +61,9 @@ async def lifespan(app_instance: FastAPI):
     yield
     # Shutdown
     print("FastAPI application shutting down...")
-    # No specific cleanup needed for Firestore client or Firebase Admin SDK typically
+    if app_instance.state.db:
+        await app_instance.state.db.close() # Close async client
+        print("Async Firestore client closed.")
 
 
 # --- FastAPI Application ---
@@ -72,7 +76,7 @@ app = FastAPI(
 
 # --- CORS Middleware Configuration ---
 # Allow all origins for development, or specify your frontend URL for production
-origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3002")
+origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3002") # Default for Next.js dev
 origins = [origin.strip() for origin in origins_env.split(',')]
 
 
@@ -89,7 +93,8 @@ app.include_router(roles_router.router)
 app.include_router(invitations_admin_router)
 app.include_router(invitations_public_router)
 app.include_router(users_router.router)
-app.include_router(events_router.router) # Add the events router
+app.include_router(events_router.router)
+app.include_router(working_groups_router.router) # Add the working_groups router
 
 
 @app.get("/")
@@ -104,34 +109,27 @@ async def health_check(request: Request):
     if firebase_app_initialized:
         try:
             project_id_val = firebase_admin.get_app().project_id
-        except Exception: # Handle case where get_app might fail if not fully initialized
+        except Exception: 
             project_id_val = "Error retrieving project_id"
 
 
     if firebase_app_initialized and firestore_client_initialized:
         return {
             "status": "ok",
-            "message": "Backend is running, Firebase Admin SDK and Firestore client are initialized.",
+            "message": "Backend is running, Firebase Admin SDK and Async Firestore client are initialized.",
             "project_id": project_id_val
         }
-    elif firebase_app_initialized: # Firestore client failed
+    elif firebase_app_initialized: 
         return {
             "status": "partial_error",
-            "message": "Backend is running, Firebase Admin SDK initialized, but Firestore client (app.state.db) failed to initialize.",
+            "message": "Backend is running, Firebase Admin SDK initialized, but Async Firestore client (app.state.db) failed to initialize.",
             "project_id": project_id_val,
             "db_state": str(getattr(request.app.state, 'db', 'Not set'))
         }
-    else: # Firebase Admin SDK failed
-        # Avoid raising HTTPException here to allow health check to always return JSON if possible
+    else: 
         return {
             "status": "error",
             "message": "Backend is running, but Firebase Admin SDK failed to initialize.",
             "project_id": None,
             "db_state": str(getattr(request.app.state, 'db', 'Not set'))
         }
-
-# The /users/me endpoint is now in routers/users.py, this one can be removed if it's a duplicate.
-# @app.get("/users/me", tags=["Users"]) # This seems to be a duplicate from Sprint 0/1.
-# async def read_users_me(current_user: dict = Depends(get_firebase_user)):
-#     return {"user_info": current_user}
-# Removing the duplicate /users/me from main.py as it's defined in users_router.

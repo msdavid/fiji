@@ -6,16 +6,15 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO } from 'date-fns'; 
 
-// Define an interface for the event data expected from the backend
 interface Event {
-  eventId: string;
+  id: string; 
   eventName: string;
   eventType?: string;
   purpose?: string;
   description?: string;
-  dateTime: string; // Represents Start Date & Time
-  endTime?: string;  // New field for End Date & Time
-  location: string; 
+  dateTime: string; 
+  endTime?: string;  
+  venue: string; 
   volunteersRequired?: number;
   status: string;
   createdByUserId: string;
@@ -29,9 +28,24 @@ interface Event {
   organizerFirstName?: string; 
   organizerLastName?: string;  
 }
-
-// Interface for the detailed event data, can be same as Event for now
 interface EventDetail extends Event {}
+
+interface Assignment {
+  id: string;
+  userId: string;
+  assignableId: string;
+  assignableType: 'event' | 'workingGroup';
+  status: string;
+  assignedByUserId?: string;
+  assignmentDate: string; // Assuming ISO string from backend
+  createdAt: string;      // Assuming ISO string from backend
+  updatedAt: string;      // Assuming ISO string from backend
+  userFirstName?: string;
+  userLastName?: string;
+  userEmail?: string;
+  performanceNotes?: string;
+  hoursContributed?: number;
+}
 
 
 export default function EventDetailPage() {
@@ -39,111 +53,143 @@ export default function EventDetailPage() {
   const params = useParams();
   const eventId = params.eventId as string; 
 
-  const { user, loading: authLoading, userProfile, hasPrivilege } = useAuth(); // Retain hasPrivilege for canEditEvent
+  const { user, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [isLoadingEvent, setIsLoadingEvent] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState(false);
 
-  // Use hasPrivilege for edit if available, otherwise fallback to sysadmin check
+  const [assignments, setAssignments] = useState<Assignment[]>([]);
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
+  const [assignUserId, setAssignUserId] = useState(''); // For the assign form
+
   const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
+  const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('events', 'manage_assignments') : userProfile.assignedRoleIds?.includes('sysadmin'));
 
   const fetchEventDetails = useCallback(async () => {
     if (!user || !eventId) return;
-
     setIsLoadingEvent(true);
     setError(null);
     try {
       const token = await user.getIdToken();
-      if (!token) throw new Error("Authentication token not available.");
-      
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const response = await fetch(`${backendUrl}/events/${eventId}`, {
         headers: { 'Authorization': `Bearer ${token}` },
       });
-
-      if (!response.ok) {
-        if (response.status === 404) {
-          throw new Error("Event not found.");
-        }
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Failed to fetch event details (status: ${response.status})`);
-      }
+      if (!response.ok) throw new Error((await response.json()).detail || 'Failed to fetch event details');
       const data: EventDetail = await response.json();
       setEvent(data);
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred while fetching event details.');
-      console.error("Fetch event details error:", err);
+      setError(err.message);
     } finally {
       setIsLoadingEvent(false);
     }
   }, [user, eventId]);
+
+  const fetchEventAssignments = useCallback(async () => {
+    if (!user || !eventId || !canManageAssignments) return; // Only fetch if user can manage
+    setIsLoadingAssignments(true);
+    try {
+      const token = await user.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/events/${eventId}/assignments`, {
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error((await response.json()).detail || 'Failed to fetch event assignments');
+      const data: Assignment[] = await response.json();
+      setAssignments(data);
+    } catch (err: any) {
+      setError(err.message); // Or a specific assignment error state
+      console.error("Fetch assignments error:", err);
+    } finally {
+      setIsLoadingAssignments(false);
+    }
+  }, [user, eventId, canManageAssignments]);
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
       return;
     }
+    if (user && !userProfile) {
+        fetchUserProfile();
+    }
     if (user && eventId) {
       fetchEventDetails();
+      if (canManageAssignments) { // Fetch assignments if user has permission
+        fetchEventAssignments();
+      }
     }
-  }, [user, authLoading, eventId, router, fetchEventDetails]);
+  }, [user, authLoading, eventId, router, fetchEventDetails, fetchEventAssignments, userProfile, fetchUserProfile, canManageAssignments]);
 
-  const handleSignup = async () => {
+  const handleSignup = async () => { /* ... (same as before, ensure event.id) ... */ 
     if (!user || !event) return;
-    setActionInProgress(true);
-    setError(null);
+    setActionInProgress(true); setError(null);
     try {
         const token = await user.getIdToken();
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-        const response = await fetch(`${backendUrl}/events/${event.eventId}/signup`, {
-            method: 'POST',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to sign up for event.');
-        }
-        alert('Successfully signed up for the event!');
-        fetchEventDetails(); 
-    } catch (err: any) {
-        setError(err.message);
-        alert(`Error: ${err.message}`);
-    } finally {
-        setActionInProgress(false);
-    }
+        const response = await fetch(`${backendUrl}/events/${event.id}/signup`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
+        if (!response.ok) throw new Error((await response.json()).detail || 'Failed to sign up');
+        await fetchEventDetails(); 
+    } catch (err: any) { setError(err.message); } 
+    finally { setActionInProgress(false); }
   };
 
-  const handleWithdraw = async () => {
+  const handleWithdraw = async () => { /* ... (same as before, ensure event.id) ... */ 
     if (!user || !event) return;
-    setActionInProgress(true);
-    setError(null);
+    setActionInProgress(true); setError(null);
     try {
         const token = await user.getIdToken();
         const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-        const response = await fetch(`${backendUrl}/events/${event.eventId}/signup`, { 
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!response.ok) {
-            const errorData = await response.json();
-            throw new Error(errorData.detail || 'Failed to withdraw from event.');
-        }
-        alert('Successfully withdrawn from the event!');
-        fetchEventDetails(); 
-    } catch (err: any) {
-        setError(err.message);
-        alert(`Error: ${err.message}`);
-    } finally {
-        setActionInProgress(false);
-    }
+        const response = await fetch(`${backendUrl}/events/${event.id}/signup`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
+        if (!response.ok) throw new Error((await response.json()).detail || 'Failed to withdraw');
+        await fetchEventDetails();
+    } catch (err: any) { setError(err.message); }
+    finally { setActionInProgress(false); }
   };
 
-  if (authLoading || isLoadingEvent) {
+  const handleAssignVolunteer = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!user || !event || !assignUserId.trim()) return;
+    setActionInProgress(true); setError(null);
+    try {
+      const token = await user.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/events/${event.id}/assignments`, {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({ userId: assignUserId, assignableId: event.id, assignableType: 'event', status: 'confirmed_admin' }),
+      });
+      if (!response.ok) throw new Error((await response.json()).detail || 'Failed to assign volunteer');
+      setAssignUserId(''); // Clear input
+      await fetchEventAssignments(); // Refresh assignments list
+      await fetchEventDetails(); // Refresh event details (e.g. if it affects volunteer count display)
+    } catch (err: any) { setError(err.message); }
+    finally { setActionInProgress(false); }
+  };
+
+  const handleRemoveAssignment = async (assignmentId: string) => {
+    if (!user || !event || !confirm("Are you sure you want to remove this volunteer?")) return;
+    setActionInProgress(true); setError(null);
+    try {
+      const token = await user.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/events/${event.id}/assignments/${assignmentId}`, {
+        method: 'DELETE',
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) throw new Error((await response.json()).detail || 'Failed to remove volunteer');
+      await fetchEventAssignments(); // Refresh assignments list
+      await fetchEventDetails();
+    } catch (err: any) { setError(err.message); }
+    finally { setActionInProgress(false); }
+  };
+
+
+  if (authLoading || isLoadingEvent) { /* ... (same as before) ... */ 
     return <div className="flex items-center justify-center min-h-screen"><p>Loading event details...</p></div>;
   }
-
-  if (error && !event) { 
+  if (error && !event) { /* ... (same as before) ... */ 
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
         <Link href="/dashboard/events" className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 mb-4 inline-block">← Back to Events</Link>
@@ -154,13 +200,12 @@ export default function EventDetailPage() {
       </div>
     );
   }
-
-  if (!event) {
+  if (!event) { /* ... (same as before) ... */ 
     return (
       <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
         <Link href="/dashboard/events" className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 mb-4 inline-block">← Back to Events</Link>
         <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 text-center">
-          <p className="text-gray-600 dark:text-gray-300">Event data not available. It might have been deleted or an error occurred.</p>
+          <p className="text-gray-600 dark:text-gray-300">Event data not available.</p>
         </div>
       </div>
     );
@@ -168,26 +213,16 @@ export default function EventDetailPage() {
   
   const canSignUp = event.status === 'open_for_signup' && !event.isCurrentUserSignedUp;
   const canWithdraw = event.isCurrentUserSignedUp;
-
-  const organizerName = event.organizerFirstName && event.organizerLastName 
-    ? `${event.organizerFirstName} ${event.organizerLastName}` 
-    : event.organizerUserId || 'N/A';
-
-  const creatorName = event.creatorFirstName && event.creatorLastName
-    ? `${event.creatorFirstName} ${event.creatorLastName}`
-    : event.createdByUserId;
+  const organizerName = event.organizerFirstName && event.organizerLastName ? `${event.organizerFirstName} ${event.organizerLastName}` : event.organizerUserId || 'N/A';
+  const creatorName = event.creatorFirstName && event.creatorLastName ? `${event.creatorFirstName} ${event.creatorLastName}` : event.createdByUserId;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
-      <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6">
+      <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6"> {/* ... (same as before) ... */} 
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
-            <Link href="/dashboard" className="flex-shrink-0 text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                Fiji Platform
-            </Link>
-            <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-                ← Back to Events
-            </Link>
+            <Link href="/dashboard" className="flex-shrink-0 text-xl font-bold text-indigo-600 dark:text-indigo-400">Fiji Platform</Link>
+            <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">← Back to Events</Link>
           </div>
         </div>
       </nav>
@@ -195,87 +230,90 @@ export default function EventDetailPage() {
       <main className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg overflow-hidden">
           <div className="p-6 sm:p-8">
-            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4">
+            <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4"> {/* ... (same as before, use event.id) ... */} 
               <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2 sm:mb-0">{event.eventName}</h1>
-              {canEditEvent && ( // Only show Edit button based on its own privilege
-                <Link href={`/dashboard/events/${event.eventId}/edit`}>
-                  <button className="py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-md">
-                    Edit Event
-                  </button>
-                </Link>
-              )}
+              {canEditEvent && (<Link href={`/dashboard/events/${event.id}/edit`}><button className="py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-md">Edit Event</button></Link>)}
             </div>
             
-            {error && <p className="text-red-500 text-sm mt-2 mb-4">{error}</p>}
+            {error && !actionInProgress && <p className="text-red-500 text-sm mt-2 mb-4">{error}</p>}
 
-            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 text-sm text-gray-700 dark:text-gray-300">
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-x-8 gap-y-4 mb-6 text-sm text-gray-700 dark:text-gray-300"> {/* ... (same as before, use event.venue) ... */} 
               <p><strong>Type:</strong> {event.eventType || 'N/A'}</p>
               <p><strong>Start Date & Time:</strong> {event.dateTime ? format(parseISO(event.dateTime), 'PPP p') : 'N/A'}</p>
-              <p><strong>Venue:</strong> {event.location || 'N/A'}</p>
+              <p><strong>Venue:</strong> {event.venue || 'N/A'}</p>
               <p><strong>End Date & Time:</strong> {event.endTime ? format(parseISO(event.endTime), 'PPP p') : 'N/A'}</p>
-              <p><strong>Status:</strong> 
-                <span className={`ml-2 px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                    event.status === 'open_for_signup' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' :
-                    event.status === 'draft' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100' :
-                    event.status === 'completed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100' :
-                    event.status === 'cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100' :
-                    'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
-                }`}>{event.status.replace(/_/g, ' ')}</span>
-              </p>
+              <p><strong>Status:</strong> <span className={`ml-2 px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${ event.status === 'open_for_signup' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' : event.status === 'draft' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100' : event.status === 'completed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100' : event.status === 'cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100' }`}>{event.status.replace(/_/g, ' ')}</span></p>
               <p><strong>Volunteers Required:</strong> {event.volunteersRequired ?? 'N/A'}</p>
               <p><strong>Organizer:</strong> {organizerName}</p>
               <p><strong>Created By:</strong> {creatorName}</p>
             </div>
 
-            {event.purpose && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Purpose</h2>
-                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{event.purpose}</p>
-              </div>
-            )}
-
-            {event.description && (
-              <div className="mb-6">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Description</h2>
-                <p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{event.description}</p>
-              </div>
-            )}
+            {event.purpose && ( /* ... (same as before) ... */ <div className="mb-6"><h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Purpose</h2><p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{event.purpose}</p></div>)}
+            {event.description && ( /* ... (same as before) ... */ <div className="mb-6"><h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">Description</h2><p className="text-gray-700 dark:text-gray-300 whitespace-pre-wrap">{event.description}</p></div>)}
             
-            {/* Show signup/withdraw only if the user cannot edit the event */}
-            {!canEditEvent && user && (
+            {user && !canEditEvent && ( /* ... (same as before for signup/withdraw) ... */ 
                 <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-700">
                     {event.isCurrentUserSignedUp ? (
                         <div>
-                            <p className="text-green-600 dark:text-green-400 mb-2">
-                                You are signed up for this event. (Status: {event.currentUserAssignmentStatus || 'Unknown'})
-                            </p>
-                            {canWithdraw && (
-                                <button 
-                                    onClick={handleWithdraw} 
-                                    disabled={actionInProgress}
-                                    className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md disabled:opacity-50"
-                                >
-                                    {actionInProgress ? 'Processing...' : 'Withdraw Signup'}
-                                </button>
-                            )}
+                            <p className="text-green-600 dark:text-green-400 mb-2">You are signed up. (Status: {event.currentUserAssignmentStatus?.replace(/_/g, ' ') || 'Unknown'})</p>
+                            {canWithdraw && (<button onClick={handleWithdraw} disabled={actionInProgress} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md disabled:opacity-50">{actionInProgress ? 'Processing...' : 'Withdraw Signup'}</button>)}
                         </div>
                     ) : (
-                        canSignUp ? (
-                            <button 
-                                onClick={handleSignup} 
-                                disabled={actionInProgress}
-                                className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md disabled:opacity-50"
-                            >
-                                {actionInProgress ? 'Processing...' : 'Sign Up for this Event'}
-                            </button>
-                        ) : (
-                            <p className="text-gray-500 dark:text-gray-400">
-                                Signup is not currently available for this event. (Status: {event.status.replace(/_/g, ' ')})
-                            </p>
-                        )
+                        canSignUp ? (<button onClick={handleSignup} disabled={actionInProgress} className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md disabled:opacity-50">{actionInProgress ? 'Processing...' : 'Sign Up'}</button>)
+                        : (<p className="text-gray-500 dark:text-gray-400">Signup not available. (Status: {event.status.replace(/_/g, ' ')})</p>)
                     )}
                     {error && actionInProgress && <p className="text-red-500 text-sm mt-2">{error}</p>}
                 </div>
+            )}
+
+            {/* Event Roster Management Section */}
+            {canManageAssignments && (
+              <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Manage Volunteers</h2>
+                
+                <form onSubmit={handleAssignVolunteer} className="mb-6 p-4 border dark:border-gray-700 rounded-md">
+                  <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Assign Volunteer</h3>
+                  <div className="flex items-center gap-2">
+                    <input 
+                      type="text"
+                      value={assignUserId}
+                      onChange={(e) => setAssignUserId(e.target.value)}
+                      placeholder="Enter User ID to assign"
+                      className="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-800 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
+                      required
+                    />
+                    <button type="submit" disabled={actionInProgress || !assignUserId.trim()} className="py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md disabled:opacity-50">
+                      {actionInProgress ? 'Assigning...' : 'Assign'}
+                    </button>
+                  </div>
+                  {error && actionInProgress && <p className="text-red-500 text-sm mt-2">{error}</p>}
+                </form>
+
+                <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Assigned Volunteers ({assignments.length})</h3>
+                {isLoadingAssignments ? <p>Loading assignments...</p> : assignments.length > 0 ? (
+                  <ul className="space-y-3">
+                    {assignments.map((assignment) => (
+                      <li key={assignment.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md shadow-sm flex justify-between items-center">
+                        <div>
+                          <p className="font-medium text-gray-800 dark:text-gray-200">
+                            {assignment.userFirstName || 'N/A'} {assignment.userLastName || ''} ({assignment.userEmail || assignment.userId})
+                          </p>
+                          <p className="text-xs text-gray-500 dark:text-gray-400">Status: {assignment.status.replace(/_/g, ' ')} | Assigned: {format(parseISO(assignment.assignmentDate), 'Pp')}</p>
+                        </div>
+                        <button 
+                          onClick={() => handleRemoveAssignment(assignment.id)} 
+                          disabled={actionInProgress}
+                          className="py-1 px-3 bg-red-500 hover:bg-red-600 text-white text-xs font-medium rounded-md disabled:opacity-50"
+                        >
+                          Remove
+                        </button>
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="text-gray-500 dark:text-gray-400">No volunteers currently assigned to this event.</p>
+                )}
+              </div>
             )}
           </div>
         </div>

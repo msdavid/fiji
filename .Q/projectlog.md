@@ -143,3 +143,46 @@ Awaiting user instructions for the next session.
 
 **Next Steps:**
 *   Awaiting user instructions. This may include proceeding with Sprint 4 tasks.
+
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Sprint 4 Kick-off
+
+**Goal:** Initiate Sprint 4: Event Participation & Working Group Management (Initial).
+The primary objective is to implement backend and frontend functionalities for managing volunteer participation in events (self-signup, manual assignment) and initial CRUD operations for Working Groups.
+
+**Key Deliverables (Sprint 4):**
+*   `assignments` collection in Firestore for tracking event/group participation.
+*   Backend API endpoints for event signup, withdrawal, and admin assignment/removal of volunteers.
+*   Frontend UI for volunteers to join/leave events and for admins to manage event rosters.
+*   Backend API endpoints for basic CRUD operations on working groups.
+*   Frontend UI for listing and creating basic working groups.
+
+**Sprint Plan Outline:**
+*   **Phase 1: Backend - Event Participation & Assignments Collection**
+    1.  Update Project Log (This step).
+    2.  Define `assignments` Collection.
+    3.  Implement `Assignment` Model.
+    4.  Implement Backend API Endpoints for Event Participation.
+    5.  Add RBAC.
+    6.  Write Tests.
+*   **Phase 2: Backend - Working Group Management (Initial)**
+    7.  Define `workingGroups` Collection.
+    8.  Implement `WorkingGroup` Model.
+    9.  Implement Backend API Endpoints for Working Group CRUD.
+    10. Implement Backend API Endpoints for Assigning Users to Working Groups.
+    11. Add RBAC.
+    12. Write Tests.
+*   **Phase 3: Frontend - Event Participation**
+    13. Implement UI for Event Signup/Withdrawal.
+    14. Implement UI for Event Roster Management.
+    15. Integrate with Backend.
+*   **Phase 4: Frontend - Working Group Management (Initial)**
+    16. Create Pages for Working Group Management.
+    17. Implement UI for Assigning Users to Working Groups.
+    18. Integrate with Backend.
+*   **Phase 5: Documentation & Review**
+    19. Update Documentation.
+    20. Commit Changes.
+    21. Update Project Log (Mark Sprint 4 complete).
+
+**Next Steps:**
+*   Proceed with Sprint 4, Phase 1, Step 2: Define `assignments` Collection by reviewing `.Q/srs.md`.
