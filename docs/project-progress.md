@@ -38,5 +38,8 @@
         *   Working group detail page (`/dashboard/admin/working-groups/[groupId]`) displaying group information and allowing authorized users to manage members (list, assign by ID, remove).
 *   **Documentation:** SRS and technical specifications updated to reflect new features and API endpoints.
 
+## Recent UI/UX Enhancements
+*   **Dashboard Navigation:** Implemented a unified and refactored dashboard navigation menu (`DashboardNav.tsx` and `dashboard/layout.tsx`). The menu now displays the user's first name as a link to their profile and includes separators between links for better readability. This provides a consistent navigation experience across all dashboard pages.
+
 ---
 *(Upcoming Sprints: Sprint 5: User Availability & Donation Tracking, Sprint 6: Basic Reporting & Initial Notifications, etc.)*

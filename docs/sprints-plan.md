@@ -44,7 +44,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
 
 ---
 
-## Sprint 1: Core Frontend Setup & User Authentication Flow
+## Sprint 1: Core Frontend Setup & User Authentication Flow (Completed)
 
 *   **Goal:** Establish the frontend project structure in the `frontend` directory, basic Next.js application, Dockerization, and initial CI/CD for the frontend. Implement Firebase SDK, login, registration (using invitation token), and a basic dashboard layout with Tailwind UI. Connect frontend authentication to the backend.
 *   **Key Deliverables:**
@@ -52,7 +52,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
     *   Dockerfile for the frontend (`frontend/Dockerfile`).
     *   Updated `cloudbuild.yaml` for frontend CI/CD.
     *   Login and Registration pages styled with Tailwind UI.
-    *   Basic authenticated user dashboard placeholder styled with Tailwind UI.
+    *   Basic authenticated user dashboard placeholder styled with Tailwind UI. (Note: Dashboard navigation was significantly refactored and enhanced post-Sprint 4 with a unified layout and improved user display).
     *   Frontend successfully authenticates with Firebase and communicates with the backend for registration.
 *   **Main Task Areas:**
     *   **Frontend (Next.js & Tailwind UI):**
@@ -70,7 +70,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
 
 ---
 
-## Sprint 2: User Profile Management & RBAC Implementation
+## Sprint 2: User Profile Management & RBAC Implementation (Completed)
 
 *   **Goal:** Implement user profile viewing and editing on the frontend. Enhance backend RBAC by creating a dependency that checks user privileges against Firestore roles. Secure backend endpoints using this RBAC dependency.
 *   **Key Deliverables:**
@@ -89,7 +89,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
 
 ---
 
-## Sprint 3: Event Management - Core CRUD & Basic Listing
+## Sprint 3: Event Management - Core CRUD & Basic Listing (Completed)
 
 *   **Goal:** Implement core CRUD (Create, Read, Update, Delete) operations for events in the backend. Develop basic frontend pages for listing events and viewing event details.
 *   **Key Deliverables:**
@@ -107,7 +107,7 @@ This document outlines the planned development sprints for Project Fiji. It prov
 
 ---
 
-## Sprint 4: Event Participation - Signup & Assignment
+## Sprint 4: Event Participation - Signup & Assignment (Completed)
 
 *   **Goal:** Enable users to sign up for events from the frontend. Allow authorized users (e.g., event managers) to assign/unassign volunteers to events via backend APIs (frontend admin UI for this deferred).
 *   **Key Deliverables:**
