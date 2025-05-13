@@ -137,7 +137,7 @@
 *   User to confirm prerequisites for Sprint 4 testing are met (users assigned roles, test events created).
 *   Continue with manual execution of test cases from `tmp/sprint-4-test-plan.md`, starting with EP.1.
 
-## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Create Dashboard Navigation Menu & Refactor Pages
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Previous Session) - Create Dashboard Navigation Menu & Refactor Pages
 
 **Goal:** Create a reusable navigation menu for the user dashboard section and refactor relevant pages to use it, removing redundant navigation elements.
 
@@ -167,3 +167,23 @@
 **Next Steps:**
 *   User to test the updated dashboard pages to ensure single navigation and correct layout.
 *   Proceed with further development or testing as instructed.
+
+## Session: {{YYYY-MM-DD HH:MM:SS}} (Current Session) - Update Dashboard Navigation Profile Link
+
+**Goal:** Modify the dashboard navigation to display the user's first name (linking to their profile) instead of their email, and remove the separate "My Profile" link.
+
+**Activities:**
+*   Modified `frontend/src/components/dashboard/DashboardNav.tsx`:
+    *   Removed the explicit "My Profile" `Link` component.
+    *   Changed the user identification display from `user.email` (as a `span`) to a `Link` component.
+    *   This new link displays `userProfile.firstName` if available, falling back to `user.email`, and then to "Profile".
+    *   The link points to `/dashboard/profile`.
+*   Updated `.Q/projectlog.md` to reflect these changes.
+
+**Files Modified/Created:**
+*   `frontend/src/components/dashboard/DashboardNav.tsx` (modified)
+*   `.Q/projectlog.md` (this update)
+
+**Next Steps:**
+*   User to test the updated dashboard navigation.
+*   Commit and push changes.

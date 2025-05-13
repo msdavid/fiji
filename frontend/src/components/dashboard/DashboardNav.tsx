@@ -43,6 +43,11 @@ export default function DashboardNav() {
     return null;
   }
 
+  // Determine display name for profile link
+  // Fallback chain: userProfile.firstName -> user.email -> "Profile"
+  // user is guaranteed to be non-null here.
+  const displayName = userProfile?.firstName ? userProfile.firstName : (user.email || "Profile");
+
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-sm">
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -53,12 +58,7 @@ export default function DashboardNav() {
             </Link>
           </div>
           <div className="flex items-center space-x-4">
-            <Link
-              href="/dashboard/profile"
-              className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
-            >
-              My Profile
-            </Link>
+            {/* "My Profile" link has been removed */}
             {isAdmin && (
               <>
                 <Link
@@ -81,9 +81,13 @@ export default function DashboardNav() {
             >
               Events
             </Link>
-            <span className="text-gray-700 dark:text-gray-300">
-              {user.email}
-            </span>
+            {/* User's display name (First Name or email) as a link to their profile */}
+            <Link
+              href="/dashboard/profile"
+              className="text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400"
+            >
+              {displayName}
+            </Link>
             <button
               onClick={handleLogout}
               className="py-2 px-3 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
