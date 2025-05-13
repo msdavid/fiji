@@ -34,7 +34,7 @@ For detailed task tracking and technical logs, refer to `.Q/projectlog.md`.
         *   Backend Python import structures were refactored to use absolute paths, resolving potential circular dependencies and improving code maintainability. Database client initialization was moved to FastAPI's `lifespan` events for better resource management and testability.
     *   **Documentation:**
         *   A `backend/README.md` was created and subsequently enhanced with detailed setup, testing, and local run instructions.
-        *   All relevant SRS documents (`docs/technical-specs.md`, `.Q/Software-Requirements-Specifications.md`, `.Q/PROJECT_FIJI_LLM_SPRINT_PLAN_SRS.md`) were updated to reflect architectural decisions, backend refinements, and testing setup.
+        *   All relevant SRS documents (`docs/technical-specs.md`, `.Q/srs.md`) were updated to reflect architectural decisions, backend refinements, and testing setup.
     *   **GCP Prerequisites:** User confirmed completion of manual GCP setup, including enabling Firebase services and configuring IAM permissions for ADC.
 
 *   **Outcome:** Sprint 0 successfully established a solid foundation for the backend services. This includes core APIs, database interaction, authentication mechanisms, a robust testing framework with initial test coverage, and an enhanced CI/CD pipeline incorporating automated testing. The project is well-positioned to proceed with frontend development and further backend feature enhancements in subsequent sprints.
@@ -93,17 +93,31 @@ For detailed task tracking and technical logs, refer to `.Q/projectlog.md`.
 
 ---
 
-### Sprint 3: Event Management (Backend)
-*   **Status:** Completed (Backend portion)
-*   **Completion Date:** 2024-07-30 (based on project log entry)
-*   **Goal:** Implement the backend functionalities for Event Management, including data models, API endpoints for CRUD operations on events, and necessary business logic.
-*   **Key Achievements (Backend):**
-    *   **Event Data Model:** Defined the `Event` model (`backend/models/event.py`) to store event details (e.g., name, date, description, location, attendees).
-    *   **API Endpoints:** Developed CRUD API endpoints in `backend/routers/events.py` for creating, reading, updating, and deleting events.
-    *   **Business Logic:** Implemented initial business logic related to event management, potentially including validation and user associations.
-    *   **Integration:** Ensured new event endpoints are integrated with authentication and authorization mechanisms.
-*   **Outcome:** The backend for event management is complete, providing the necessary APIs and data structures for the frontend to build upon in a subsequent sprint.
-*   **Next Steps (as per log):** Proceed with Sprint 4 (Event Management - Frontend).
+### Sprint 3: Event Management (Core Features)
+*   **Status:** Completed
+*   **Completion Date:** {{YYYY-MM-DD}} (Current Date)
+*   **Goal:** Implement core event management features, including backend logic and frontend UI for event creation, viewing, updating, and deletion. Enable volunteer self-signup/withdrawal from events.
+*   **Key Achievements:**
+    *   **Backend Event Management:**
+        *   Defined `Event` model (`backend/models/event.py`) with fields for event name, type, purpose, description, start/end times (`dateTime`, `endTime`), venue, volunteers required, status, creator, and organizer.
+        *   Implemented CRUD API endpoints in `backend/routers/events.py` for events, including `POST /events`, `GET /events`, `GET /events/{event_id}`, `PUT /events/{event_id}`, and `DELETE /events/{event_id}`.
+        *   Added backend logic for user search (`GET /users/search`) to support organizer selection.
+        *   Implemented backend endpoints for event self-signup (`POST /events/{event_id}/signup`) and withdrawal (`DELETE /events/{event_id}/signup`).
+    *   **Frontend Event Management UI (Next.js with Tailwind UI):**
+        *   Developed pages for event listing (`/dashboard/events`), event detail view (`/dashboard/events/[eventId]`), event creation (`/dashboard/events/new`), and event editing (`/dashboard/events/[eventId]/edit`).
+        *   Implemented forms for creating and editing events, including fields for all event properties.
+        *   Integrated organizer selection with a debounced search calling the backend user search API.
+        *   Implemented UI for event self-signup and withdrawal on the event detail page for regular users.
+        *   Added event deletion functionality with a confirmation dialog, accessible via a "Delete Event" button on the event edit page for authorized users.
+    *   **UX Enhancements:**
+        *   Default end time calculation (60 minutes after start time) in event forms.
+        *   Display of creator and organizer names on event detail and listing pages.
+        *   Changed "Location" label to "Venue".
+    *   **Documentation:** Updated `.Q/srs.md` and `docs/technical-specs.md` to reflect event management features, including the `endTime` refactor and deletion functionality.
+    *   **Testing:** Successfully completed manual testing of event creation, viewing, updating (including organizer and timing changes), deletion, and volunteer self-signup/withdrawal flows as per the Sprint 3 test plan (`tmp/sprint-3-event-management.md`).
+
+*   **Outcome:** Sprint 3 delivered a comprehensive set of core event management features. Users can now create, view, update, and delete events. Volunteers can sign up for and withdraw from events. The backend provides robust APIs, and the frontend offers a user-friendly interface for these operations.
+*   **Next Steps:** Proceed to Sprint 4 for advanced event assignment management and other features.
 
 ---
 *(Space for future sprint summaries)*

@@ -128,6 +128,7 @@ This section details the functional requirements of Project Fiji, grouped by maj
     *   Event creation shall include details such as event name, type, purpose, description, start date/time, end date/time, **venue**, number of volunteers required, and an optional designated **organizer**.
     *   The organizer is selected from existing users via a search interface provided in the frontend.
     *   The `organizerUserId` (UID of the selected organizer) will be stored with the event.
+    *   **UX Note:** When creating or editing an event, if the "Start Date & Time" is changed, the "End Date & Time" will default to 60 minutes after the new start time. The user can then manually adjust this default end time.
 *   **3.4.2 Event Viewing:**
     *   Authorized users (with `events:view` privilege, or public if configured) shall be able to list all events and view details of specific events.
     *   Event listings may support filtering and pagination. API responses for event details will include creator and organizer names if available.
@@ -233,7 +234,7 @@ This section details the functional requirements of Project Fiji, grouped by maj
     *   Login and Registration pages.
     *   User Dashboard.
     *   User Profile page.
-    *   Event Listing, Detail, and Creation/Edit pages (including organizer search/selection, start and end time inputs).
+    *   Event Listing, Detail, and Creation/Edit pages (including organizer search/selection, start and end time inputs). **UX Note:** In event creation and editing forms, changing the "Start Date & Time" will automatically set the "End Date & Time" to 60 minutes later by default. Users can then manually adjust this.
     *   Working Group management pages (for admins).
     *   Role management pages (for Sysadmin).
     *   Invitation management pages (for Sysadmin).
