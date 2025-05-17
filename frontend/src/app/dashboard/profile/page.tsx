@@ -119,8 +119,8 @@ const ProfilePage = () => {
             ...s, 
             id: s.id || Math.random().toString(36).substr(2, 9), 
             date: s.date ? format(parseISO(s.date), 'yyyy-MM-dd') : '',
-            from_time: s.from_time || '', // Ensure empty string if undefined
-            to_time: s.to_time || '',     // Ensure empty string if undefined
+            from_time: s.from_time || '', 
+            to_time: s.to_time || '',     
         })) || [],
       },
     });
@@ -220,11 +220,32 @@ const ProfilePage = () => {
     setIsLoading(true);
     setError(null); 
     
+    // Frontend validation for time logic
+    for (const rule of formData.availability.general_rules) {
+        if (rule.from_time && rule.to_time && rule.to_time <= rule.from_time) {
+            setError(`General Rule Error: 'To time' (${rule.to_time}) must be after 'From time' (${rule.from_time}) for ${rule.weekday}.`);
+            setIsLoading(false);
+            return;
+        }
+    }
+    for (const slot of formData.availability.specific_slots) {
+        if (slot.from_time && slot.to_time && slot.to_time <= slot.from_time) {
+            setError(`Specific Slot Error (${slot.date}): 'To time' (${slot.to_time}) must be after 'From time' (${slot.from_time}).`);
+            setIsLoading(false);
+            return;
+        }
+        if ((slot.from_time && !slot.to_time) || (!slot.from_time && slot.to_time)) {
+            setError(`Specific Slot Error (${slot.date}): Both 'From time' and 'To time' must be provided if one is specified, or leave both empty for an all-day slot.`);
+            setIsLoading(false);
+            return;
+        }
+    }
+
     const availabilityPayload: UserAvailability = {
         general_rules: formData.availability.general_rules.map(({ id, ...rest }) => rest),
         specific_slots: formData.availability.specific_slots.map(({ id, ...rest }) => ({
             ...rest,
-            date: rest.date, // Already YYYY-MM-DD string
+            date: rest.date, 
             from_time: rest.from_time || undefined, 
             to_time: rest.to_time || undefined,     
         })),
