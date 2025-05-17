@@ -101,3 +101,23 @@
 **Notes:**
 
 *   The `eslint-disable-next-line react-hooks/exhaustive-deps` comment was used in `useEffect` hooks where router methods might cause re-triggers if `router` itself was in the dependency array without careful memoization.
+
+---
+### Session: 2024-07-25 10:00
+
+**Developer:** Mauro
+**Agent:** Q
+
+**Sprint Objective:** Resolve Frontend Console Errors & Code Refinements
+
+**Key Activities:**
+
+1.  **Resolved Nested Anchor Tag Error (`frontend/src/app/dashboard/events/page.tsx`):**
+    *   Identified that a `Link` component (rendering an `<a>` tag) for individual event cards was wrapping another `Link` component used for an "Edit" button, causing an HTML validation error ("<a> cannot be a descendant of <a>") and Next.js hydration issues.
+    *   Modified `frontend/src/app/dashboard/events/page.tsx`:
+        *   The inner "Edit" `Link` component was replaced with a `<button>` element.
+        *   The `useRouter` hook (already imported and initialized) was used to handle navigation programmatically via `router.push()` within the button's `onClick` handler.
+        *   The `e.stopPropagation()` call within the `onClick` handler was preserved to prevent the click event from bubbling up to the outer `Link` component of the event card.
+    *   This change ensures valid HTML structure and resolves the console error.
+
+---

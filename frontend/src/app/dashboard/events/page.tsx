@@ -188,15 +188,15 @@ export default function EventsPage() {
                           </p>
                         </div>
                         {canEditEvents && (
-                          <Link 
-                            href={`/dashboard/events/${event.id}/edit`} 
+                          <button
                             onClick={(e) => {
-                              e.stopPropagation(); 
+                              e.stopPropagation(); // Prevent outer Link navigation
+                              router.push(`/dashboard/events/${event.id}/edit`);
                             }}
                             className="text-xs sm:text-sm py-1 px-2 sm:px-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md whitespace-nowrap"
                           >
                             Edit
-                          </Link>
+                          </button>
                         )}
                       </div>
                     </div>
