@@ -2,6 +2,53 @@
 
 ## Session DATE_TIME_PLACEHOLDER
 
+**Goal:** Beautify the View Working Group (Detail) page (`frontend/src/app/dashboard/admin/working-groups/[groupId]/page.tsx`).
+
+**Activities:**
+
+1.  **Standardized Page Layout:**
+    *   Removed custom padding and max-width from the `<main>` tag, assuming future integration with `DashboardLayout`.
+    *   Ensured the "Back to Working Groups" link uses `arrow_back_ios` icon for consistency.
+
+2.  **Enhanced Main Information Display (Top Card):**
+    *   Added a `workspaces` Material Icon next to the working group name.
+    *   Adjusted status badge padding to `px-2.5 py-1`.
+    *   Restructured "Description", "Created By", "Created On", and "Last Updated" details using a local `DetailItem` helper component (mimicking styling guide) for better visual organization with icons.
+
+3.  **Improved "Manage Members" Section:**
+    *   **Assign User Form:**
+        *   Styled the form container with `bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg shadow-sm`.
+        *   Styled the "Assign User" button as a primary green "Success" button with a `person_add` icon.
+    *   **Current Members List:**
+        *   Styled the "Remove" button as a "Small/Action (Destructive Red)" button with a `person_remove` icon.
+        *   Improved display of user email/ID and assignment date.
+        *   Added a loading indicator for when members are being fetched.
+
+4.  **Refined Loading, Error, and Access Denied States:**
+    *   **Loading State:** Implemented the standard animated `sync` icon and styled text.
+    *   **Error States:**
+        *   Main working group fetch error and "Not Found" states are now full-page messages with icons (`error_outline`, `search_off`) and styled containers.
+        *   Assignment-related errors (`assignmentsError`) are displayed within the "Manage Members" section, using an alert box style if appropriate.
+    *   **Access Denied State:** Enhanced with a `lock` icon for the title and an `arrow_back` icon for the button.
+
+5.  **Code Cleanup and Final Review:**
+    *   Added a local `DetailItem` helper component for structured detail display.
+    *   Reviewed all changes for consistency with the styling guide and overall visual improvement.
+
+**Files Modified:**
+
+*   `frontend/src/app/dashboard/admin/working-groups/[groupId]/page.tsx`
+
+**Next Steps:**
+
+*   Commit the changes.
+*   Consider moving `DetailItem` to a shared component if it will be reused.
+
+---
+(Previous log entries remain below)
+
+## Session DATE_TIME_PLACEHOLDER
+
 **Goal:** Beautify the Working Groups page (`frontend/src/app/dashboard/admin/working-groups/page.tsx`).
 
 **Activities:**
@@ -32,31 +79,6 @@
 **Files Modified:**
 
 *   `frontend/src/app/dashboard/admin/working-groups/page.tsx`
-
-**Next Steps:**
-
-*   Commit the changes.
-
----
-(Previous log entries remain below)
-
-## Session DATE_TIME_PLACEHOLDER
-
-**Goal:** Update the styling guide to reflect the "no box" layout for page-level search/filter controls.
-
-**Activities:**
-
-1.  **Read Existing Styling Guide:** Loaded the content of `.Q/styling.md`.
-2.  **Updated `.Q/styling.md`:**
-    *   Added a new sub-point under Section 3 "Layout & Spacing" titled "**Page-Level Control Sections (e.g., Search/Filter Bars)**".
-    *   This new point clarifies that such controls:
-        *   Can optionally be enclosed in a styled card (e.g., `bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 md:p-6`).
-        *   Alternatively, can be placed directly on the page background, typically using a grid and margins for spacing, as demonstrated in the recent Events page update.
-    *   Noted that the existing "Search Bar Container" under Section 4 "Card Styling" is one implementation of the card-based approach for controls.
-
-**Files Modified:**
-
-*   `.Q/styling.md`
 
 ---
 (Previous log entries truncated for brevity)
