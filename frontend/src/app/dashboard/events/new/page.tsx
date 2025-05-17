@@ -285,17 +285,17 @@ export default function CreateEventPage() {
       <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="md:flex md:space-x-6 items-start">
-            <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center"> {/* Changed md:items-start to items-center */}
+            <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center"> 
               <div 
                 onClick={handleIconClick}
                 className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors"
                 title="Click to change icon"
               >
-                <span className="material-icons" style={{ fontSize: '4rem' }}>
+                <span className="material-icons" style={{ fontSize: '5rem' }}> {/* Increased font size */}
                   {formData.icon || 'add_photo_alternate'}
                 </span>
               </div>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center w-32 sm:w-40">Click icon to change</p> {/* Ensured text-center for the paragraph itself */}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center w-32 sm:w-40">Click icon to change</p> 
             </div>
 
             <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 h-auto"></div> 
