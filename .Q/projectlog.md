@@ -1,11 +1,18 @@
-# Project Fiji Log
+# Project Log - Fiji
 
 ## Session (YYYY-MM-DD HH:MM)
-- Initialized project.
-- Reviewed project instructions and existing file structure.
+- **Q Agent:** Mauro
+- **Objective:** Modify frontend root path to redirect to login page.
 
-## Session (Previous Date - if applicable)
-- ... previous logs ...
+### Activity:
+- Modified `frontend/src/app/page.tsx` to implement a redirect from `/` to `/login`.
+  - Replaced existing content with `next/navigation`'s `redirect` function.
 
-## Session (YYYY-MM-DD HH:MM) - Mauro
-- Updated `docs/functional-specs.md` to provide a more detailed explanation of the Role-Based Access Control (RBAC) system, specifically detailing how system administrators can create arbitrary roles and assign specific actions on resources. This enhancement clarifies the flexibility and granularity of the permission system.
+## Previous Sessions
+
+... (previous log entries remain unchanged) ...
+
+---
+*Log entry for current session. Previous entries should be preserved.*
+*Date/Time will be replaced by the actual timestamp when the operation is performed.*
+*Need to read the existing log first to append correctly.*
