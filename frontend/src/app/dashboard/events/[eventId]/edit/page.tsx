@@ -341,7 +341,7 @@ export default function EditEventPage() {
   if (authLoading || isLoadingEvent) return <div className="flex items-center justify-center min-h-screen">Loading event data for editing...</div>;
 
   return (
-    <>
+    <div className="max-w-2xl mx-auto">
       <div className="mb-6">
         <Link href={`/dashboard/events/${eventId}`} className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
             ← Back to Event Details
@@ -506,6 +506,6 @@ export default function EditEventPage() {
           </div>
         </form>
       )}
-    </>
+    </div>
   );
 }
