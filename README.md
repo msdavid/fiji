@@ -191,30 +191,7 @@ This assumes you are starting with a new GCP project.
         npm install
         ```
 
-### 5. Running the Application Locally
-
-You'll need two separate terminal windows to run the backend and frontend simultaneously.
-
-1.  **Run the Backend (FastAPI with Uvicorn):**
-    *   Open a terminal and navigate to the `backend/` directory.
-    *   Ensure your Python virtual environment (e.g., `.venv`) is active if you're not using `uv run` directly.
-    *   Start the server (we've been using port 6001; adjust if needed):
-        ```bash
-        # In backend/ directory
-        uv run uvicorn main:app --reload --port 6001
-        ```
-    *   The backend API should be accessible at `http://localhost:6001`. Check terminal output for confirmation.
-
-2.  **Run the Frontend (Next.js):**
-    *   Open another terminal and navigate to the `frontend/` directory.
-    *   Start the Next.js development server:
-        ```bash
-        # In frontend/ directory
-        npm run dev
-        ```
-    *   The frontend application should be accessible at `http://localhost:3000` (or another port like 3002 if 3000 is in use). Check the terminal output for the exact URL.
-
-### 6. Initial Data Setup (First-time Admin User & Invitation)
+### 5. Initial Data Setup (First-time Admin User & Invitation)
 
 To fully use the application, you'll need an administrative user and roles defined.
 
@@ -242,7 +219,7 @@ To fully use the application, you'll need an administrative user and roles defin
 
 3.  **Create an Invitation (using `backend/utils/create-invitation.py`):**
     *   This script allows an existing sysadmin user (identified by their role) to generate an invitation token for a new user.
-    *   Ensure a sysadmin user exists in Firestore (created in Step 6.2).
+    *   Ensure a sysadmin user exists in Firestore (created in Step 5.2).
     *   Run the script from the `backend/` directory:
         ```bash
         # In backend/ directory
@@ -252,7 +229,7 @@ To fully use the application, you'll need an administrative user and roles defin
         Optionally, use `--roles` followed by a comma-separated list of Role Document IDs (e.g., `sysadmin` or other custom role IDs) to assign to the user upon registration. If omitted, `rolesToAssignOnRegistration` will be empty.
     *   The script will output an invitation token. This token can be used with the frontend registration page (e.g., `http://localhost:3002/register?token=THE_GENERATED_TOKEN`).
 
-### 7. Key Configuration Files and Secrets Management
+### 6. Key Configuration Files and Secrets Management
 
 *   **Backend (`backend/`):**
     *   `.env`: Stores `GOOGLE_CLOUD_PROJECT`. This file is typically simple and may not contain highly sensitive secrets if ADC is used for local development.
@@ -284,3 +261,26 @@ This project is organized as a monorepo with the following key directories:
 *   `.Q/`: Contains AI agent interaction logs and project context.
 
 Refer to the `README.md` files within the `backend/` and `frontend/` subdirectories if they exist for more specific, component-level details.
+
+## Running the Application Locally
+
+You'll need two separate terminal windows to run the backend and frontend simultaneously.
+
+1.  **Run the Backend (FastAPI with Uvicorn):**
+    *   Open a terminal and navigate to the `backend/` directory.
+    *   Ensure your Python virtual environment (e.g., `.venv`) is active if you're not using `uv run` directly.
+    *   Start the server (we've been using port 6001; adjust if needed):
+        ```bash
+        # In backend/ directory
+        uv run uvicorn main:app --reload --port 6001
+        ```
+    *   The backend API should be accessible at `http://localhost:6001`. Check terminal output for confirmation.
+
+2.  **Run the Frontend (Next.js):**
+    *   Open another terminal and navigate to the `frontend/` directory.
+    *   Start the Next.js development server:
+        ```bash
+        # In frontend/ directory
+        npm run dev
+        ```
+    *   The frontend application should be accessible at `http://localhost:3000` (or another port like 3002 if 3000 is in use). Check the terminal output for the exact URL.
