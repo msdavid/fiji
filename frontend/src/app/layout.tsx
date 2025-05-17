@@ -1,11 +1,13 @@
 import type { Metadata } from "next";
-import { GeistSans, GeistMono } from "geist/font";
+import { Inter } from "next/font/google";
 import "./globals.css";
-import { AuthProvider } from "@/context/AuthContext"; // Import AuthProvider
+import { AuthProvider } from '@/context/AuthContext';
+
+const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
-  title: "Fiji Platform",
-  description: "Volunteer and Event Management Platform",
+  title: "Fiji",
+  description: "Fiji Platform",
 };
 
 export default function RootLayout({
@@ -14,9 +16,12 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" className={`${GeistSans.variable} ${GeistMono.variable}`}>
-      <body>
-        <AuthProvider> {/* Wrap children with AuthProvider */}
+    <html lang="en">
+      <head>
+        <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
+      </head>
+      <body className={inter.className}>
+        <AuthProvider>
           {children}
         </AuthProvider>
       </body>

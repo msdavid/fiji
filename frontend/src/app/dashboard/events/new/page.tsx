@@ -10,12 +10,13 @@ interface EventFormData {
   eventType: string;
   purpose: string;
   description: string;
-  dateTime: string; // Will represent Start Date & Time
-  endTime: string;   // New field for End Date & Time
+  dateTime: string; 
+  endTime: string;   
   location: string; 
   volunteersRequired: number;
   status: string; 
   organizerUserId: string | null; 
+  icon: string; 
 }
 
 interface UserSearchResult {
@@ -31,11 +32,12 @@ const initialFormData: EventFormData = {
   purpose: '',
   description: '',
   dateTime: '', 
-  endTime: '',   // Initialize endTime
+  endTime: '',   
   location: '', 
   volunteersRequired: 1,
   status: 'draft',
   organizerUserId: null, 
+  icon: 'event', 
 };
 
 const formatDateTimeForInput = (date: Date): string => {
@@ -47,7 +49,6 @@ const formatDateTimeForInput = (date: Date): string => {
   return `${year}-${month}-${day}T${hours}:${minutes}`;
 };
 
-// Debounce helper function
 function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
   let timeout: ReturnType<typeof setTimeout> | null = null;
   return (...args: Parameters<F>): Promise<ReturnType<F>> =>
@@ -72,14 +73,44 @@ export default function CreateEventPage() {
   const [selectedOrganizerName, setSelectedOrganizerName] = useState<string | null>(null);
   const [isSearchingOrganizers, setIsSearchingOrganizers] = useState(false);
 
+  const handleIconClick = () => {
+    localStorage.setItem('eventFormDraft', JSON.stringify(formData));
+    router.push('/dashboard/events/select-icon?returnTo=/dashboard/events/new');
+  };
+
   useEffect(() => {
+    const selectedIcon = new URLSearchParams(window.location.search).get('selectedIcon');
+    const storedDraft = localStorage.getItem('eventFormDraft');
+
+    if (selectedIcon) {
+      let draftData = initialFormData;
+      if (storedDraft) {
+        try {
+          draftData = JSON.parse(storedDraft);
+        } catch (e) {
+          console.error("Failed to parse stored event form draft:", e);
+        }
+      }
+      setFormData(prev => ({ ...draftData, icon: selectedIcon }));
+      localStorage.removeItem('eventFormDraft');
+      router.replace('/dashboard/events/new', undefined);
+    } else if (storedDraft && !selectedIcon) {
+        try {
+            setFormData(JSON.parse(storedDraft));
+        } catch (e) {
+            console.error("Failed to parse stored event form draft on rehydration:", e);
+        }
+    }
+
     if (!loading && !user) {
       router.push('/login');
     }
     if (!loading && user && userProfile && !userProfile.assignedRoleIds?.includes('sysadmin')) {
        setError("You are not authorized to create events.");
     }
-  }, [user, loading, userProfile, router]);
+  // eslint-disable-next-line react-hooks/exhaustive-deps 
+  }, [user, loading, userProfile]); 
+
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value, type } = e.target;
@@ -90,7 +121,7 @@ export default function CreateEventPage() {
       if (newDateTime) {
         const startDate = new Date(newDateTime);
         if (!isNaN(startDate.getTime())) {
-          const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); // Add 60 minutes
+          const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); 
           newEndTime = formatDateTimeForInput(endDate);
         }
       }
@@ -185,7 +216,7 @@ export default function CreateEventPage() {
         return;
     }
 
-    const { ...payloadWithoutDuration } = formData;
+    const payload = { ...formData }; 
 
     try {
       const token = await user.getIdToken();
@@ -197,7 +228,7 @@ export default function CreateEventPage() {
           'Content-Type': 'application/json',
           'Authorization': `Bearer ${token}`,
         },
-        body: JSON.stringify(payloadWithoutDuration), 
+        body: JSON.stringify(payload), 
       });
 
       if (!response.ok) {
@@ -208,6 +239,7 @@ export default function CreateEventPage() {
       setSuccessMessage('Event created successfully!');
       setFormData(initialFormData); 
       setSelectedOrganizerName(null); 
+      localStorage.removeItem('eventFormDraft');
       setTimeout(() => {
         router.push('/dashboard/events'); 
       }, 1500); 
@@ -220,10 +252,12 @@ export default function CreateEventPage() {
     }
   };
   
-  if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  if (loading && !formData.icon) { 
+    return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
 
   return (
-    <div className="max-w-2xl mx-auto"> 
+    <div className="max-w-3xl mx-auto"> {/* Adjusted max-width to 3xl for consistency with profile page */}
       <div className="mb-6">
         <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
             ← Back to Events
@@ -248,124 +282,152 @@ export default function CreateEventPage() {
             </div>
       )}
 
-      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-900 p-8 rounded-lg shadow">
-        <div>
-          <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Name</label>
-          <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-        </div>
-
-        <div className="md:grid md:grid-cols-2 md:gap-6">
-          <div>
-            <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
-            <input type="text" name="eventType" id="eventType" value={formData.eventType} onChange={handleChange} 
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-            <select name="status" id="status" value={formData.status} onChange={handleChange} required
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
-              <option value="draft">Draft</option>
-              <option value="open_for_signup">Open for Signup</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-        </div>
-
-        <div>
-          <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Purpose</label>
-          <textarea name="purpose" id="purpose" value={formData.purpose} onChange={handleChange} rows={3}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
-        </div>
-        <div>
-          <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-          <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={4}
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
-        </div>
-
-        <div className="md:grid md:grid-cols-2 md:gap-6">
-          <div>
-            <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
-            <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
-            <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime} onChange={handleChange} required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-        </div>
-
-        <div className="md:grid md:grid-cols-2 md:gap-6">
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
-            <input type="text" name="location" id="location" value={formData.location} onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
-            <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-        </div>
-
-        <div>
-          <label 
-            htmlFor="organizerSearch" 
-            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-          >
-            Event Organizer{' '}
-            {selectedOrganizerName ? (
-              <span className="text-green-600 dark:text-green-400 font-semibold">(Selected: {selectedOrganizerName})</span>
-            ) : (
-              <span className="text-gray-500 dark:text-gray-400">(Optional)</span>
-            )}
-          </label>
-          <div className="relative mt-1"> 
-            <input
-              type="text"
-              id="organizerSearch"
-              name="organizerSearch"
-              value={organizerSearchQuery}
-              onChange={handleOrganizerSearchChange}
-              placeholder="Search by name or email..."
-              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-            />
-            {isSearchingOrganizers && (
-              <div className="absolute top-full w-full mt-1">
-                <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">Searching...</p>
+      {/* Main card structure */}
+      <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div className="md:flex md:space-x-6 items-start">
+            {/* Left Column: Icon Display */}
+            <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center md:items-start">
+              <div 
+                onClick={handleIconClick}
+                className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors"
+                title="Click to change icon"
+              >
+                <span className="material-icons" style={{ fontSize: '4rem' }}>
+                  {formData.icon || 'add_photo_alternate'}
+                </span>
               </div>
-            )}
-            {organizerSearchResults.length > 0 && !isSearchingOrganizers && (
-              <ul className="absolute top-full z-20 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
-                {organizerSearchResults
-                  .filter(org => org && org.id)  
-                  .map(org => (
-                  <li key={org.id} 
-                      onClick={() => handleSelectOrganizer(org)}
-                      className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
-                    {org.firstName} {org.lastName} ({org.email})
-                  </li>
-                ))}
-              </ul>
-            )}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center md:text-left">Click icon to change</p>
+            </div>
+
+            {/* Vertical Separator */}
+            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 h-auto"></div> {/* Adjusted for visibility */}
+
+
+            {/* Right Column: Form Fields */}
+            <div className="flex-grow space-y-6"> {/* Added space-y-6 here for consistent spacing */}
+              <div>
+                <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Name</label>
+                <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+              </div>
+            
+              {/* Event Type and Status - now part of the right column's flow */}
+              <div className="md:grid md:grid-cols-2 md:gap-6">
+                <div>
+                  <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
+                  <input type="text" name="eventType" id="eventType" value={formData.eventType} onChange={handleChange} 
+                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                </div>
+                <div>
+                  <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+                  <select name="status" id="status" value={formData.status} onChange={handleChange} required
+                          className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
+                    <option value="draft">Draft</option>
+                    <option value="open_for_signup">Open for Signup</option>
+                    <option value="ongoing">Ongoing</option>
+                    <option value="completed">Completed</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+              </div>
+            </div>
           </div>
-        </div>
-        
-        <div className="flex justify-end space-x-3">
-          <Link href="/dashboard/events">
-              <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                  Cancel
-              </button>
-          </Link>
-          <button type="submit" disabled={submitting || (!userProfile?.assignedRoleIds?.includes('sysadmin') && !loading)}
-                  className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
-            {submitting ? 'Submitting...' : 'Create Event'}
-          </button>
-        </div>
-      </form>
+
+          {/* Remaining form fields - now outside the initial two-column flex, but within the form's space-y-6 */}
+          <div>
+            <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Purpose</label>
+            <textarea name="purpose" id="purpose" value={formData.purpose} onChange={handleChange} rows={3}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
+          </div>
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+            <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={4}
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
+          </div>
+
+          <div className="md:grid md:grid-cols-2 md:gap-6">
+            <div>
+              <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
+              <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
+              <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime} onChange={handleChange} required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+
+          <div className="md:grid md:grid-cols-2 md:gap-6">
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
+              <input type="text" name="location" id="location" value={formData.location} onChange={handleChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
+              <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
+          </div>
+
+          <div>
+            <label 
+              htmlFor="organizerSearch" 
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
+              Event Organizer{' '}
+              {selectedOrganizerName ? (
+                <span className="text-green-600 dark:text-green-400 font-semibold">(Selected: {selectedOrganizerName})</span>
+              ) : (
+                <span className="text-gray-500 dark:text-gray-400">(Optional)</span>
+              )}
+            </label>
+            <div className="relative mt-1"> 
+              <input
+                type="text"
+                id="organizerSearch"
+                name="organizerSearch"
+                value={organizerSearchQuery}
+                onChange={handleOrganizerSearchChange}
+                placeholder="Search by name or email..."
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+              />
+              {isSearchingOrganizers && (
+                <div className="absolute top-full w-full mt-1">
+                  <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">Searching...</p>
+                </div>
+              )}
+              {organizerSearchResults.length > 0 && !isSearchingOrganizers && (
+                <ul className="absolute top-full z-20 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                  {organizerSearchResults
+                    .filter(org => org && org.id)  
+                    .map(org => (
+                    <li key={org.id} 
+                        onClick={() => handleSelectOrganizer(org)}
+                        className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
+                      {org.firstName} {org.lastName} ({org.email})
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
+          </div>
+          
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700"> {/* Added border-t for separation */}
+            <Link href="/dashboard/events">
+                <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                    Cancel
+                </button>
+            </Link>
+            <button type="submit" disabled={submitting || (!userProfile?.assignedRoleIds?.includes('sysadmin') && !loading)}
+                    className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+              {submitting ? 'Submitting...' : 'Create Event'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }

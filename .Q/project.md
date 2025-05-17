@@ -14,3 +14,4 @@
 - read the .Q/projectlog.md file for the latest updates and context on every new session.
 - if you need to create temporary scirpts, files, etc. use the tmp directory.
 - the root directory for the backend is backend/. use direct imports from the backend directory.
+- when adding placehoders for future code, use the TODO comment format.
