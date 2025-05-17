@@ -69,13 +69,17 @@
     *   Relocated the "Back to Events" link to the top of the `main` content area, above the event title.
     *   Removed an unnecessary outer `div` with `min-h-screen` and background styling, deferring to the parent layout.
 
+9.  **Enabled Backend Event Icon Storage:**
+    *   Updated Pydantic models in `backend/models/event.py`:
+        *   Added `icon: Optional[str] = Field(None, max_length=50, description="Name of the Material Icon for the event.")` to `EventBase`.
+        *   Added `icon: Optional[str] = Field(None, max_length=50)` to `EventUpdate`.
+    *   Verified that `backend/routers/events.py` does not require direct modification for the `icon` field, as `model_dump()` in create/update endpoints will automatically include it due to Pydantic model updates. The `icon` field will now be saved to and retrieved from Firestore.
+
 **Next Steps (Planned for Future Sessions):**
 
 *   Refine state management for icon selection if `localStorage` proves insufficient (e.g., using a shared context or Zustand/Redux if complexity grows).
-*   Update backend: Add `icon` field to the event model, update API endpoints (`POST /events`, `PUT /events/{eventId}`, `GET /events/{eventId}`) to handle the new field.
-*   Display the selected event icon in other relevant places (e.g., event list, event detail page - partially done with placeholder).
+*   Display the selected event icon on the events listing page (currently shows a placeholder calendar icon).
 
 **Notes:**
 
-*   Backend changes are critical for the `icon` field to be saved and displayed permanently.
 *   The `eslint-disable-next-line react-hooks/exhaustive-deps` comment was used in `useEffect` hooks where router methods might cause re-triggers if `router` itself was in the dependency array without careful memoization.

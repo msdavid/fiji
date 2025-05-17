@@ -19,6 +19,7 @@ class EventBase(BaseModel):
         description="Status of the event (e.g., 'draft', 'open_for_signup', 'ongoing', 'completed', 'cancelled')."
     )
     organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer.")
+    icon: Optional[str] = Field(None, max_length=50, description="Name of the Material Icon for the event.")
 
     @model_validator(mode='after')
     def check_end_time_after_start_time(cls, values):
@@ -49,6 +50,7 @@ class EventUpdate(BaseModel):
     volunteersRequired: Optional[int] = Field(None, ge=0)
     status: Optional[str] = None 
     organizerUserId: Optional[str] = Field(None, description="UID of the user designated as the event organizer. Can be set to null to remove organizer.")
+    icon: Optional[str] = Field(None, max_length=50)
 
     model_config = ConfigDict(extra='forbid')
 

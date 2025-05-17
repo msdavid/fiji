@@ -1,11 +1,10 @@
-Fix(events): Remove duplicate navbar from event detail page
+Feat(events): Enable backend storage for event icons
 
-The event detail page (`frontend/src/app/dashboard/events/[eventId]/page.tsx`)
-contained its own `<nav>` element, which caused a duplicate navbar when
-rendered within the main dashboard layout.
-
-This commit removes the redundant `<nav>` element from the event detail page.
-The "Back to Events" link has been moved to the top of the `main` content
-area, just above the event title, to maintain navigation functionality.
-The outer `div` with `min-h-screen` and background styling was also removed
-as these should be handled by the parent layout.
+- Updated Pydantic models in `backend/models/event.py` to include an
+  optional `icon` field in `EventBase` and `EventUpdate`.
+- This allows the `icon` string (e.g., Material Icon name) selected
+  on the frontend to be saved to Firestore when creating or updating
+  an event.
+- No changes were needed in `backend/routers/events.py` as Pydantic's
+  `model_dump()` automatically handles the inclusion of the new field.
+- Updated `.Q/projectlog.md` to reflect these backend changes.
