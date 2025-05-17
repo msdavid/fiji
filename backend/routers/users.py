@@ -26,22 +26,12 @@ def _sanitize_user_data_fields(user_data: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(user_data.get("qualifications"), list):
         user_data["qualifications"] = []
     
-    # Preferences is now a string, ensure it is, or default to None (or empty string if preferred)
     if "preferences" in user_data and not isinstance(user_data["preferences"], str):
-        # If it exists and is not a string (e.g., old dict format), convert to string or clear
-        # For simplicity, let's clear it or convert to JSON string.
-        # Pydantic will expect a string, so if it's a dict from old data, this might be an issue.
-        # Best to ensure it's None if not a string, or handle migration.
-        # For now, if it's not a string, set to None so Pydantic doesn't break on UserResponse.
         user_data["preferences"] = None 
-        # Alternatively, to preserve old dict data as JSON string:
-        # if isinstance(user_data["preferences"], dict):
-        #     try:
-        #         user_data["preferences"] = json.dumps(user_data["preferences"])
-        #     except TypeError:
-        #         user_data["preferences"] = None # Fallback if dict is not serializable
-        # else:
-        #     user_data["preferences"] = None
+    
+    # Sanitize emergencyContactDetails
+    if "emergencyContactDetails" in user_data and not isinstance(user_data["emergencyContactDetails"], str):
+        user_data["emergencyContactDetails"] = None
 
 
     if not isinstance(user_data.get("assignedRoleIds"), list):

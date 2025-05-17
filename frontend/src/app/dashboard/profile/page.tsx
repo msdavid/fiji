@@ -40,9 +40,10 @@ interface UserDataFromBackend {
   firstName: string;
   lastName: string;
   phone?: string | null;
+  emergencyContactDetails?: string | null; // New field
   skills?: string | string[]; 
   qualifications?: string | string[]; 
-  preferences?: string | null; // Changed to string | null
+  preferences?: string | null; 
   profilePictureUrl?: string | null; 
   availability?: UserAvailability; 
   assignedRoleIds?: string[];
@@ -57,9 +58,10 @@ interface EditableUserProfile {
   lastName:string;
   email: string; 
   phone?: string;
+  emergencyContactDetails?: string; // New field
   skills?: string; 
   qualifications?: string; 
-  preferences?: string; // Already string, which is good
+  preferences?: string; 
   profilePictureUrl?: string | null; 
   availability: UserAvailability; 
 }
@@ -82,6 +84,7 @@ const ProfilePage = () => {
     lastName: '',
     email: '', 
     phone: '',
+    emergencyContactDetails: '', // New field
     skills: '', 
     qualifications: '', 
     preferences: '', 
@@ -98,17 +101,16 @@ const ProfilePage = () => {
       return fieldValue || '';
   };
   
-  // No longer need preferencesObjectToStringForTextarea, as it's just a string
-
   const initializeFormData = useCallback((profileData: UserDataFromBackend) => {
     setFormData({
       firstName: profileData.firstName || '',
       lastName: profileData.lastName || '',
       email: profileData.email || '', 
       phone: profileData.phone || '',
+      emergencyContactDetails: profileData.emergencyContactDetails || '', // New field
       skills: arrayFieldToString(profileData.skills),
       qualifications: arrayFieldToString(profileData.qualifications),
-      preferences: profileData.preferences || '', // Directly use the string
+      preferences: profileData.preferences || '', 
       profilePictureUrl: profileData.profilePictureUrl || '',
       availability: { 
         general_rules: profileData.availability?.general_rules?.map(r => ({...r, id: r.id || Math.random().toString(36).substr(2, 9)})) || [],
@@ -247,23 +249,20 @@ const ProfilePage = () => {
         })),
     };
 
-    // Construct payload, preferences is now just a string
     const updatePayload: Omit<EditableUserProfile, 'availability' | 'preferences'> & { 
       skills?: string[], 
       qualifications?: string[], 
-      preferences?: string, // Changed to string
+      preferences?: string, 
       availability: UserAvailability 
     } = {
       firstName: formData.firstName,
       lastName: formData.lastName,
       phone: formData.phone,
-      preferences: formData.preferences || undefined, // Send as string or undefined
+      emergencyContactDetails: formData.emergencyContactDetails || undefined, // New field
+      preferences: formData.preferences || undefined, 
       availability: availabilityPayload, 
     };
     
-    // Remove JSON parsing for preferences
-    // updatePayload.preferences is already formData.preferences (string)
-
     if (typeof formData.skills === 'string') {
       updatePayload.skills = formData.skills.split('\n').map(s => s.trim()).filter(s => s);
     }
@@ -341,6 +340,10 @@ const ProfilePage = () => {
               <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Last Name</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.lastName}</p></div>
               <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Email</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.email}</p></div>
               <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Phone</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.phone || 'N/A'}</p></div>
+              <div>
+                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Emergency Contact Details</label>
+                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{currentProfileData.emergencyContactDetails || 'N/A'}</p>
+              </div>
               <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Skills</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{arrayFieldToString(currentProfileData.skills) || 'N/A'}</p></div>
               <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Qualifications</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{arrayFieldToString(currentProfileData.qualifications) || 'N/A'}</p></div>
               <div>
@@ -392,6 +395,10 @@ const ProfilePage = () => {
               <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
               <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className={`mt-1 ${disabledInputStyles}`} /></div>
               <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} /></div>
+              <div>
+                <label htmlFor="emergencyContactDetails" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Emergency Contact Details</label>
+                <textarea name="emergencyContactDetails" id="emergencyContactDetails" value={formData.emergencyContactDetails || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} placeholder="e.g., Name, Relation, Phone Number"/>
+              </div>
               <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
               <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
               <div>

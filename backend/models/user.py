@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
-from typing import Optional, List, Dict, Any, Literal # Any might still be used if other dicts exist
+from typing import Optional, List, Dict, Any, Literal 
 from datetime import datetime, date, time 
 import re 
 
@@ -60,9 +60,10 @@ class UserBase(BaseModel):
     firstName: Optional[str] = Field(None, min_length=1, max_length=50, description="User's first name.")
     lastName: Optional[str] = Field(None, min_length=1, max_length=50, description="User's last name.")
     phone: Optional[str] = Field(None, description="User's phone number.")
+    emergencyContactDetails: Optional[str] = Field(None, description="Emergency contact details (e.g., name, relation, phone).") # New field
     skills: Optional[List[str]] = Field(default_factory=list, description="List of user's skills.")
     qualifications: Optional[List[str]] = Field(default_factory=list, description="List of user's qualifications.")
-    preferences: Optional[str] = Field(None, description="User's preferences as a string (e.g., free text, or JSON string).") # Changed to Optional[str]
+    preferences: Optional[str] = Field(None, description="User's preferences as a string (e.g., free text, or JSON string).")
     profilePictureUrl: Optional[str] = Field(None, description="URL of the user's profile picture.")
     availability: Optional[UserAvailability] = Field(default_factory=UserAvailability, description="User's structured availability information.")
     
@@ -73,9 +74,10 @@ class UserUpdate(BaseModel):
     firstName: Optional[str] = Field(None, min_length=1, max_length=50)
     lastName: Optional[str] = Field(None, min_length=1, max_length=50)
     phone: Optional[str] = None
+    emergencyContactDetails: Optional[str] = None # New field
     skills: Optional[List[str]] = None
     qualifications: Optional[List[str]] = None
-    preferences: Optional[str] = None # Changed to Optional[str]
+    preferences: Optional[str] = None 
     profilePictureUrl: Optional[str] = None
     availability: Optional[UserAvailability] = None 
     

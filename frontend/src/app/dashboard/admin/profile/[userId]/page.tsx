@@ -37,9 +37,10 @@ interface UserProfileData {
   firstName: string;
   lastName: string;
   phone?: string | null; 
+  emergencyContactDetails?: string | null; // New field
   skills?: string[] | null; 
   qualifications?: string[] | null; 
-  preferences?: string | null; // Changed to string | null
+  preferences?: string | null; 
   profilePictureUrl?: string | null;
   availability?: UserAvailability; 
   assignedRoleIds: string[];
@@ -131,7 +132,7 @@ const AdminViewUserProfilePage = () => {
       displayValue = value || 'N/A';
     }
     
-    const usePre = isPreformatted || (typeof value === 'string' && (value.includes('\n') || value.length > 60 || label === "Preferences"));
+    const usePre = isPreformatted || (typeof value === 'string' && (value.includes('\n') || value.length > 60 || label === "Preferences" || label === "Emergency Contact Details"));
 
 
     return (
@@ -209,6 +210,7 @@ const AdminViewUserProfilePage = () => {
         <ProfileField label="Full Name" value={`${viewedUserProfile.firstName} ${viewedUserProfile.lastName}`} />
         <ProfileField label="Email" value={viewedUserProfile.email} />
         <ProfileField label="Phone Number" value={userPhone} />
+        <ProfileField label="Emergency Contact Details" value={viewedUserProfile.emergencyContactDetails} isPreformatted={true} /> 
         <ProfileField label="Status" value={viewedUserProfile.status} />
       </div>
 
@@ -217,9 +219,7 @@ const AdminViewUserProfilePage = () => {
         {viewedUserProfile.skills && viewedUserProfile.skills.length > 0 && <ProfileField label="Skills" value={displaySkills} />}
         {viewedUserProfile.qualifications && viewedUserProfile.qualifications.length > 0 && <ProfileField label="Qualifications" value={displayQualifications} />}
         
-        {/* Preferences Display - now as simple string */}
         <ProfileField label="Preferences" value={viewedUserProfile.preferences} isPreformatted={true} />
-
 
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Availability</h3>
