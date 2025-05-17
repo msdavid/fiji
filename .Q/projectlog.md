@@ -103,12 +103,12 @@
 *   The `eslint-disable-next-line react-hooks/exhaustive-deps` comment was used in `useEffect` hooks where router methods might cause re-triggers if `router` itself was in the dependency array without careful memoization.
 
 ---
-### Session: 2024-07-25 10:00
+### Session: 2024-07-25 10:00 (Auto-filled by Q)
 
 **Developer:** Mauro
 **Agent:** Q
 
-**Sprint Objective:** Resolve Frontend Console Errors & Code Refinements
+**Sprint Objective:** Resolve Frontend Console Errors & Code Refinements, Enhance Event Display
 
 **Key Activities:**
 
@@ -119,5 +119,38 @@
         *   The `useRouter` hook (already imported and initialized) was used to handle navigation programmatically via `router.push()` within the button's `onClick` handler.
         *   The `e.stopPropagation()` call within the `onClick` handler was preserved to prevent the click event from bubbling up to the outer `Link` component of the event card.
     *   This change ensures valid HTML structure and resolves the console error.
+
+2.  **Implemented Firebase ID Token Auto-Refresh in AuthContext (`frontend/src/context/AuthContext.tsx`):**
+    *   Replaced `onAuthStateChanged` with `auth.onIdTokenChanged` to listen for both auth state changes and ID token refreshes.
+    *   Ensured `idToken` state in `AuthContext` is updated when Firebase refreshes the token, preventing "Invalid ID token" errors after an hour.
+    *   Refined error handling and state clearing within the listener.
+
+3.  **Corrected Assignee Display on Event Detail Page (`frontend/src/app/dashboard/events/[eventId]/page.tsx`):**
+    *   Identified that `AssignmentResponse` Pydantic model in `backend/models/assignment.py` was missing `userFirstName`, `userLastName`, and `userEmail` fields.
+    *   Added these optional fields to `AssignmentResponse`, allowing the backend to correctly serialize and send user details for assignments.
+    *   The frontend was already attempting to display these fields, so this backend model change resolved the "N/A (UID)" display issue.
+
+4.  **Enhanced Event Cards on Events Listing Page (`frontend/src/app/dashboard/events/page.tsx`):**
+    *   **Removed Edit Button:** The "Edit" button was removed from individual event cards to simplify the card UI. Editing is still accessible from the event detail page.
+    *   **Icon Styling:**
+        *   Reduced padding around the icon and aligned it to the top of its container (`items-start`).
+        *   Changed icon default color from gray to indigo (`text-indigo-500 dark:text-indigo-400`) and hover color to a more intense indigo (`group-hover:text-indigo-700 dark:group-hover:text-indigo-500`) for better visibility.
+    *   **Search and Filter Functionality:**
+        *   Added state variables `searchTerm` and `statusFilter`.
+        *   Implemented an input field for text search (event name, description, creator full name) and a dropdown to filter by event status.
+        *   Modified `fetchEvents` to include status filter in backend API calls.
+        *   Client-side filtering logic updated in `displayedEvents` to handle search term.
+        *   Addressed Firestore composite index requirement for status filtering by advising on index creation via Firebase console link.
+    *   **Dynamic "Ongoing" Status with Blinking Effect:**
+        *   Added "ongoing" to `EVENT_STATUSES` and `EVENT_STATUS_LABELS`.
+        *   Added CSS keyframes (`slow-green-blink`) and class (`.status-ongoing-blinking`) to `frontend/src/app/globals.css` for a visual blinking effect.
+        *   Implemented logic in `displayedEvents` to dynamically set an event's `displayStatus` to "ongoing" if the current time falls within the event's `dateTime` and `endTime` (unless already completed/cancelled).
+        *   A `currentTimeTick` state variable updates every minute to re-evaluate dynamic statuses.
+        *   Event cards now use `displayStatus` and apply the blinking class for ongoing events.
+
+**Next Steps (Planned for Future Sessions):**
+
+*   Refine state management for icon selection if `localStorage` proves insufficient.
+*   Ensure backend correctly handles/sets the "ongoing" status if it's meant to be a persistent status rather than purely display logic. (Currently, "ongoing" is a display-only status derived on the frontend).
 
 ---
