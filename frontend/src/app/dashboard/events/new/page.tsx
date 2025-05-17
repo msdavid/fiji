@@ -123,14 +123,14 @@ export default function CreateEventPage() {
         throw new Error('Failed to search users');
       }
       const results: UserSearchResult[] = await response.json();
-      setOrganizerSearchResults(results);
+      setOrganizerSearchResults(results); // Set results first
       return results;
     } catch (err) {
       console.error("User search error:", err);
       setOrganizerSearchResults([]);
       return [];
     } finally {
-      setIsSearchingOrganizers(false);
+      setIsSearchingOrganizers(false); // Then set searching to false
     }
   };
 
@@ -145,6 +145,7 @@ export default function CreateEventPage() {
       debouncedUserSearch(query);
     } else {
       setOrganizerSearchResults([]);
+      setIsSearchingOrganizers(false); // Ensure searching is false if query is too short
     }
   };
 
@@ -153,6 +154,7 @@ export default function CreateEventPage() {
     setSelectedOrganizerName(`${organizer.firstName} ${organizer.lastName} (${organizer.email})`);
     setOrganizerSearchQuery(''); 
     setOrganizerSearchResults([]); 
+    setIsSearchingOrganizers(false);
   };
 
   const handleSubmit = async (e: FormEvent) => {
@@ -297,33 +299,43 @@ export default function CreateEventPage() {
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
 
-          <div className="relative">
-            <label htmlFor="organizerSearch" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+          {/* Organizer Search Field - Updated Structure */}
+          <div>
+            <label 
+              htmlFor="organizerSearch" 
+              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+            >
               Event Organizer {selectedOrganizerName ? `(Selected: ${selectedOrganizerName})` : '(Optional)'}
             </label>
-            <input
-              type="text"
-              id="organizerSearch"
-              name="organizerSearch"
-              value={organizerSearchQuery}
-              onChange={handleOrganizerSearchChange}
-              placeholder="Search by name or email..."
-              className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-            />
-            {isSearchingOrganizers && <p className="text-xs text-gray-500 dark:text-gray-400">Searching...</p>}
-            {organizerSearchResults.length > 0 && (
-              <ul className="absolute z-10 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
-                {organizerSearchResults
-                  .filter(org => org && org.uid) 
-                  .map(org => (
-                  <li key={org.uid} 
-                      onClick={() => handleSelectOrganizer(org)}
-                      className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
-                    {org.firstName} {org.lastName} ({org.email})
-                  </li>
-                ))}
-              </ul>
-            )}
+            <div className="relative mt-1"> {/* Added mt-1 for spacing from label */}
+              <input
+                type="text"
+                id="organizerSearch"
+                name="organizerSearch"
+                value={organizerSearchQuery}
+                onChange={handleOrganizerSearchChange}
+                placeholder="Search by name or email..."
+                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+              />
+              {isSearchingOrganizers && (
+                <div className="absolute top-full w-full mt-1">
+                  <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">Searching...</p>
+                </div>
+              )}
+              {organizerSearchResults.length > 0 && !isSearchingOrganizers && (
+                <ul className="absolute top-full z-20 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                  {organizerSearchResults
+                    .filter(org => org && org.uid) 
+                    .map(org => (
+                    <li key={org.uid} 
+                        onClick={() => handleSelectOrganizer(org)}
+                        className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
+                      {org.firstName} {org.lastName} ({org.email})
+                    </li>
+                  ))}
+                </ul>
+              )}
+            </div>
           </div>
           
           <div>
