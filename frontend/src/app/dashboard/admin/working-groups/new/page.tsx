@@ -28,13 +28,12 @@ export default function NewWorkingGroupPage() {
       router.push('/login');
     }
     if (user && !userProfile) {
-        fetchUserProfile(); // Ensure profile and privileges are loaded
+        fetchUserProfile(); 
     }
-    // Redirect if user does not have permission after profile is loaded
     if (userProfile && !canCreateWorkingGroups) {
         setError("You don't have permission to create working groups.");
-        // Optionally redirect after a delay or show a more prominent message
-        // router.push('/dashboard/admin/working-groups'); 
+        // Consider redirecting or showing a more prominent message if access is denied after loading.
+        // For now, the main return block handles rendering the access denied message.
     }
   }, [user, authLoading, userProfile, fetchUserProfile, router, canCreateWorkingGroups]);
 
@@ -75,9 +74,7 @@ export default function NewWorkingGroupPage() {
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to create working group');
       }
-      // const createdGroup = await response.json();
-      // console.log('Working group created:', createdGroup);
-      router.push('/dashboard/admin/working-groups'); // Redirect to list page on success
+      router.push('/dashboard/admin/working-groups'); 
     } catch (err: any) {
       setError(err.message);
       console.error("Create working group error:", err);
@@ -86,14 +83,17 @@ export default function NewWorkingGroupPage() {
     }
   };
 
-  if (authLoading || !userProfile) { // Wait for profile to load to check permissions
+  // Loading state will be enhanced in a later step
+  if (authLoading || !userProfile && user) { 
     return <div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>;
   }
 
+  // Access Denied state will be enhanced in a later step
   if (!canCreateWorkingGroups) {
     return (
-        <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
-            <div className="max-w-2xl mx-auto bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 text-center">
+        // Assuming this div would be within DashboardLayout's main content area
+        <div className="max-w-2xl mx-auto py-8"> 
+            <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 text-center">
                 <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400 mb-4">Access Denied</h1>
                 <p className="text-gray-700 dark:text-gray-300">You do not have permission to create new working groups.</p>
                 <Link href="/dashboard/admin/working-groups" className="mt-6 inline-block px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
@@ -104,95 +104,90 @@ export default function NewWorkingGroupPage() {
     );
   }
 
+  // This outermost div assumes it's rendered within DashboardLayout, which provides page bg and padding.
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
-      <nav className="bg-white dark:bg-gray-900 shadow-sm">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/dashboard" className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-              Fiji
-            </Link>
-            <Link href="/dashboard/admin/working-groups" className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
-              ← Back to Working Groups
-            </Link>
+    <div> 
+      <div className="mb-6">
+        <Link href="/dashboard/admin/working-groups" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+          <span className="material-icons text-lg mr-1">arrow_back_ios</span>
+          Back to Working Groups
+        </Link>
+      </div>
+
+      <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8"> {/* This is the main form card */}
+        <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-6">Create New Working Group</h1>
+        
+        <form onSubmit={handleSubmit} className="space-y-6">
+          <div>
+            <label htmlFor="groupName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Group Name <span className="text-red-500">*</span>
+            </label>
+            <input
+              type="text"
+              name="groupName"
+              id="groupName"
+              value={groupName}
+              onChange={(e) => setGroupName(e.target.value)}
+              required
+              className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+            />
           </div>
-        </div>
-      </nav>
 
-      <main className="max-w-3xl mx-auto py-10 px-4 sm:px-6 lg:px-8">
-        <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8">
-          <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-6">Create New Working Group</h1>
-          
-          <form onSubmit={handleSubmit} className="space-y-6">
-            <div>
-              <label htmlFor="groupName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Group Name <span className="text-red-500">*</span>
-              </label>
-              <input
-                type="text"
-                name="groupName"
-                id="groupName"
-                value={groupName}
-                onChange={(e) => setGroupName(e.target.value)}
-                required
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
-              />
-            </div>
+          <div>
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Description
+            </label>
+            <textarea
+              name="description"
+              id="description"
+              rows={4}
+              value={description}
+              onChange={(e) => setDescription(e.target.value)}
+              className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+            />
+          </div>
 
-            <div>
-              <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Description
-              </label>
-              <textarea
-                name="description"
-                id="description"
-                rows={4}
-                value={description}
-                onChange={(e) => setDescription(e.target.value)}
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
-              />
-            </div>
+          <div>
+            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+              Status
+            </label>
+            <select
+              id="status"
+              name="status"
+              value={status}
+              onChange={(e) => setStatus(e.target.value as 'active' | 'archived')}
+              className="mt-1 block w-full pl-3 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-800 dark:text-white" // Adjusted py-2 to py-2.5 to match input padding better
+            >
+              <option value="active">Active</option>
+              <option value="archived">Archived</option>
+            </select>
+          </div>
 
-            <div>
-              <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
-                Status
-              </label>
-              <select
-                id="status"
-                name="status"
-                value={status}
-                onChange={(e) => setStatus(e.target.value as 'active' | 'archived')}
-                className="mt-1 block w-full pl-3 pr-10 py-2 text-base border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-800 dark:text-white"
-              >
-                <option value="active">Active</option>
-                <option value="archived">Archived</option>
-              </select>
-            </div>
+          {/* Error message styling will be enhanced in a later step */}
+          {error && (
+            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          )}
 
-            {error && (
-              <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
-            )}
-
-            <div className="flex justify-end space-x-3">
-              <Link href="/dashboard/admin/working-groups">
-                <button
-                    type="button"
-                    className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-                >
-                    Cancel
-                </button>
-              </Link>
+          {/* Button styling will be enhanced in a later step */}
+          <div className="flex justify-end space-x-3 pt-2"> {/* Added pt-2 for spacing */}
+            <Link href="/dashboard/admin/working-groups">
               <button
-                type="submit"
-                disabled={isSubmitting}
-                className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+                  type="button"
+                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
               >
-                {isSubmitting ? 'Creating...' : 'Create Working Group'}
+                  Cancel
               </button>
-            </div>
-          </form>
-        </div>
-      </main>
+            </Link>
+            <button
+              type="submit"
+              disabled={isSubmitting}
+              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+            >
+              {isSubmitting ? 'Creating...' : 'Create Working Group'}
+            </button>
+          </div>
+        </form>
+      </div>
     </div>
   );
 }
