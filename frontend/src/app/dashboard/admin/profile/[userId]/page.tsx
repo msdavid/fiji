@@ -5,31 +5,37 @@ import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/lib/apiClient';
+import { format, parseISO } from 'date-fns'; // For date formatting
+
+// Define UserAvailability interface matching Pydantic model
+interface UserAvailability {
+  general?: string;
+  specificDatesUnavailable?: string[]; // Expect YYYY-MM-DD strings from backend
+  specificDatesAvailable?: string[];   // Expect YYYY-MM-DD strings from backend
+}
 
 // Interface for the user profile data fetched from the backend
 interface UserProfileData {
-  uid: string; // Same as id from backend UserResponse
+  uid: string; 
   id: string; 
   email: string;
   firstName: string;
   lastName: string;
   phoneNumber?: string | null;
-  skills?: string[] | null; // Expecting array from backend
-  qualifications?: string[] | null; // Expecting array from backend
-  preferences?: Record<string, any> | string | null; // Updated to allow object or string
+  skills?: string[] | null; 
+  qualifications?: string[] | null; 
+  preferences?: Record<string, any> | string | null; 
   profilePictureUrl?: string | null;
+  availability?: UserAvailability; // Added availability field
   assignedRoleIds: string[];
-  assignedRoleNames?: string[]; // For displaying role names
+  assignedRoleNames?: string[]; 
   status: string;
   createdAt: string; 
   updatedAt: string; 
 }
 
-// Custom hook for admin-specific authentication and authorization logic
-// (Assuming this hook correctly provides admin context and permissions)
 const useAdminAuthCheck = () => {
   const { user, idToken, userProfile, loading: authLoading, error: authError, hasPrivilege } = useAuth();
-  // Example: Check for a specific admin privilege or a general 'sysadmin' role
   const isAdmin = userProfile && (hasPrivilege ? hasPrivilege('users', 'view') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canAccessPage = user && idToken && isAdmin;
   return { user, idToken, userProfile, canAccessPage, authLoading, authError };
@@ -57,10 +63,9 @@ const AdminViewUserProfilePage = () => {
       return;
     }
 
-    if (!canAccessPage && !authLoading) { // Check canAccessPage only after authLoading is false
+    if (!canAccessPage && !authLoading) { 
       setError("Access Denied. You do not have permission to view this page.");
       setIsLoading(false);
-      // router.push('/dashboard'); // Optionally redirect
       return;
     }
 
@@ -76,14 +81,13 @@ const AdminViewUserProfilePage = () => {
       return;
     }
     
-    // Fetch only if all conditions are met
     if (idToken && userId && canAccessPage) {
         const fetchUserProfileData = async () => {
           setIsLoading(true);
           setError(null);
           try {
             const data = await apiClient<UserProfileData>({
-              path: `/users/${userId}`, // Fetches specific user by ID
+              path: `/users/${userId}`, 
               token: idToken,
               method: 'GET',
             });
@@ -104,11 +108,10 @@ const AdminViewUserProfilePage = () => {
     try {
       return new Date(dateString).toLocaleString();
     } catch (e) {
-      return dateString; // Fallback if date string is invalid
+      return dateString; 
     }
   };
 
-  // Helper component for displaying profile fields (simple string or array values)
   const ProfileField = ({ label, value }: { label: string; value: string | undefined | null | string[] }) => {
     let displayValue: string;
     if (Array.isArray(value)) {
@@ -117,7 +120,6 @@ const AdminViewUserProfilePage = () => {
       displayValue = value || 'N/A';
     }
     
-    // Use <pre> for potentially long multi-line strings (e.g. from skills/qualifications if they were single strings)
     const usePre = typeof value === 'string' && (value.includes('\n') || value.length > 60);
 
     return (
@@ -165,7 +167,6 @@ const AdminViewUserProfilePage = () => {
     );
   }
   
-  // Prepare display for skills and qualifications (assuming they are arrays)
   const displaySkills = viewedUserProfile.skills && Array.isArray(viewedUserProfile.skills) ? viewedUserProfile.skills.join(', ') : 'N/A';
   const displayQualifications = viewedUserProfile.qualifications && Array.isArray(viewedUserProfile.qualifications) ? viewedUserProfile.qualifications.join(', ') : 'N/A';
 
@@ -185,7 +186,6 @@ const AdminViewUserProfilePage = () => {
       {/* Card 1: Basic Information */}
       <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Basic Information</h2>
-        
         <div className="mb-4">
           <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
           {viewedUserProfile.profilePictureUrl ? (
@@ -200,40 +200,65 @@ const AdminViewUserProfilePage = () => {
             </div>
           )}
         </div>
-
         <ProfileField label="Full Name" value={`${viewedUserProfile.firstName} ${viewedUserProfile.lastName}`} />
         <ProfileField label="Email" value={viewedUserProfile.email} />
         <ProfileField label="Phone Number" value={viewedUserProfile.phoneNumber} />
         <ProfileField label="Status" value={viewedUserProfile.status} />
       </div>
 
-      {/* Card 2: Professional Details */}
-      {(viewedUserProfile.skills?.length || viewedUserProfile.qualifications?.length || (typeof viewedUserProfile.preferences === 'object' && viewedUserProfile.preferences && Object.keys(viewedUserProfile.preferences).length > 0)) && (
-        <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6">
-          <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Professional Details</h2>
-          {viewedUserProfile.skills && viewedUserProfile.skills.length > 0 && <ProfileField label="Skills" value={displaySkills} />}
-          {viewedUserProfile.qualifications && viewedUserProfile.qualifications.length > 0 && <ProfileField label="Qualifications" value={displayQualifications} />}
-          
-          {/* Preferences Display */}
-          {typeof viewedUserProfile.preferences === 'object' && viewedUserProfile.preferences && Object.keys(viewedUserProfile.preferences).length > 0 && (
-            <div className="mb-4 last:mb-0">
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences</label>
-              <ul className="mt-1 list-disc list-inside space-y-1 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">
-                {Object.entries(viewedUserProfile.preferences).map(([key, value]) => (
-                  <li key={key} className="text-sm text-gray-900 dark:text-gray-100">
-                    <span className="font-semibold capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span> {String(value)}
-                  </li>
+      {/* Card 2: Professional Details & Availability */}
+      <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6">
+        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Professional Details & Availability</h2>
+        {viewedUserProfile.skills && viewedUserProfile.skills.length > 0 && <ProfileField label="Skills" value={displaySkills} />}
+        {viewedUserProfile.qualifications && viewedUserProfile.qualifications.length > 0 && <ProfileField label="Qualifications" value={displayQualifications} />}
+        
+        {typeof viewedUserProfile.preferences === 'object' && viewedUserProfile.preferences && Object.keys(viewedUserProfile.preferences).length > 0 && (
+          <div className="mb-4 last:mb-0">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences</label>
+            <ul className="mt-1 list-disc list-inside space-y-1 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">
+              {Object.entries(viewedUserProfile.preferences).map(([key, value]) => (
+                <li key={key} className="text-sm text-gray-900 dark:text-gray-100">
+                  <span className="font-semibold capitalize">{key.replace(/([A-Z])/g, ' $1').trim()}:</span> {String(value)}
+                </li>
+              ))}
+            </ul>
+          </div>
+        )}
+        {typeof viewedUserProfile.preferences === 'string' && viewedUserProfile.preferences && (
+           <ProfileField label="Preferences (Legacy)" value={viewedUserProfile.preferences} />
+        )}
+
+        {/* Availability Display Section */}
+        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
+          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Availability</h3>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Availability</label>
+            <p className="mt-1 text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md whitespace-pre-wrap">
+              {viewedUserProfile.availability?.general || 'Not specified'}
+            </p>
+          </div>
+          <div className="mb-4">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Specific Dates Unavailable</label>
+            {viewedUserProfile.availability?.specificDatesUnavailable && viewedUserProfile.availability.specificDatesUnavailable.length > 0 ? (
+              <ul className="mt-1 list-disc list-inside bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">
+                {viewedUserProfile.availability.specificDatesUnavailable.map(date => (
+                  <li key={date} className="text-sm text-gray-900 dark:text-gray-100">{format(parseISO(date), 'PPP')}</li>
                 ))}
               </ul>
-            </div>
-          )}
-          {/* Fallback for string preferences if data is mixed, though backend should send object */}
-          {typeof viewedUserProfile.preferences === 'string' && viewedUserProfile.preferences && (
-             <ProfileField label="Preferences (Legacy)" value={viewedUserProfile.preferences} />
-          )}
-
+            ) : <p className="mt-1 text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">None specified</p>}
+          </div>
+          <div>
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Specific Dates Available</label>
+            {viewedUserProfile.availability?.specificDatesAvailable && viewedUserProfile.availability.specificDatesAvailable.length > 0 ? (
+              <ul className="mt-1 list-disc list-inside bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">
+                {viewedUserProfile.availability.specificDatesAvailable.map(date => (
+                  <li key={date} className="text-sm text-gray-900 dark:text-gray-100">{format(parseISO(date), 'PPP')}</li>
+                ))}
+              </ul>
+            ) : <p className="mt-1 text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">None specified</p>}
+          </div>
         </div>
-      )}
+      </div>
 
       {/* Card 3: Account & System Information */}
       <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
