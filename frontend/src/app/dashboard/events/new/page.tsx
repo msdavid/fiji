@@ -19,7 +19,7 @@ interface EventFormData {
 }
 
 interface UserSearchResult {
-  uid: string;
+  id: string; // Changed from uid to id
   firstName: string;
   lastName: string;
   email: string;
@@ -150,7 +150,7 @@ export default function CreateEventPage() {
   };
 
   const handleSelectOrganizer = (organizer: UserSearchResult) => {
-    setFormData(prev => ({ ...prev, organizerUserId: organizer.uid }));
+    setFormData(prev => ({ ...prev, organizerUserId: organizer.id })); // Changed from organizer.uid
     setSelectedOrganizerName(`${organizer.firstName} ${organizer.lastName} (${organizer.email})`);
     setOrganizerSearchQuery(''); 
     setOrganizerSearchResults([]); 
@@ -325,9 +325,9 @@ export default function CreateEventPage() {
               {organizerSearchResults.length > 0 && !isSearchingOrganizers && (
                 <ul className="absolute top-full z-20 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
                   {organizerSearchResults
-                    .filter(org => org && org.uid) 
+                    .filter(org => org && org.id)  // Changed from org.uid
                     .map(org => (
-                    <li key={org.uid} 
+                    <li key={org.id} // Changed from org.uid
                         onClick={() => handleSelectOrganizer(org)}
                         className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
                       {org.firstName} {org.lastName} ({org.email})
