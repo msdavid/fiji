@@ -1,6 +1,20 @@
 # Project Log - Fiji
 
-## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Add User Search -->
+## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Admin User Profile Card Layout -->
+- **Q Agent:** Mauro
+- **Objective:** Enhance the visual appeal of the admin user profile page (`/dashboard/admin/profile/[userId]`) with a card-based layout.
+### Activity:
+- Modified `frontend/src/app/dashboard/admin/profile/[userId]/page.tsx`:
+  - Reorganized user profile information into three distinct cards: "Basic Information", "Professional Details", and "Account & System Information".
+  - Applied consistent styling (`bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6`) to each card for a cohesive look.
+  - Added titles to each card for clarity.
+  - Adjusted the `ProfileField` component to remove bottom margin from the last field within a card (`last:mb-0`).
+  - Increased `max-w-3xl` for the main container to better accommodate the card layout.
+  - Conditionally rendered the "Professional Details" card only if relevant fields (skills, qualifications, preferences) have data.
+  - Improved display of assigned roles to show "No roles assigned" if the array is empty.
+
+---
+## Session (YYYY-MM-DD HH:MM) <!-- Previous entry: Add User Search -->
 - **Q Agent:** Mauro
 - **Objective:** Add a search box to the admin users page for filtering.
 ### Activity:
