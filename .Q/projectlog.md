@@ -74,3 +74,25 @@
     *   `frontend/src/app/dashboard/profile/page.tsx`
     *   `.Q/projectlog.md`
 *   **Status:** Sprint completed.
+
+## Sprint 7: Donation Tracking & Basic Reporting APIs
+*   **Goal:** Implement backend CRUD operations for donation tracking. Develop backend API endpoints to provide data for basic reports (e.g., volunteer hours, event participation).
+*   **Key Deliverables:**
+    *   Backend API endpoints for donation CRUD. (Verified existing)
+    *   Backend API endpoints to supply data for reports. (Implemented for volunteer hours & event participation)
+*   **Main Task Areas & Outcomes:**
+    *   **Backend (FastAPI & Firestore):**
+        *   Donation Pydantic models (`backend/models/donation.py`) and CRUD API endpoints (`backend/routers/donations.py`) were verified as complete and functional.
+        *   Created `backend/models/report.py` with Pydantic models for `VolunteerHoursSummaryReport` and `EventParticipationSummaryReport`.
+        *   Created a new router `backend/routers/reports.py` with two initial endpoints:
+            *   `GET /reports/volunteer-hours/summary`: Aggregates and returns total volunteer hours contributed, with a per-user breakdown. Secured by `reports:view_volunteer_hours` permission.
+            *   `GET /reports/event-participation/summary`: Aggregates and returns event participation statistics, including participant counts and hours per event, and overall unique volunteer counts. Secured by `reports:view_event_participation` permission.
+        *   Included the new reports router in `backend/main.py`.
+    *   **Frontend (Next.js & Tailwind UI):**
+        *   Reporting UI deferred to a later sprint or to be handled by data export, as per the sprint plan. No frontend tasks undertaken in this sprint for reports.
+*   **Files Modified/Created in Sprint 7:**
+    *   `backend/models/report.py` (new file)
+    *   `backend/routers/reports.py` (new file)
+    *   `backend/main.py` (updated to include reports router)
+    *   `.Q/projectlog.md`
+*   **Status:** Sprint completed.

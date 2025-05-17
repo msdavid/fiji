@@ -19,8 +19,6 @@ class AssignmentUpdate(BaseModel):
     status: Optional[str] = None
     performanceNotes: Optional[str] = None
     hoursContributed: Optional[float] = None
-    # Removed updatedAt from here as it should be set by the server, not the client during update
-    # updatedAt: datetime = Field(default_factory=datetime.utcnow) 
 
 class AssignmentResponse(AssignmentBase):
     id: str = Field(..., description="Unique ID of the assignment.")
@@ -34,7 +32,8 @@ class AssignmentResponse(AssignmentBase):
 
     # Added assignable entity details
     assignableName: Optional[str] = Field(None, description="Name of the assignable entity (e.g., event name, working group name).")
-    # assignableDescription: Optional[str] = Field(None, description="Description of the assignable entity.") # Consider adding if needed
+    assignableStartDate: Optional[str] = Field(None, description="Start date of the assignable entity (YYYY-MM-DD), primarily for events.")
+    # assignableDescription: Optional[str] = Field(None, description="Description of the assignable entity.")
 
     class Config:
         from_attributes = True 
@@ -42,5 +41,5 @@ class AssignmentResponse(AssignmentBase):
             datetime: lambda v: v.isoformat() if v else None
         }
 
-class AssignmentInDB(AssignmentResponse): # This can often be an alias or inherit directly if no changes
+class AssignmentInDB(AssignmentResponse):
     pass
