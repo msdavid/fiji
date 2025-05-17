@@ -39,27 +39,24 @@ export default function EditDonationPage() {
     donorPhone: null,
     donationType: 'monetary',
     amount: null,
-    currency: 'USD', // Default currency
+    currency: 'USD', 
     description: '',
-    donationDate: format(new Date(), 'yyyy-MM-dd'), // Default to today
+    donationDate: format(new Date(), 'yyyy-MM-dd'), 
     notes: null,
   });
   const [originalDonation, setOriginalDonation] = useState<Donation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [submitError, setSubmitError] = useState<string | null>(null);
-  const [deleteError, setDeleteError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); // General page load error
+  const [submitError, setSubmitError] = useState<string | null>(null); // Form submission error
+  const [successMessage, setSuccessMessage] = useState<string | null>(null); // Form submission success
 
   const canEditDonation = userProfile && (hasPrivilege ? hasPrivilege('donations', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canDeleteDonation = userProfile && (hasPrivilege ? hasPrivilege('donations', 'delete') : userProfile.assignedRoleIds?.includes('sysadmin'));
 
   const fetchDonationDetails = useCallback(async () => {
-    if (!idToken || !donationId || !canEditDonation) {
-      if (user && userProfile && !canEditDonation && !authLoading) {
-        setError("You don't have permission to edit this donation.");
-      }
+    if (!idToken || !donationId ) { // Removed canEditDonation from initial fetch blocking
       setIsLoading(false);
       return;
     }
@@ -87,12 +84,12 @@ export default function EditDonationPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [idToken, donationId, canEditDonation, user, userProfile, authLoading]);
+  }, [idToken, donationId]);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
     if (user && !userProfile) fetchUserProfile();
-    if (user && userProfile && idToken && donationId) {
+    if (user && userProfile && idToken && donationId) { // Ensure userProfile is loaded before fetching
       fetchDonationDetails();
     }
   }, [user, authLoading, userProfile, fetchUserProfile, idToken, donationId, router, fetchDonationDetails]);
@@ -104,8 +101,8 @@ export default function EditDonationPage() {
         setFormData(prev => ({
             ...prev,
             donationType: value as DonationFormData['donationType'],
-            amount: null, // Clear amount if not monetary
-            currency: null // Clear currency if not monetary
+            amount: null, 
+            currency: null 
         }));
     } else if (type === 'number' && name === 'amount') {
         setFormData(prev => ({ ...prev, [name]: value === '' ? null : parseFloat(value) }));
@@ -138,46 +135,38 @@ export default function EditDonationPage() {
         return;
     }
 
-
     setIsSubmitting(true);
     setSubmitError(null);
+    setSuccessMessage(null);
 
     try {
       if (!idToken) throw new Error("Authentication token not available.");
       
       const payload: Partial<DonationFormData> = {};
-      // Compare each field and add to payload if changed
       (Object.keys(formData) as Array<keyof DonationFormData>).forEach(key => {
         let formVal = formData[key];
         let originalVal = originalDonation[key];
-
-        // Normalize empty strings to null for optional fields for comparison
         if (key === 'donorEmail' || key === 'donorPhone' || key === 'notes' || key === 'currency' || key === 'amount') {
             if (formVal === '') formVal = null;
             if (originalVal === '') originalVal = null;
         }
-        if (key === 'donationDate' && originalDonation.donationDate) { // Ensure original date is also formatted for comparison
+        if (key === 'donationDate' && originalDonation.donationDate) {
             originalVal = format(parseISO(originalDonation.donationDate), 'yyyy-MM-dd');
         }
-
-
         if (formVal !== originalVal) {
           // @ts-ignore
           payload[key] = formVal;
         }
       });
       
-      // If donationType changed from non-monetary to monetary, ensure amount/currency are in payload
       if (formData.donationType === 'monetary' && originalDonation.donationType !== 'monetary') {
         payload.amount = formData.amount;
         payload.currency = formData.currency;
       }
-      // If donationType changed to non-monetary, ensure amount/currency are explicitly nulled if they were not already
       if (formData.donationType !== 'monetary' && originalDonation.donationType === 'monetary') {
         payload.amount = null;
         payload.currency = null;
       }
-
 
       if (Object.keys(payload).length === 0) {
         setSubmitError("No changes detected to submit.");
@@ -191,7 +180,10 @@ export default function EditDonationPage() {
         method: 'PUT',
         data: payload,
       });
-      router.push(`/dashboard/donations/${donationId}`);
+      setSuccessMessage('Donation updated successfully!');
+      setTimeout(() => {
+        router.push(`/dashboard/donations/${donationId}`);
+      }, 1500);
     } catch (err: any) {
       setSubmitError(err.response?.data?.detail || err.message || 'Failed to update donation.');
     } finally {
@@ -201,13 +193,14 @@ export default function EditDonationPage() {
 
   const handleDeleteDonation = async () => {
     if (!canDeleteDonation || !originalDonation) {
-        setDeleteError("Cannot delete: Insufficient permissions or donation data missing.");
+        setSubmitError("Cannot delete: Insufficient permissions or donation data missing."); // Use submitError for consistency
         return;
     }
     if (!confirm(`Are you sure you want to delete this donation from "${originalDonation.donorName}"? This action cannot be undone.`)) return;
 
     setIsDeleting(true);
-    setDeleteError(null);
+    setSubmitError(null); // Clear submit error before attempting delete
+    setSuccessMessage(null);
     try {
         if (!idToken) throw new Error("Authentication token not available.");
         await apiClient({
@@ -215,9 +208,10 @@ export default function EditDonationPage() {
             token: idToken,
             method: 'DELETE',
         });
+        alert('Donation deleted successfully!'); // Simple alert for now
         router.push('/dashboard/donations');
     } catch (err: any) {
-        setDeleteError(err.response?.data?.detail || err.message || 'Failed to delete donation.');
+        setSubmitError(err.response?.data?.detail || err.message || 'Failed to delete donation.'); // Use submitError
     } finally {
         setIsDeleting(false);
     }
@@ -236,32 +230,37 @@ export default function EditDonationPage() {
       </div>
     );
   }
-
-  if (error || (userProfile && !canEditDonation) || (!isLoading && !originalDonation)) {
+  
+  // Page-level error (e.g., failed to fetch initial data) or access denied
+  if (error || (userProfile && !canEditDonation && !isLoading) || (!isLoading && !originalDonation && !error)) {
     const displayError = error || (userProfile && !canEditDonation ? "Access Denied. You do not have permission to edit this donation." : "Donation not found for editing.");
-    const icon = error || (userProfile && !canEditDonation) ? "lock" : "search_off";
-    const title = error || (userProfile && !canEditDonation) ? "Error Editing Donation" : "Donation Not Found";
+    const isAccessDenied = userProfile && !canEditDonation;
     return (
-        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
             <div className="mb-6">
-                <Link href={`/dashboard/donations/${donationId}`} className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                <Link href={originalDonation ? `/dashboard/donations/${donationId}` : "/dashboard/donations"} className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
                     <span className="material-icons text-lg mr-1">arrow_back_ios</span>
-                    Back to Donation Details
+                    {originalDonation ? "Back to Donation Details" : "Back to Donations List"}
                 </Link>
             </div>
             <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8 text-center">
-                <span className={`material-icons text-5xl mx-auto mb-3 ${icon === 'lock' ? 'text-red-500 dark:text-red-400' : 'text-gray-400 dark:text-gray-500'}`}>{icon}</span>
-                <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">{title}</h1>
-                <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-md mb-6">
-                    <p className="text-red-600 dark:text-red-400 text-sm">{displayError}</p>
+                <span className={`material-icons text-5xl mx-auto mb-3 ${isAccessDenied ? 'text-red-500 dark:text-red-400' : 'text-yellow-500 dark:text-yellow-400'}`}>{isAccessDenied ? 'lock' : 'error_outline'}</span>
+                <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">{isAccessDenied ? "Access Denied" : "Error"}</h1>
+                <div className={`${isAccessDenied ? 'bg-red-50 dark:bg-red-900/30 text-red-600 dark:text-red-400' : 'bg-yellow-50 dark:bg-yellow-900/30 text-yellow-700 dark:text-yellow-400'} p-4 rounded-md mb-6`}>
+                    <p className="text-sm">{displayError}</p>
                 </div>
             </div>
         </main>
     );
   }
   
+  // This should ideally not be reached if the above covers all states
+  if (!originalDonation) {
+      return <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center"><p>Donation data is unavailable.</p></main>;
+  }
+  
   return (
-    <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
             <Link href={`/dashboard/donations/${donationId}`} className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
                 <span className="material-icons text-lg mr-1">arrow_back_ios</span>
@@ -269,142 +268,115 @@ export default function EditDonationPage() {
             </Link>
         </div>
 
-        <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
-            <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-6">
-                Edit Donation from: <span className="text-indigo-600 dark:text-indigo-400">{originalDonation?.donorName}</span>
-            </h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+            Edit Donation: <span className="text-indigo-600 dark:text-indigo-400">{originalDonation?.donorName}</span>
+        </h1>
 
-            <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Donor Information */}
-                <fieldset className="border border-gray-300 dark:border-gray-600 p-4 rounded-md">
-                    <legend className="text-lg font-medium text-gray-900 dark:text-white px-2">Donor Information</legend>
-                    <div className="space-y-4 mt-2">
-                        <div>
-                            <label htmlFor="donorName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Name <span className="text-red-500">*</span></label>
-                            <input type="text" name="donorName" id="donorName" value={formData.donorName} onChange={handleChange} required className="input-class" />
-                        </div>
-                        <div>
-                            <label htmlFor="donorEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Email</label>
-                            <input type="email" name="donorEmail" id="donorEmail" value={formData.donorEmail || ''} onChange={handleChange} className="input-class" />
-                        </div>
-                        <div>
-                            <label htmlFor="donorPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Phone</label>
-                            <input type="tel" name="donorPhone" id="donorPhone" value={formData.donorPhone || ''} onChange={handleChange} className="input-class" />
+        {successMessage && (
+            <div className="mb-6 p-4 text-sm text-green-700 bg-green-100 dark:bg-green-700 dark:text-green-100 rounded-lg shadow-md" role="alert">
+            <span className="font-medium">Success!</span> {successMessage}
+            </div>
+        )}
+        {submitError && ( // Changed from deleteError to submitError for general form errors
+            <div className="mb-6 p-4 text-sm text-red-700 bg-red-100 dark:bg-red-700 dark:text-red-100 rounded-lg shadow-md" role="alert">
+            <span className="font-medium">Error:</span> {submitError}
+            </div>
+        )}
+
+        {canEditDonation && (
+            <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
+                <form onSubmit={handleSubmit} className="space-y-6">
+                    {/* Donor Information Section */}
+                    <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
+                        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Donor Information</h2>
+                        <div className="space-y-4">
+                            <div>
+                                <label htmlFor="donorName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Name <span className="text-red-500">*</span></label>
+                                <input type="text" name="donorName" id="donorName" value={formData.donorName} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                            </div>
+                            <div>
+                                <label htmlFor="donorEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Email</label>
+                                <input type="email" name="donorEmail" id="donorEmail" value={formData.donorEmail || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                            </div>
+                            <div>
+                                <label htmlFor="donorPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Phone</label>
+                                <input type="tel" name="donorPhone" id="donorPhone" value={formData.donorPhone || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                            </div>
                         </div>
                     </div>
-                </fieldset>
 
-                {/* Donation Details */}
-                <fieldset className="border border-gray-300 dark:border-gray-600 p-4 rounded-md">
-                    <legend className="text-lg font-medium text-gray-900 dark:text-white px-2">Donation Details</legend>
-                    <div className="space-y-4 mt-2">
+                    {/* Donation Details Section */}
+                    <div className="pt-6 space-y-4">
+                        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Donation Details</h2>
                         <div>
                             <label htmlFor="donationDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donation Date <span className="text-red-500">*</span></label>
-                            <input type="date" name="donationDate" id="donationDate" value={formData.donationDate} onChange={handleChange} required className="input-class" />
+                            <input type="date" name="donationDate" id="donationDate" value={formData.donationDate} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                         </div>
                         <div>
                             <label htmlFor="donationType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donation Type <span className="text-red-500">*</span></label>
-                            <select name="donationType" id="donationType" value={formData.donationType} onChange={handleChange} required className="input-class">
+                            <select name="donationType" id="donationType" value={formData.donationType} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
                                 <option value="monetary">Monetary</option>
                                 <option value="in_kind">In-Kind</option>
                                 <option value="time_contribution">Time Contribution</option>
                             </select>
                         </div>
                         {formData.donationType === 'monetary' && (
-                            <>
+                            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                                 <div>
                                     <label htmlFor="amount" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Amount <span className="text-red-500">*</span></label>
-                                    <input type="number" name="amount" id="amount" value={formData.amount || ''} onChange={handleChange} required min="0.01" step="0.01" className="input-class" />
+                                    <input type="number" name="amount" id="amount" value={formData.amount || ''} onChange={handleChange} required min="0.01" step="0.01" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                                 </div>
                                 <div>
                                     <label htmlFor="currency" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Currency <span className="text-red-500">*</span></label>
-                                    <input type="text" name="currency" id="currency" value={formData.currency || ''} onChange={handleChange} required maxLength={3} className="input-class" placeholder="e.g., USD, EUR"/>
+                                    <input type="text" name="currency" id="currency" value={formData.currency || ''} onChange={handleChange} required maxLength={3} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" placeholder="e.g., USD, EUR"/>
                                 </div>
-                            </>
+                            </div>
                         )}
                         <div>
                             <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description <span className="text-red-500">*</span></label>
-                            <textarea name="description" id="description" rows={3} value={formData.description} onChange={handleChange} required className="input-class" />
+                            <textarea name="description" id="description" rows={3} value={formData.description} onChange={handleChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                         </div>
                         <div>
                             <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
-                            <textarea name="notes" id="notes" rows={3} value={formData.notes || ''} onChange={handleChange} className="input-class" />
+                            <textarea name="notes" id="notes" rows={3} value={formData.notes || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                         </div>
                     </div>
-                </fieldset>
-                
-                <style jsx>{`
-                    .input-class {
-                        display: block;
-                        width: 100%;
-                        padding: 0.5rem 0.75rem;
-                        border-width: 1px;
-                        border-color: #D1D5DB; /* gray-300 */
-                        border-radius: 0.375rem; /* rounded-md */
-                        box-shadow: 0 1px 2px 0 rgba(0, 0, 0, 0.05); /* shadow-sm */
-                        font-size: 0.875rem; /* sm:text-sm */
-                    }
-                    .dark .input-class {
-                        background-color: #374151; /* dark:bg-gray-700 */
-                        border-color: #4B5563; /* dark:border-gray-600 */
-                        color: #F3F4F6; /* dark:text-white */
-                    }
-                    .input-class:focus {
-                        outline: 2px solid transparent;
-                        outline-offset: 2px;
-                        border-color: #6366F1; /* focus:border-indigo-500 */
-                        box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.5); /* focus:ring-indigo-500 */
-                    }
-                `}</style>
-
-
-                {submitError && (
-                    <div className="p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert">
-                        <span className="material-icons text-lg mr-2">error_outline</span>
-                        {submitError}
+                    
+                    {/* Action Buttons */}
+                    <div className="flex flex-col sm:flex-row justify-between items-center pt-8 mt-4 border-t border-gray-200 dark:border-gray-700 space-y-4 sm:space-y-0">
+                        <div>
+                            {canDeleteDonation && (
+                                <button 
+                                    type="button" 
+                                    onClick={handleDeleteDonation}
+                                    disabled={isDeleting || isSubmitting}
+                                    className="w-full sm:w-auto py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-red-600 hover:bg-red-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50 inline-flex items-center justify-center"
+                                >
+                                    <span className="material-icons mr-2 text-base">{isDeleting ? 'hourglass_empty' : 'delete_forever'}</span>
+                                    {isDeleting ? 'Deleting...' : 'Delete Donation'}
+                                </button>
+                            )}
+                        </div>
+                        <div className="flex space-x-3 w-full sm:w-auto justify-end">
+                            <Link href={`/dashboard/donations/${donationId}`} legacyBehavior>
+                                <a className="w-full sm:w-auto py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center justify-center">
+                                    <span className="material-icons mr-2 text-base">cancel</span>
+                                    Cancel
+                                </a>
+                            </Link>
+                            <button
+                                type="submit"
+                                disabled={isSubmitting || isDeleting || isLoading}
+                                className="w-full sm:w-auto py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center justify-center"
+                            >
+                                <span className="material-icons mr-2 text-base">{isSubmitting ? 'hourglass_empty' : 'save'}</span>
+                                {isSubmitting ? 'Saving...' : 'Save Changes'}
+                            </button>
+                        </div>
                     </div>
-                )}
-
-                <div className="flex items-center justify-end space-x-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <Link href={`/dashboard/donations/${donationId}`} legacyBehavior>
-                        <a className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                            Cancel
-                        </a>
-                    </Link>
-                    <button
-                        type="submit"
-                        disabled={isSubmitting || isLoading}
-                        className="inline-flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
-                    >
-                        <span className="material-icons text-lg mr-2">{isSubmitting ? 'hourglass_empty' : 'save'}</span>
-                        {isSubmitting ? 'Saving...' : 'Save Changes'}
-                    </button>
-                </div>
-            </form>
-
-            {canDeleteDonation && originalDonation && (
-            <div className="mt-10 pt-6 border-t border-red-300 dark:border-red-700">
-                 <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-3">Danger Zone</h3>
-                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-                    Deleting this donation is permanent and cannot be undone.
-                 </p>
-                <button
-                    onClick={handleDeleteDonation}
-                    disabled={isDeleting || isSubmitting}
-                    className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md shadow-sm inline-flex items-center disabled:opacity-50"
-                >
-                    <span className="material-icons text-lg mr-2">delete_forever</span>
-                    {isDeleting ? 'Deleting...' : 'Delete This Donation'}
-                </button>
-                {deleteError && 
-                    <div className="mt-3 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert">
-                    <span className="material-icons text-lg mr-2">error_outline</span>
-                    {deleteError}
-                    </div>
-                }
+                </form>
             </div>
-          )}
-        </div>
+        )}
     </main>
   );
 }
