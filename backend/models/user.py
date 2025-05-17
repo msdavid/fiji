@@ -1,4 +1,4 @@
-from pydantic import BaseModel, EmailStr, Field
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
 from typing import Optional, List
 from datetime import datetime
 
@@ -38,6 +38,8 @@ class UserUpdate(BaseModel):
     status: Optional[str] = None # e.g., "active", "disabled", "pending_verification"
     # Email is typically not updated directly via this model, managed by Firebase Auth.
     # availability fields to be added in Sprint 5
+    model_config = ConfigDict(extra='forbid')
+
 
 class UserInDBBase(UserBase):
     id: str = Field(..., description="User's unique ID (matches Firebase Auth UID).")
@@ -46,10 +48,12 @@ class UserInDBBase(UserBase):
     createdAt: datetime = Field(..., description="Timestamp of user creation.")
     updatedAt: datetime = Field(..., description="Timestamp of last update.")
     lastLoginAt: Optional[datetime] = Field(None, description="Timestamp of last login.")
-    
+    model_config = ConfigDict(from_attributes=True)
+
 class UserResponse(UserInDBBase):
     # Include human-readable role names
     assignedRoleNames: Optional[List[str]] = Field(default_factory=list, description="Names of assigned roles.")
+    # from_attributes is inherited from UserInDBBase
     pass
 
 class UserListResponse(BaseModel): # For list views, might be a subset of UserResponse
@@ -62,6 +66,7 @@ class UserListResponse(BaseModel): # For list views, might be a subset of UserRe
     assignedRoleNames: Optional[List[str]] = Field(default_factory=list, description="Names of assigned roles.")
     createdAt: datetime
     profilePictureUrl: Optional[str] = None
+    model_config = ConfigDict(from_attributes=True)
 
 
 class UserSearchResponseItem(BaseModel):
@@ -69,3 +74,4 @@ class UserSearchResponseItem(BaseModel):
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     email: EmailStr
+    model_config = ConfigDict(from_attributes=True)

@@ -26,7 +26,7 @@ class WorkingGroupResponse(WorkingGroupBase):
     creatorLastName: Optional[str] = None
 
     class Config:
-        orm_mode = True
+        from_attributes = True # Changed from orm_mode
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
         }
