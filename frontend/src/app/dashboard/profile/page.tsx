@@ -1,29 +1,51 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react';
 import { useAuth } from '@/context/AuthContext'; 
 import apiClient from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
-import { format, parseISO, isValid, parse } from 'date-fns';
+import { format, parseISO, isValid, parse as parseDateFns } from 'date-fns';
+
+// --- New Availability Interfaces ---
+type Weekday = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
+const weekdays: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
+type SlotType = 'available' | 'unavailable';
+const slotTypes: SlotType[] = ['available', 'unavailable'];
+
+
+interface GeneralAvailabilityRule {
+  id?: string; 
+  weekday: Weekday;
+  from_time: string; // HH:MM
+  to_time: string;   // HH:MM
+}
+
+interface SpecificDateSlot {
+  id?: string; 
+  date: string; // YYYY-MM-DD
+  from_time?: string; // HH:MM
+  to_time?: string;   // HH:MM
+  slot_type: SlotType;
+}
 
 interface UserAvailability {
-  general?: string;
-  specificDatesUnavailable?: string[];
-  specificDatesAvailable?: string[];
+  general_rules: GeneralAvailabilityRule[];
+  specific_slots: SpecificDateSlot[];
 }
+// --- End New Availability Interfaces ---
 
 interface UserDataFromBackend {
   uid: string;
   email: string;
   firstName: string;
   lastName: string;
-  phone?: string | null; // Changed from phoneNumber
+  phone?: string | null;
   skills?: string | string[]; 
   qualifications?: string | string[]; 
   preferences?: Record<string, any> | string; 
   profilePictureUrl?: string | null; 
-  availability?: UserAvailability;
+  availability?: UserAvailability; 
   assignedRoleIds?: string[];
   assignedRoleNames?: string[];
   status?: string;
@@ -35,14 +57,12 @@ interface EditableUserProfile {
   firstName: string;
   lastName:string;
   email: string; 
-  phone?: string; // Changed from phoneNumber
+  phone?: string;
   skills?: string; 
   qualifications?: string; 
   preferences?: string; 
   profilePictureUrl?: string | null; 
-  availabilityGeneral?: string;
-  availabilitySpecificDatesUnavailable?: string;
-  availabilitySpecificDatesAvailable?: string;
+  availability: UserAvailability; 
 }
 
 const ProfilePage = () => {
@@ -55,38 +75,27 @@ const ProfilePage = () => {
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   
-  const [formData, setFormData] = useState<EditableUserProfile>({
+  const initialFormData: EditableUserProfile = {
     firstName: '',
     lastName: '',
     email: '', 
-    phone: '', // Changed from phoneNumber
+    phone: '',
     skills: '', 
     qualifications: '', 
     preferences: '', 
     profilePictureUrl: '',
-    availabilityGeneral: '',
-    availabilitySpecificDatesUnavailable: '',
-    availabilitySpecificDatesAvailable: '',
-  });
+    availability: { 
+      general_rules: [],
+      specific_slots: [],
+    },
+  };
+  const [formData, setFormData] = useState<EditableUserProfile>(initialFormData);
 
   const arrayFieldToString = (fieldValue: string | string[] | undefined): string => {
       if (Array.isArray(fieldValue)) return fieldValue.join('\n');
       return fieldValue || '';
   };
   
-  const dateArrayToString = (dates?: string[]): string => {
-    if (Array.isArray(dates)) return dates.join(', ');
-    return '';
-  };
-
-  const stringToDateArray = (dateString?: string): string[] => {
-    if (!dateString) return [];
-    return dateString.split(',')
-      .map(d => d.trim())
-      .filter(d => d && isValid(parse(d, 'yyyy-MM-dd', new Date()))) 
-      .sort(); 
-  };
-
   const preferencesObjectToStringForTextarea = (prefs: Record<string, any> | string | undefined): string => {
     if (typeof prefs === 'object' && prefs !== null) {
       return JSON.stringify(prefs, null, 2); 
@@ -94,10 +103,32 @@ const ProfilePage = () => {
     return prefs || '';
   };
 
+  const initializeFormData = useCallback((profileData: UserDataFromBackend) => {
+    setFormData({
+      firstName: profileData.firstName || '',
+      lastName: profileData.lastName || '',
+      email: profileData.email || '', 
+      phone: profileData.phone || '',
+      skills: arrayFieldToString(profileData.skills),
+      qualifications: arrayFieldToString(profileData.qualifications),
+      preferences: preferencesObjectToStringForTextarea(profileData.preferences),
+      profilePictureUrl: profileData.profilePictureUrl || '',
+      availability: { 
+        general_rules: profileData.availability?.general_rules?.map(r => ({...r, id: r.id || Math.random().toString(36).substr(2, 9)})) || [],
+        specific_slots: profileData.availability?.specific_slots?.map(s => ({
+            ...s, 
+            id: s.id || Math.random().toString(36).substr(2, 9), 
+            date: s.date ? format(parseISO(s.date), 'yyyy-MM-dd') : '',
+            from_time: s.from_time || '', // Ensure empty string if undefined
+            to_time: s.to_time || '',     // Ensure empty string if undefined
+        })) || [],
+      },
+    });
+  }, []);
+
+
   useEffect(() => {
-    if (authLoading) {
-      return;
-    }
+    if (authLoading) return;
     if (!user) {
       router.push('/login');
       return;
@@ -117,37 +148,67 @@ const ProfilePage = () => {
           token: idToken,
         });
         setProfile(fetchedProfileData);
-        setFormData({
-            firstName: fetchedProfileData.firstName || '',
-            lastName: fetchedProfileData.lastName || '',
-            email: fetchedProfileData.email || '', 
-            phone: fetchedProfileData.phone || '', // Changed from phoneNumber
-            skills: arrayFieldToString(fetchedProfileData.skills),
-            qualifications: arrayFieldToString(fetchedProfileData.qualifications),
-            preferences: preferencesObjectToStringForTextarea(fetchedProfileData.preferences),
-            profilePictureUrl: fetchedProfileData.profilePictureUrl || '',
-            availabilityGeneral: fetchedProfileData.availability?.general || '',
-            availabilitySpecificDatesUnavailable: dateArrayToString(fetchedProfileData.availability?.specificDatesUnavailable),
-            availabilitySpecificDatesAvailable: dateArrayToString(fetchedProfileData.availability?.specificDatesAvailable),
-        });
+        initializeFormData(fetchedProfileData); 
         setError(null);
       } catch (err: any) {
         console.error("Failed to fetch profile:", err);
-        const errorMessage = err.message || 
-                             (err.response?.data?.detail) || 
-                             "Failed to fetch profile. Please try again.";
-        setError(errorMessage);
+        setError(err.message || (err.response?.data?.detail) || "Failed to fetch profile.");
       } finally {
         setIsLoading(false);
       }
     };
-
     fetchProfile();
-  }, [user, authLoading, idToken, router]);
+  }, [user, authLoading, idToken, router, initializeFormData]);
 
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
+  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
     const { name, value } = e.target;
     setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleGeneralRuleChange = (index: number, field: keyof GeneralAvailabilityRule, value: string) => {
+    const updatedRules = formData.availability.general_rules.map((rule, i) => 
+      i === index ? { ...rule, [field]: value } : rule
+    );
+    setFormData(prev => ({ ...prev, availability: { ...prev.availability, general_rules: updatedRules }}));
+  };
+
+  const addGeneralRule = () => {
+    setFormData(prev => ({
+      ...prev,
+      availability: {
+        ...prev.availability,
+        general_rules: [...prev.availability.general_rules, { id: Math.random().toString(36).substr(2, 9), weekday: 'Monday', from_time: '09:00', to_time: '17:00' }]
+      }
+    }));
+  };
+
+  const removeGeneralRule = (idToRemove?: string) => {
+    if (!idToRemove) return;
+    const updatedRules = formData.availability.general_rules.filter(rule => rule.id !== idToRemove);
+    setFormData(prev => ({ ...prev, availability: { ...prev.availability, general_rules: updatedRules }}));
+  };
+
+  const handleSpecificSlotChange = (index: number, field: keyof SpecificDateSlot, value: string | boolean) => {
+    const updatedSlots = formData.availability.specific_slots.map((slot, i) =>
+      i === index ? { ...slot, [field]: value } : slot
+    );
+    setFormData(prev => ({ ...prev, availability: { ...prev.availability, specific_slots: updatedSlots }}));
+  };
+
+  const addSpecificSlot = () => {
+    setFormData(prev => ({
+      ...prev,
+      availability: {
+        ...prev.availability,
+        specific_slots: [...prev.availability.specific_slots, { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString().split('T')[0], slot_type: 'unavailable', from_time: '', to_time: '' }]
+      }
+    }));
+  };
+
+  const removeSpecificSlot = (idToRemove?: string) => {
+    if(!idToRemove) return;
+    const updatedSlots = formData.availability.specific_slots.filter(slot => slot.id !== idToRemove);
+    setFormData(prev => ({ ...prev, availability: { ...prev.availability, specific_slots: updatedSlots }}));
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -156,67 +217,56 @@ const ProfilePage = () => {
       setError("Authentication token is missing for update.");
       return;
     }
-    try {
-      setIsLoading(true);
-      setError(null); 
-      
-      const updatePayload: Partial<EditableUserProfile> & { 
-        skills?: string[], 
-        qualifications?: string[], 
-        preferences?: Record<string, any>,
-        availability?: UserAvailability 
-      } = {
-        firstName: formData.firstName,
-        lastName: formData.lastName,
-        phone: formData.phone, // Changed from phoneNumber
-      };
-      
-      if (formData.preferences) {
-        try {
-          const parsedPreferences = JSON.parse(formData.preferences);
-          if (typeof parsedPreferences === 'object' && parsedPreferences !== null) {
-            updatePayload.preferences = parsedPreferences;
-          } else {
-            setError("Preferences must be a valid JSON object.");
-            setIsLoading(false);
-            return;
-          }
-        } catch (parseError) {
-          setError("Preferences field contains invalid JSON. Please correct it or clear it.");
-          setIsLoading(false);
-          return;
+    setIsLoading(true);
+    setError(null); 
+    
+    const availabilityPayload: UserAvailability = {
+        general_rules: formData.availability.general_rules.map(({ id, ...rest }) => rest),
+        specific_slots: formData.availability.specific_slots.map(({ id, ...rest }) => ({
+            ...rest,
+            date: rest.date, // Already YYYY-MM-DD string
+            from_time: rest.from_time || undefined, 
+            to_time: rest.to_time || undefined,     
+        })),
+    };
+
+    const updatePayload: Omit<EditableUserProfile, 'availability'> & { 
+      skills?: string[], 
+      qualifications?: string[], 
+      preferences?: Record<string, any>,
+      availability: UserAvailability 
+    } = {
+      firstName: formData.firstName,
+      lastName: formData.lastName,
+      phone: formData.phone,
+      availability: availabilityPayload, 
+    };
+    
+    if (formData.preferences) {
+      try {
+        const parsedPreferences = JSON.parse(formData.preferences);
+        if (typeof parsedPreferences === 'object' && parsedPreferences !== null) {
+          updatePayload.preferences = parsedPreferences;
+        } else {
+          setError("Preferences must be a valid JSON object.");
+          setIsLoading(false); return;
         }
-      } else {
-        updatePayload.preferences = {}; 
+      } catch (parseError) {
+        setError("Preferences field contains invalid JSON.");
+        setIsLoading(false); return;
       }
+    } else {
+      updatePayload.preferences = {}; 
+    }
 
-      if (typeof formData.skills === 'string') {
-        updatePayload.skills = formData.skills.split('\n').map(s => s.trim()).filter(s => s);
-      }
-      if (typeof formData.qualifications === 'string') {
-        updatePayload.qualifications = formData.qualifications.split('\n').map(q => q.trim()).filter(q => q);
-      }
-      
-      const unavailableDates = stringToDateArray(formData.availabilitySpecificDatesUnavailable);
-      const availableDates = stringToDateArray(formData.availabilitySpecificDatesAvailable);
-
-      if (formData.availabilitySpecificDatesUnavailable && unavailableDates.length !== formData.availabilitySpecificDatesUnavailable.split(',').map(d=>d.trim()).filter(d=>d).length) {
-        setError("Invalid date format in 'Specific Dates Unavailable'. Please use YYYY-MM-DD, comma-separated.");
-        setIsLoading(false);
-        return;
-      }
-      if (formData.availabilitySpecificDatesAvailable && availableDates.length !== formData.availabilitySpecificDatesAvailable.split(',').map(d=>d.trim()).filter(d=>d).length) {
-        setError("Invalid date format in 'Specific Dates Available'. Please use YYYY-MM-DD, comma-separated.");
-        setIsLoading(false);
-        return;
-      }
-      
-      updatePayload.availability = {
-        general: formData.availabilityGeneral || undefined, 
-        specificDatesUnavailable: unavailableDates.length > 0 ? unavailableDates : undefined,
-        specificDatesAvailable: availableDates.length > 0 ? availableDates : undefined,
-      };
-      
+    if (typeof formData.skills === 'string') {
+      updatePayload.skills = formData.skills.split('\n').map(s => s.trim()).filter(s => s);
+    }
+    if (typeof formData.qualifications === 'string') {
+      updatePayload.qualifications = formData.qualifications.split('\n').map(q => q.trim()).filter(q => q);
+    }
+          
+    try {
       const updatedProfileData = await apiClient<UserDataFromBackend>({
         method: 'PUT',
         path: `/users/me`, 
@@ -225,67 +275,34 @@ const ProfilePage = () => {
       });
 
       setProfile(updatedProfileData); 
-      setFormData({
-        firstName: updatedProfileData.firstName || '',
-        lastName: updatedProfileData.lastName || '',
-        email: updatedProfileData.email || '',
-        phone: updatedProfileData.phone || '', // Changed from phoneNumber
-        skills: arrayFieldToString(updatedProfileData.skills), 
-        qualifications: arrayFieldToString(updatedProfileData.qualifications), 
-        preferences: preferencesObjectToStringForTextarea(updatedProfileData.preferences), 
-        profilePictureUrl: updatedProfileData.profilePictureUrl || '',
-        availabilityGeneral: updatedProfileData.availability?.general || '',
-        availabilitySpecificDatesUnavailable: dateArrayToString(updatedProfileData.availability?.specificDatesUnavailable),
-        availabilitySpecificDatesAvailable: dateArrayToString(updatedProfileData.availability?.specificDatesAvailable),
-      });
+      initializeFormData(updatedProfileData); 
       setIsEditing(false);
       alert("Profile updated successfully!");
     } catch (err: any) { 
       console.error("Failed to update profile:", err);
-      const errorMessage = err.message || 
-                           (err.response?.data?.detail) ||
-                           "Failed to update profile. Please try again.";
-      setError(errorMessage);
+      const errorDetail = err.response?.data?.detail;
+      if (Array.isArray(errorDetail)) { 
+        const pydanticError = errorDetail[0];
+        setError(`Validation Error: ${pydanticError.msg} (Field: ${pydanticError.loc?.join(' -> ') || 'unknown'})`);
+      } else {
+        setError(errorDetail || err.message || "Failed to update profile.");
+      }
     } finally {
       setIsLoading(false);
     }
   };
 
-  if (authLoading || (isLoading && !isEditing)) {
-    return (
-      <div className="flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900">
-        <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">Loading profile...</div>
-      </div>
-    );
+  if (authLoading || (isLoading && !isEditing && !profile)) {
+    return <div className="flex justify-center items-center min-h-screen"><p>Loading profile...</p></div>;
   }
-
-  if (error && !isEditing) { 
-    return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-        <div className="bg-red-50 dark:bg-red-800/30 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 px-6 py-4 rounded-lg shadow-md">
-          <h3 className="font-semibold text-lg mb-2">Error Loading Profile</h3>
-          <p>{error}</p>
-        </div>
-        <Link href="/dashboard" className="mt-6 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm">
-            Back to Dashboard
-        </Link>
-      </div>
-    );
+  if (error && !isEditing) {
+    return <div className="p-8 text-center text-red-500">Error: {error}</div>;
   }
-
   if (!profile && !isEditing) {
-    return (
-      <div className="flex flex-col justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
-        <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">Profile data not found.</div>
-        <Link href="/dashboard" className="mt-6 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm">
-            Back to Dashboard
-        </Link>
-      </div>
-    );
+    return <div className="p-8 text-center">Profile data not found.</div>;
   }
-  
-  const displaySkillsText = profile ? arrayFieldToString(profile.skills) : '';
-  const displayQualificationsText = profile ? arrayFieldToString(profile.qualifications) : '';
+
+  const currentProfileData = profile || initialFormData;
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
@@ -298,209 +315,167 @@ const ProfilePage = () => {
 
         <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8">
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
-              Your Profile
-            </h1>
-            {!isEditing && profile && (
-              <button
-                onClick={() => {
-                    setIsEditing(true);
-                    setFormData({ 
-                        firstName: profile.firstName || '',
-                        lastName: profile.lastName || '',
-                        email: profile.email || '',
-                        phone: profile.phone || '', // Changed from phoneNumber
-                        skills: arrayFieldToString(profile.skills),
-                        qualifications: arrayFieldToString(profile.qualifications),
-                        preferences: preferencesObjectToStringForTextarea(profile.preferences),
-                        profilePictureUrl: profile.profilePictureUrl || '',
-                        availabilityGeneral: profile.availability?.general || '',
-                        availabilitySpecificDatesUnavailable: dateArrayToString(profile.availability?.specificDatesUnavailable),
-                        availabilitySpecificDatesAvailable: dateArrayToString(profile.availability?.specificDatesAvailable),
-                    });
-                    setError(null); 
-                }}
-                className="mt-4 sm:mt-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
-              >
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Your Profile</h1>
+            {!isEditing && currentProfileData && (
+              <button onClick={() => { setIsEditing(true); if(profile) initializeFormData(profile); setError(null); }}
+                className="mt-4 sm:mt-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm">
                 Edit Profile
               </button>
             )}
           </div>
 
           {isLoading && isEditing && <p>Loading edit form...</p>}
-          {!isLoading && !isEditing && !profile && <p>Could not load profile data to display.</p>}
           
-          {!isEditing && profile ? (
+          {!isEditing && currentProfileData ? (
             <div className="space-y-6">
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Profile Picture</label>
-                {profile.profilePictureUrl ? (
-                  <img 
-                    src={profile.profilePictureUrl} 
-                    alt="Your profile picture"
-                    className="mt-2 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600" 
-                  />
-                ) : (
-                  <div className="mt-2 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
-                    <span>No Picture</span>
-                  </div>
-                )}
+                {currentProfileData.profilePictureUrl ? <img src={currentProfileData.profilePictureUrl} alt="Profile" className="mt-2 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"/> : <div className="mt-2 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">No Picture</div>}
               </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">First Name</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.firstName}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Last Name</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.lastName}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Email</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.email}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Phone Number</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.phone || 'Not provided'}</p> 
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Skills</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{displaySkillsText || 'Not specified'}</p>
-              </div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Qualifications</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{displayQualificationsText || 'Not specified'}</p>
-              </div>
+              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">First Name</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.firstName}</p></div>
+              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Last Name</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.lastName}</p></div>
+              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Email</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.email}</p></div>
+              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Phone</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.phone || 'N/A'}</p></div>
+              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Skills</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{arrayFieldToString(currentProfileData.skills) || 'N/A'}</p></div>
+              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Qualifications</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{arrayFieldToString(currentProfileData.qualifications) || 'N/A'}</p></div>
               <div>
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Preferences</label>
-                {typeof profile.preferences === 'object' && profile.preferences !== null && Object.keys(profile.preferences).length > 0 ? (
-                  <ul className="mt-1 list-disc list-inside space-y-1">
-                    {Object.entries(profile.preferences).map(([key, value]) => (
-                      <li key={key} className="text-lg text-gray-800 dark:text-gray-200">
-                        <span className="font-semibold capitalize">{key.replace(/([A-Z])/g, ' $1')}:</span> {String(value)}
-                      </li>
-                    ))}
-                  </ul>
-                ) : (
-                  <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">Not specified</p>
-                )}
+                {typeof currentProfileData.preferences === 'object' && currentProfileData.preferences && Object.keys(currentProfileData.preferences).length > 0 ? 
+                  <pre className="mt-1 text-lg bg-gray-50 dark:bg-gray-700 p-2 rounded whitespace-pre-wrap">{JSON.stringify(currentProfileData.preferences, null, 2)}</pre> : <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">N/A</p>}
               </div>
+
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">Availability</h2>
                 <div>
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">General Availability</label>
-                  <p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{profile.availability?.general || 'Not specified'}</p>
-                </div>
-                <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Specific Dates Unavailable</label>
-                  {profile.availability?.specificDatesUnavailable && profile.availability.specificDatesUnavailable.length > 0 ? (
-                    <ul className="mt-1 list-disc list-inside">
-                      {profile.availability.specificDatesUnavailable.map(date => (
-                        <li key={date} className="text-lg text-gray-800 dark:text-gray-200">{format(parseISO(date), 'PPP')}</li>
+                  <h3 className="text-md font-medium text-gray-500 dark:text-gray-400">General Recurring Availability</h3>
+                  {currentProfileData.availability?.general_rules && currentProfileData.availability.general_rules.length > 0 ? (
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      {currentProfileData.availability.general_rules.map((rule, index) => (
+                        <li key={index} className="text-lg text-gray-800 dark:text-gray-200">
+                          Every {rule.weekday} from {rule.from_time} to {rule.to_time}
+                        </li>
                       ))}
                     </ul>
-                  ) : <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">None specified</p>}
+                  ) : <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">Not specified.</p>}
                 </div>
                 <div className="mt-4">
-                  <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Specific Dates Available</label>
-                  {profile.availability?.specificDatesAvailable && profile.availability.specificDatesAvailable.length > 0 ? (
-                    <ul className="mt-1 list-disc list-inside">
-                      {profile.availability.specificDatesAvailable.map(date => (
-                        <li key={date} className="text-lg text-gray-800 dark:text-gray-200">{format(parseISO(date), 'PPP')}</li>
+                  <h3 className="text-md font-medium text-gray-500 dark:text-gray-400">Specific Date Slots</h3>
+                  {currentProfileData.availability?.specific_slots && currentProfileData.availability.specific_slots.length > 0 ? (
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      {currentProfileData.availability.specific_slots.map((slot, index) => (
+                        <li key={index} className={`text-lg ${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                          {slot.date ? format(parseISO(slot.date), 'PPP') : 'Invalid Date'}
+                          {slot.from_time && slot.to_time ? ` from ${slot.from_time} to ${slot.to_time}` : ' (All day)'}
+                          {' '}({slot.slot_type})
+                        </li>
                       ))}
                     </ul>
-                  ) : <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">None specified</p>}
+                  ) : <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">No specific date slots defined.</p>}
                 </div>
               </div>
-
-              {profile.assignedRoleNames && profile.assignedRoleNames.length > 0 && (
+              {currentProfileData.assignedRoleNames && currentProfileData.assignedRoleNames.length > 0 && (
                   <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                       <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Roles</label>
-                      <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.assignedRoleNames.join(', ')}</p>
+                      <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.assignedRoleNames.join(', ')}</p>
                   </div>
               )}
             </div>
-          ) : !isLoading && isEditing && profile ? ( 
+          ) : !isLoading && isEditing && currentProfileData ? ( 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {error && ( 
-                <div className="p-3 bg-red-50 dark:bg-red-800/30 border border-red-300 dark:border-red-600 rounded-md">
-                    <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
-                </div>
-              )}
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
-                {formData.profilePictureUrl ? ( <img src={formData.profilePictureUrl} alt="Your profile picture" className="mt-2 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600" />) 
-                : (<div className="mt-2 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600"><span>No Picture</span></div>)}
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Profile picture upload is not yet available.</p>
-              </div>
-
-              <div>
-                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label>
-                <input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" required />
-              </div>
-              <div>
-                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label>
-                <input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" required />
-              </div>
-              <div>
-                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label>
-                <input type="email" name="email" id="email" value={formData.email} readOnly className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed" />
-              </div>
-              <div>
-                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number</label> 
-                <input
-                  type="tel"
-                  name="phone" // Changed from phoneNumber
-                  id="phone"   // Changed from phoneNumber
-                  value={formData.phone || ''} // Changed from phoneNumber
-                  onChange={handleInputChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
-                />
-              </div>
-              <div>
-                <label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label>
-                <textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={4} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
-              </div>
-              <div>
-                <label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label>
-                <textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={4} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
-              </div>
-              <div>
-                <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences (JSON format)</label>
-                <textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} placeholder='e.g., {"communication": "email", "theme": "dark"}' className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
-              </div>
-
+              {error && <div className="p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
+              
+              <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className="mt-1 input-class" required /></div>
+              <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className="mt-1 input-class" required /></div>
+              <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className="mt-1 input-class-disabled" /></div>
+              <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className="mt-1 input-class" /></div>
+              <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className="mt-1 input-class" /></div>
+              <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className="mt-1 input-class" /></div>
+              <div><label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences (JSON)</label><textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className="mt-1 input-class" /></div>
+              
               <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">Edit Availability</h2>
-                <div>
-                  <label htmlFor="availabilityGeneral" className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Availability</label>
-                  <textarea name="availabilityGeneral" id="availabilityGeneral" value={formData.availabilityGeneral || ''} onChange={handleInputChange} rows={3} placeholder="e.g., Weekends, Monday evenings after 6 PM" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Edit Availability</h2>
+                
+                <div className="space-y-3 mb-6">
+                  <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">General Recurring Availability</h3>
+                  {formData.availability.general_rules.map((rule, index) => (
+                    <div key={rule.id || index} className="p-3 border dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div>
+                          <label htmlFor={`ga_weekday_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Weekday</label>
+                          <select name={`ga_weekday_${index}`} value={rule.weekday} onChange={(e) => handleGeneralRuleChange(index, 'weekday', e.target.value as Weekday)} className="input-class text-sm w-full">
+                            {weekdays.map(day => <option key={day} value={day}>{day}</option>)}
+                          </select>
+                        </div>
+                        <div>
+                          <label htmlFor={`ga_from_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">From Time</label>
+                          <input type="time" name={`ga_from_${index}`} value={rule.from_time} onChange={(e) => handleGeneralRuleChange(index, 'from_time', e.target.value)} className="input-class text-sm w-full" />
+                        </div>
+                        <div>
+                          <label htmlFor={`ga_to_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">To Time</label>
+                          <input type="time" name={`ga_to_${index}`} value={rule.to_time} onChange={(e) => handleGeneralRuleChange(index, 'to_time', e.target.value)} className="input-class text-sm w-full" />
+                        </div>
+                      </div>
+                      <button type="button" onClick={() => removeGeneralRule(rule.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
+                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                      </button>
+                    </div>
+                  ))}
+                  <button type="button" onClick={addGeneralRule} className="text-sm px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">
+                    + Add General Rule
+                  </button>
                 </div>
-                <div className="mt-4">
-                  <label htmlFor="availabilitySpecificDatesUnavailable" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Specific Dates Unavailable (YYYY-MM-DD, comma-separated)</label>
-                  <textarea name="availabilitySpecificDatesUnavailable" id="availabilitySpecificDatesUnavailable" value={formData.availabilitySpecificDatesUnavailable || ''} onChange={handleInputChange} rows={2} placeholder="e.g., 2024-08-15, 2024-09-01" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
-                </div>
-                <div className="mt-4">
-                  <label htmlFor="availabilitySpecificDatesAvailable" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Specific Dates Available (YYYY-MM-DD, comma-separated)</label>
-                  <textarea name="availabilitySpecificDatesAvailable" id="availabilitySpecificDatesAvailable" value={formData.availabilitySpecificDatesAvailable || ''} onChange={handleInputChange} rows={2} placeholder="e.g., 2024-07-20, 2024-07-21" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
+                
+                <div className="space-y-3">
+                   <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Specific Date Slots</h3>
+                   {formData.availability.specific_slots.map((slot, index) => (
+                     <div key={slot.id || index} className="p-3 border dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30">
+                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                         <div>
+                           <label htmlFor={`sd_date_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Date</label>
+                           <input type="date" name={`sd_date_${index}`} value={slot.date} onChange={(e) => handleSpecificSlotChange(index, 'date', e.target.value)} className="input-class text-sm w-full" />
+                         </div>
+                         <div>
+                           <label htmlFor={`sd_from_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">From (Optional)</label>
+                           <input type="time" name={`sd_from_${index}`} value={slot.from_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'from_time', e.target.value)} className="input-class text-sm w-full" />
+                         </div>
+                         <div>
+                           <label htmlFor={`sd_to_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">To (Optional)</label>
+                           <input type="time" name={`sd_to_${index}`} value={slot.to_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'to_time', e.target.value)} className="input-class text-sm w-full" />
+                         </div>
+                         <div>
+                            <label htmlFor={`sd_type_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Type</label>
+                            <select name={`sd_type_${index}`} value={slot.slot_type} onChange={(e) => handleSpecificSlotChange(index, 'slot_type', e.target.value as SlotType)} className="input-class text-sm w-full">
+                                {slotTypes.map(type => <option key={type} value={type} className="capitalize">{type.charAt(0).toUpperCase() + type.slice(1)}</option>)}
+                            </select>
+                         </div>
+                       </div>
+                       <button type="button" onClick={() => removeSpecificSlot(slot.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
+                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                       </button>
+                     </div>
+                   ))}
+                   <button type="button" onClick={addSpecificSlot} className="text-sm px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">
+                     + Add Specific Date Slot
+                   </button>
                 </div>
               </div>
 
               <div className="flex items-center justify-end space-x-3 pt-4">
-                <button type="button" onClick={() => { setIsEditing(false); if (profile) { setFormData({ firstName: profile.firstName || '', lastName: profile.lastName || '', email: profile.email || '', phone: profile.phone || '', skills: arrayFieldToString(profile.skills), qualifications: arrayFieldToString(profile.qualifications), preferences: preferencesObjectToStringForTextarea(profile.preferences), profilePictureUrl: profile.profilePictureUrl || '', availabilityGeneral: profile.availability?.general || '', availabilitySpecificDatesUnavailable: dateArrayToString(profile.availability?.specificDatesUnavailable), availabilitySpecificDatesAvailable: dateArrayToString(profile.availability?.specificDatesAvailable), });} setError(null); }} className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium border border-gray-300 dark:border-gray-500 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
-                  Cancel
-                </button>
-                <button type="submit" disabled={isLoading} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 disabled:opacity-50">
+                <button type="button" onClick={() => { setIsEditing(false); if (profile) initializeFormData(profile); setError(null); }} className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium border border-gray-300 dark:border-gray-500 rounded-md shadow-sm">Cancel</button>
+                <button type="submit" disabled={isLoading} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50">
                   {isLoading ? 'Saving...' : 'Save Changes'}
                 </button>
               </div>
             </form>
-          ) : (
-             (!isLoading && !profile && isEditing) && <p>Could not load profile data to edit.</p>
-          )}
+          ) : null}
         </div>
       </div>
     </div>
   );
 };
+
+// Basic styling for inputs (can be moved to globals.css or a utility)
+const inputClass = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
+const inputClassDisabled = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed";
 
 export default ProfilePage;

@@ -1,9 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List, Optional, Any, Dict
 from firebase_admin import firestore, auth
-import datetime # Required for date conversion if needed, though Pydantic handles it
+import datetime 
 
-from models.user import UserCreate, UserResponse, UserUpdate, UserListResponse, UserSearchResponseItem, UserAvailability
+from models.user import UserCreate, UserResponse, UserUpdate, UserListResponse, UserSearchResponseItem, UserAvailability, GeneralAvailabilityRule, SpecificDateSlot
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
 
@@ -13,7 +13,7 @@ router = APIRouter(
 )
 
 USERS_COLLECTION = "users"
-ROLES_COLLECTION = "roles" # For fetching role names
+ROLES_COLLECTION = "roles"
 
 def _sanitize_user_data_fields(user_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -30,31 +30,31 @@ def _sanitize_user_data_fields(user_data: Dict[str, Any]) -> Dict[str, Any]:
     if not isinstance(user_data.get("assignedRoleIds"), list):
         user_data["assignedRoleIds"] = []
     
-    # Sanitize availability field
+    # Sanitize new availability structure
     availability_data = user_data.get("availability")
-    if availability_data is not None and not isinstance(availability_data, dict):
-        # If it exists but is not a dict, reset to a default empty dict structure
-        # or handle as an error. For now, reset to allow Pydantic to validate later.
-        user_data["availability"] = UserAvailability().model_dump() 
+    if availability_data is None:
+        # If availability is not present at all, initialize with empty lists
+        user_data["availability"] = UserAvailability(general_rules=[], specific_slots=[]).model_dump()
     elif isinstance(availability_data, dict):
-        # Ensure nested fields are of correct type if necessary, though Pydantic handles this on model creation.
-        # For example, specificDatesUnavailable and specificDatesAvailable should be lists.
-        if "specificDatesUnavailable" in availability_data and not isinstance(availability_data["specificDatesUnavailable"], list):
-            availability_data["specificDatesUnavailable"] = []
-        if "specificDatesAvailable" in availability_data and not isinstance(availability_data["specificDatesAvailable"], list):
-            availability_data["specificDatesAvailable"] = []
+        # Ensure general_rules is a list, default to empty if not or malformed
+        if not isinstance(availability_data.get("general_rules"), list):
+            availability_data["general_rules"] = []
+        # Ensure specific_slots is a list, default to empty if not or malformed
+        if not isinstance(availability_data.get("specific_slots"), list):
+            availability_data["specific_slots"] = []
+    else:
+        # If availability exists but is not a dict (e.g., old string format), reset it
+        user_data["availability"] = UserAvailability(general_rules=[], specific_slots=[]).model_dump()
             
     return user_data
 
 async def _get_role_names(db: firestore.AsyncClient, role_ids: List[str]) -> List[str]:
     role_names = []
-    if not isinstance(role_ids, list): # Defensive check
+    if not isinstance(role_ids, list): 
         return role_names
     for role_id in role_ids:
         role_doc = await db.collection(ROLES_COLLECTION).document(role_id).get()
         if role_doc.exists:
-            # Assuming role document has a 'name' or 'roleName' field.
-            # Based on RoleBase, it's 'roleName'.
             role_data = role_doc.to_dict()
             role_names.append(role_data.get("roleName", role_id)) 
         else:
@@ -69,7 +69,6 @@ async def list_users(
 ):
     try:
         users_ref = db.collection(USERS_COLLECTION)
-        # Consider adding more sophisticated sorting/filtering if needed
         query = users_ref.order_by("lastName").order_by("firstName").limit(limit).offset(offset)
         docs_snapshot = query.stream()
         
@@ -94,17 +93,13 @@ async def search_users(
     q: str = Query(..., min_length=2, description="Search term for first name, last name, or email."),
     db: firestore.AsyncClient = Depends(get_db)
 ):
-    if not q or len(q) < 2: # Already handled by Query min_length, but good for explicit check
+    if not q or len(q) < 2: 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Search query must be at least 2 characters long.")
 
     search_term_lower = q.lower()
     users_list = []
 
     try:
-        # Firestore does not support case-insensitive search or OR queries on different fields directly.
-        # This requires fetching all users and filtering in Python, which is not scalable for large datasets.
-        # For production, consider a dedicated search service like Algolia or Elasticsearch,
-        # or structure data to support specific queries (e.g., store lowercase fields).
         all_users_snapshot = await db.collection(USERS_COLLECTION).get()
 
         for doc in all_users_snapshot:
@@ -122,10 +117,10 @@ async def search_users(
                     id=user_data['id'],
                     firstName=user_data.get("firstName"),
                     lastName=user_data.get("lastName"),
-                    email=user_data.get("email") # Ensure email is present
+                    email=user_data.get("email") 
                 ))
             
-            if len(users_list) >= 20: # Limit results for performance
+            if len(users_list) >= 20: 
                 break
         
         return users_list
@@ -160,8 +155,6 @@ async def update_users_me(
 ):
     user_ref = db.collection(USERS_COLLECTION).document(current_rbac_user.uid)
     
-    # User cannot update their own roles or status via this endpoint.
-    # Email is also not updatable here (managed by Firebase Auth).
     update_dict = user_update_data.model_dump(exclude_unset=True, exclude={"assignedRoleIds", "status", "email"}) 
     
     if not update_dict:
@@ -204,7 +197,6 @@ async def update_user_by_admin(
     user_id: str,
     user_update_data: UserUpdate, 
     db: firestore.AsyncClient = Depends(get_db),
-    # current_rbac_user: RBACUser = Depends(get_current_user_with_rbac) # Not strictly needed if permission covers admin action
 ):
     user_ref = db.collection(USERS_COLLECTION).document(user_id)
     user_doc = await user_ref.get()
@@ -213,10 +205,7 @@ async def update_user_by_admin(
 
     update_dict = user_update_data.model_dump(exclude_unset=True)
     
-    # Prevent admin from changing email via this endpoint if it's part of the payload.
-    # Email should be managed via Firebase Auth and synced.
     if "email" in update_dict and update_dict["email"] != user_doc.to_dict().get("email"):
-        # Log this attempt or simply remove it from update_dict
         print(f"Attempt to change email for user {user_id} by admin was ignored.")
         del update_dict["email"] 
 

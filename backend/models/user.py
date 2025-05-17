@@ -1,12 +1,59 @@
-from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List, Dict, Any 
-from datetime import datetime, date # date is still used by frontend for parsing, but backend will store str
+from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
+from typing import Optional, List, Dict, Any, Literal
+from datetime import datetime, date, time # Import time
+import re # For regex validation
+
+# Regex for HH:MM time format
+TIME_REGEX = r"^([01]\d|2[0-3]):([0-5]\d)$"
+
+class GeneralAvailabilityRule(BaseModel):
+    weekday: Literal["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"]
+    from_time: str = Field(..., pattern=TIME_REGEX, description="Start time in HH:MM format.")
+    to_time: str = Field(..., pattern=TIME_REGEX, description="End time in HH:MM format.")
+
+    @model_validator(mode='after')
+    def check_times(cls, values):
+        from_time_str, to_time_str = values.from_time, values.to_time
+        if from_time_str and to_time_str:
+            try:
+                t_from = time.fromisoformat(from_time_str)
+                t_to = time.fromisoformat(to_time_str)
+                if t_to <= t_from:
+                    raise ValueError("to_time must be after from_time for general availability rules.")
+            except ValueError as e: # Catches time.fromisoformat errors for invalid formats not caught by regex
+                raise ValueError(f"Invalid time format: {e}")
+        return values
+    
+    model_config = ConfigDict(from_attributes=True)
+
+class SpecificDateSlot(BaseModel):
+    date: date # Pydantic will convert "YYYY-MM-DD" string to date object
+    from_time: Optional[str] = Field(None, pattern=TIME_REGEX, description="Start time in HH:MM format (optional).")
+    to_time: Optional[str] = Field(None, pattern=TIME_REGEX, description="End time in HH:MM format (optional).")
+    slot_type: Literal["available", "unavailable"] = Field(..., description="Whether the slot is for availability or unavailability.")
+
+    @model_validator(mode='after')
+    def check_time_consistency(cls, values):
+        from_time_str, to_time_str = values.from_time, values.to_time
+        if (from_time_str and not to_time_str) or (not from_time_str and to_time_str):
+            raise ValueError("Both from_time and to_time must be provided if one is specified for specific date slots.")
+        if from_time_str and to_time_str:
+            try:
+                t_from = time.fromisoformat(from_time_str)
+                t_to = time.fromisoformat(to_time_str)
+                if t_to <= t_from:
+                    raise ValueError("to_time must be after from_time for specific date slots.")
+            except ValueError as e:
+                raise ValueError(f"Invalid time format: {e}")
+        return values
+
+    model_config = ConfigDict(from_attributes=True)
 
 class UserAvailability(BaseModel):
-    general: Optional[str] = Field(None, description="General availability description (e.g., 'Weekends', 'Mon-Fri evenings').")
-    # Store dates as ISO 8601 date strings (YYYY-MM-DD)
-    specificDatesUnavailable: Optional[List[str]] = Field(default_factory=list, description="Specific dates (YYYY-MM-DD) the user is unavailable.")
-    specificDatesAvailable: Optional[List[str]] = Field(default_factory=list, description="Specific dates (YYYY-MM-DD) the user is available.")
+    # general field is removed, replaced by general_rules
+    general_rules: List[GeneralAvailabilityRule] = Field(default_factory=list, description="List of general recurring availability rules.")
+    # specificDatesUnavailable and specificDatesAvailable are removed, replaced by specific_slots
+    specific_slots: List[SpecificDateSlot] = Field(default_factory=list, description="List of specific date slots for availability/unavailability.")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -19,9 +66,9 @@ class UserBase(BaseModel):
     qualifications: Optional[List[str]] = Field(default_factory=list, description="List of user's qualifications.")
     preferences: Optional[Dict[str, Any]] = Field(default_factory=dict, description="User's preferences (e.g., communication preferences).")
     profilePictureUrl: Optional[str] = Field(None, description="URL of the user's profile picture.")
-    availability: Optional[UserAvailability] = Field(None, description="User's availability information.")
+    availability: Optional[UserAvailability] = Field(default_factory=UserAvailability, description="User's structured availability information.")
+    
     # model_config = ConfigDict(arbitrary_types_allowed=True) # If needed for preferences
-
 
 class UserCreate(UserBase):
     pass
@@ -34,14 +81,13 @@ class UserUpdate(BaseModel):
     qualifications: Optional[List[str]] = None
     preferences: Optional[Dict[str, Any]] = None 
     profilePictureUrl: Optional[str] = None
-    availability: Optional[UserAvailability] = None # This will now expect strings for dates
+    availability: Optional[UserAvailability] = None 
     
     assignedRoleIds: Optional[List[str]] = None
     status: Optional[str] = None
     
     model_config = ConfigDict(extra='forbid')
     # model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True) # If needed for preferences
-
 
 class UserInDBBase(UserBase):
     id: str = Field(..., description="User's unique ID (matches Firebase Auth UID).")
@@ -68,7 +114,6 @@ class UserListResponse(BaseModel):
     createdAt: datetime
     profilePictureUrl: Optional[str] = None
     model_config = ConfigDict(from_attributes=True)
-
 
 class UserSearchResponseItem(BaseModel):
     id: str
