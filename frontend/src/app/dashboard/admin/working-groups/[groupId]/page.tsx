@@ -63,18 +63,16 @@ export default function WorkingGroupDetailPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null); 
-  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null); 
   const [actionInProgress, setActionInProgress] = useState(false); 
-  const [isDeleting, setIsDeleting] = useState(false); 
   
   const [selectedUserToAssign, setSelectedUserToAssign] = useState<UserSearchResult | null>(null);
 
 
   const canView = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'view') : userProfile.assignedRoleIds?.includes('sysadmin'));
+  const canEdit = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'manage_assignments') : userProfile.assignedRoleIds?.includes('sysadmin'));
-  const canDelete = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'delete') : userProfile.assignedRoleIds?.includes('sysadmin'));
-
+  // Removed canDelete as it's moving to the edit page
 
   const fetchWorkingGroupDetails = useCallback(async () => {
     if (!user || !groupId || !canView) {
@@ -82,7 +80,7 @@ export default function WorkingGroupDetailPage() {
         setIsLoading(false);
         return;
     }
-    setIsLoading(true); setError(null); setDeleteError(null);
+    setIsLoading(true); setError(null);
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -161,35 +159,7 @@ export default function WorkingGroupDetailPage() {
     finally { setActionInProgress(false); }
   };
 
-  const handleDeleteWorkingGroup = async () => {
-    if (!user || !groupId || !canDelete || !workingGroup) {
-        setDeleteError("Cannot delete: Insufficient permissions or group data missing.");
-        return;
-    }
-    if (!confirm(`Are you sure you want to delete the working group "${workingGroup.groupName}"? This action cannot be undone.`)) return;
-
-    setIsDeleting(true);
-    setDeleteError(null);
-    try {
-        const token = await user.getIdToken();
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-        const response = await fetch(`${backendUrl}/working-groups/${groupId}`, {
-            method: 'DELETE',
-            headers: { 'Authorization': `Bearer ${token}` },
-        });
-        if (!response.ok && response.status !== 204) {
-            const errorData = await response.json().catch(() => ({ detail: 'Failed to delete working group' }));
-            throw new Error(errorData.detail || 'Failed to delete working group');
-        }
-        router.push('/dashboard/admin/working-groups');
-    } catch (err: any) {
-        setDeleteError(err.message);
-        console.error("Delete working group error:", err);
-    } finally {
-        setIsDeleting(false);
-    }
-  };
-
+  // handleDeleteWorkingGroup function removed from here
 
   if (authLoading || (isLoading && !workingGroup)) {
     return (
@@ -260,12 +230,19 @@ export default function WorkingGroupDetailPage() {
         </div>
 
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8">
-          <div className="flex items-center justify-between mb-4">
-            <div className="flex items-center">
+          <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 pb-4 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex items-center mb-3 sm:mb-0">
                 <span className="material-icons text-3xl text-indigo-600 dark:text-indigo-400 mr-3">workspaces</span>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{workingGroup.groupName}</h1>
             </div>
-            {/* TODO: Add Edit button here if permissions allow */}
+            {canEdit && (
+                <Link href={`/dashboard/admin/working-groups/${groupId}/edit`} className="shrink-0">
+                    <button className="inline-flex items-center py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-md shadow-sm">
+                        <span className="material-icons mr-2 text-base">edit</span>
+                        Edit Group
+                    </button>
+                </Link>
+            )}
           </div>
 
           <div className="mb-6">
@@ -366,28 +343,7 @@ export default function WorkingGroupDetailPage() {
               }
             </div>
           )}
-
-          {deleteError && 
-            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert">
-              <span className="material-icons text-lg mr-2">error_outline</span>
-              {deleteError}
-            </div>
-          }
-
-          {canDelete && (
-            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                 <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Danger Zone</h3>
-                <button
-                    onClick={handleDeleteWorkingGroup}
-                    disabled={isDeleting}
-                    className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md shadow-sm inline-flex items-center disabled:opacity-50"
-                >
-                    <span className="material-icons text-lg mr-2">delete_forever</span>
-                    {isDeleting ? 'Deleting...' : 'Delete This Working Group'}
-                </button>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">This action is permanent and cannot be undone.</p>
-            </div>
-          )}
+          {/* Danger Zone section removed from here */}
         </div>
       </main>
   );

@@ -37,7 +37,7 @@ interface UserProfileData {
   firstName: string;
   lastName: string;
   phone?: string | null; 
-  emergencyContactDetails?: string | null; // New field
+  emergencyContactDetails?: string | null;
   skills?: string[] | null; 
   qualifications?: string[] | null; 
   preferences?: string | null; 
@@ -56,6 +56,49 @@ const useAdminAuthCheck = () => {
   const canAccessPage = user && idToken && isAdmin;
   return { user, idToken, userProfile, canAccessPage, authLoading, authError };
 };
+
+// Refactored ProfileField to be similar to DetailItem
+const ProfileField = ({ 
+  icon, 
+  label, 
+  value, 
+  isPreformatted = false,
+  valueClassName 
+}: { 
+  icon: string; 
+  label: string; 
+  value: React.ReactNode; 
+  isPreformatted?: boolean;
+  valueClassName?: string;
+}) => {
+  if (!value && typeof value !== 'number' && typeof value !== 'boolean') return null; // Don't render if value is empty, null, or undefined (except for 0 or false)
+  
+  let displayValue = value;
+  if (Array.isArray(value)) {
+    displayValue = value.length > 0 ? value.join(', ') : 'N/A';
+  } else if (value === null || value === undefined || value === '') {
+    displayValue = 'N/A';
+  }
+
+  return (
+    <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+      <span className="material-icons text-indigo-600 dark:text-indigo-400 mt-1 text-lg">{icon}</span>
+      <div className="flex-1 min-w-0"> {/* Added min-w-0 for proper truncation/wrapping of content */}
+        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
+        {isPreformatted ? (
+          <pre className={`mt-1 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words w-full ${valueClassName || ''}`}>
+            {displayValue}
+          </pre>
+        ) : (
+          <p className={`mt-1 text-sm text-gray-700 dark:text-gray-300 break-words ${valueClassName || ''}`}>
+            {displayValue}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+};
+
 
 const AdminViewUserProfilePage = () => {
   const { idToken, canAccessPage, authLoading, authError } = useAdminAuthCheck();
@@ -118,149 +161,212 @@ const AdminViewUserProfilePage = () => {
   const formatDate = (dateString: string) => {
     if (!dateString) return 'N/A';
     try {
-      return new Date(dateString).toLocaleString();
+      return format(parseISO(dateString), 'PPP p');
     } catch (e) {
       return dateString; 
     }
   };
 
-  const ProfileField = ({ label, value, isPreformatted = false }: { label: string; value: string | undefined | null | string[]; isPreformatted?: boolean }) => {
-    let displayValue: string;
-    if (Array.isArray(value)) {
-      displayValue = value.join(', ');
-    } else {
-      displayValue = value || 'N/A';
-    }
-    
-    const usePre = isPreformatted || (typeof value === 'string' && (value.includes('\n') || value.length > 60 || label === "Preferences" || label === "Emergency Contact Details"));
-
-
+  if (authLoading || isLoading) {
     return (
-      <div className="mb-4 last:mb-0">
-        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
-        {usePre ? (
-          <pre className="mt-1 block w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
-            {displayValue}
-          </pre>
-        ) : (
-          <p className="mt-1 text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">
-            {displayValue}
-          </p>
-        )}
+      <div className="flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-800">
+        <div className="text-center p-6">
+          <svg className="animate-spin h-10 w-10 text-indigo-600 dark:text-indigo-400 mx-auto mb-4" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+            <circle className="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle>
+            <path className="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+          </svg>
+          <p className="text-lg font-medium text-gray-700 dark:text-gray-300">Loading user profile...</p>
+        </div>
       </div>
     );
-  };
-
-  if (authLoading || isLoading) {
-    return <div className="flex justify-center items-center h-screen"><p className="text-lg">Loading user profile...</p></div>;
   }
+
   if (error) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl text-center">
-        <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200">View User Profile</h1>
-        <p className="text-red-500 text-lg">{error}</p>
-        <Link href="/dashboard/admin/users" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-6 inline-block">
-          ← Back to User List
-        </Link>
-      </div>
+      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        <div className="mb-6">
+            <Link href="/dashboard/admin/users" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                <span className="material-icons mr-1 text-lg">arrow_back</span>
+                Back to User List
+            </Link>
+        </div>
+        <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8 text-center">
+          <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">View User Profile</h1>
+          <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-md mb-6">
+            <p className="text-red-600 dark:text-red-400 text-sm">{error}</p>
+          </div>
+        </div>
+      </main>
     );
   }
+
   if (!viewedUserProfile) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl text-center">
-        <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200">View User Profile</h1>
-        <p className="text-gray-600 dark:text-gray-400">User profile not found.</p>
-        <Link href="/dashboard/admin/users" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-6 inline-block">
-          ← Back to User List
-        </Link>
-      </div>
+      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+         <div className="mb-6">
+            <Link href="/dashboard/admin/users" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                <span className="material-icons mr-1 text-lg">arrow_back</span>
+                Back to User List
+            </Link>
+        </div>
+        <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8 text-center">
+          <h1 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-4">View User Profile</h1>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">User profile not found.</p>
+        </div>
+      </main>
     );
   }
   
-  const displaySkills = viewedUserProfile.skills && Array.isArray(viewedUserProfile.skills) ? viewedUserProfile.skills.join(', ') : 'N/A';
-  const displayQualifications = viewedUserProfile.qualifications && Array.isArray(viewedUserProfile.qualifications) ? viewedUserProfile.qualifications.join(', ') : 'N/A';
-  const userPhone = viewedUserProfile.phone;
+  const { firstName, lastName, email, status, phone, emergencyContactDetails, skills, qualifications, preferences, availability, assignedRoleNames, assignedRoleIds, uid, createdAt, updatedAt, profilePictureUrl } = viewedUserProfile;
+
+  const statusColors: { [key: string]: string } = {
+    active: 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100',
+    pending: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100',
+    inactive: 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100',
+    suspended: 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100',
+  };
+  const statusDisplay = status?.replace(/_/g, ' ') || 'N/A';
+
 
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-3xl">
-      <div className="flex justify-between items-center mb-2">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-200">
-          User Profile: {viewedUserProfile.firstName} {viewedUserProfile.lastName}
-        </h1>
-      </div>
+    <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <Link href="/dashboard/admin/users" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
-          ← Back to User List
+        <Link 
+          href="/dashboard/admin/users" 
+          className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 group"
+        >
+          <span className="material-icons text-lg mr-1 group-hover:text-indigo-500 dark:group-hover:text-indigo-300">arrow_back_ios</span>
+          Back to User List
         </Link>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Basic Information</h2>
-        <div className="mb-4">
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
-          {viewedUserProfile.profilePictureUrl ? (
-            <img src={viewedUserProfile.profilePictureUrl} alt={`${viewedUserProfile.firstName} ${viewedUserProfile.lastName}'s profile picture`}
-              className="mt-1 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600" />
-          ) : (
-            <div className="mt-1 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
-              <span>No Picture</span>
+      <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg overflow-hidden">
+        <div className="p-6 sm:p-8">
+          {/* Header Section */}
+          <div className="flex flex-col sm:flex-row items-start sm:space-x-6 mb-6 pb-6 border-b border-gray-200 dark:border-gray-700">
+            <div className="flex-shrink-0 mb-4 sm:mb-0">
+              {profilePictureUrl ? (
+                <img 
+                  src={profilePictureUrl} 
+                  alt={`${firstName} ${lastName}'s profile`}
+                  className="w-24 h-24 rounded-full object-cover border-4 border-gray-200 dark:border-gray-700 shadow-md" 
+                />
+              ) : (
+                <div className="w-24 h-24 rounded-full bg-gray-100 dark:bg-gray-800 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-dashed border-gray-300 dark:border-gray-600">
+                  <span className="material-icons text-5xl">person_outline</span>
+                </div>
+              )}
+            </div>
+            <div className="flex-grow">
+              <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{firstName} {lastName}</h1>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">{email}</p>
+              <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+                Status: <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[status?.toLowerCase()] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'}`}>{statusDisplay}</span>
+              </p>
+              <p className="text-xs text-gray-400 dark:text-gray-500 mt-2">Last updated: {formatDate(updatedAt)}</p>
+            </div>
+            {/* TODO: Add Edit User button if permissions allow, styled like event edit button */}
+          </div>
+
+          {/* Contact Information Section */}
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Contact Information</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
+            <ProfileField icon="phone" label="Phone Number" value={phone} />
+            {/* Email is in header, Status is in header */}
+          </div>
+          
+          {emergencyContactDetails && (
+            <div className="mb-8 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2 inline-flex items-center">
+                <span className="material-icons mr-2 text-indigo-500 dark:text-indigo-400">contact_emergency</span>
+                Emergency Contact Details
+              </h3>
+              <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">{emergencyContactDetails}</pre>
             </div>
           )}
-        </div>
-        <ProfileField label="Full Name" value={`${viewedUserProfile.firstName} ${viewedUserProfile.lastName}`} />
-        <ProfileField label="Email" value={viewedUserProfile.email} />
-        <ProfileField label="Phone Number" value={userPhone} />
-        <ProfileField label="Emergency Contact Details" value={viewedUserProfile.emergencyContactDetails} isPreformatted={true} /> 
-        <ProfileField label="Status" value={viewedUserProfile.status} />
-      </div>
 
-      <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Professional Details & Availability</h2>
-        {viewedUserProfile.skills && viewedUserProfile.skills.length > 0 && <ProfileField label="Skills" value={displaySkills} />}
-        {viewedUserProfile.qualifications && viewedUserProfile.qualifications.length > 0 && <ProfileField label="Qualifications" value={displayQualifications} />}
-        
-        <ProfileField label="Preferences" value={viewedUserProfile.preferences} isPreformatted={true} />
+          {/* Professional Details Section */}
+          {(skills && skills.length > 0) || (qualifications && qualifications.length > 0) || preferences ? (
+            <>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">Professional Details</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
+                <ProfileField icon="construction" label="Skills" value={skills} />
+                <ProfileField icon="school" label="Qualifications" value={qualifications} />
+              </div>
+              {preferences && (
+                <div className="mb-8 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                  <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2 inline-flex items-center">
+                    <span className="material-icons mr-2 text-indigo-500 dark:text-indigo-400">tune</span>
+                    Preferences
+                  </h3>
+                  <pre className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">{preferences}</pre>
+                </div>
+              )}
+            </>
+          ) : null}
+          
+          {/* Availability Section */}
+          {availability && (availability.general_rules?.length > 0 || availability.specific_slots?.length > 0) && (
+            <>
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">Availability</h2>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-6 mb-8">
+                {availability.general_rules && availability.general_rules.length > 0 && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                    <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-3 inline-flex items-center">
+                      <span className="material-icons mr-2 text-indigo-500 dark:text-indigo-400">event_repeat</span>
+                      General Recurring
+                    </h3>
+                    <ul className="space-y-2 text-sm text-gray-700 dark:text-gray-300">
+                      {availability.general_rules.map((rule, index) => (
+                        <li key={index} className="flex items-center">
+                          <span className="material-icons text-base mr-2 text-gray-500 dark:text-gray-400">schedule</span>
+                          Every {rule.weekday} from {rule.from_time} to {rule.to_time}
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+                {availability.specific_slots && availability.specific_slots.length > 0 && (
+                  <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                    <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-3 inline-flex items-center">
+                      <span className="material-icons mr-2 text-indigo-500 dark:text-indigo-400">date_range</span>
+                      Specific Dates
+                    </h3>
+                    <ul className="space-y-2 text-sm">
+                      {availability.specific_slots.map((slot, index) => (
+                        <li key={index} className={`flex items-center ${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                          <span className={`material-icons text-base mr-2 ${slot.slot_type === 'unavailable' ? 'text-red-500' : 'text-green-500'}`}>
+                            {slot.slot_type === 'unavailable' ? 'event_busy' : 'event_available'}
+                          </span>
+                          {slot.date ? format(parseISO(slot.date), 'PPP') : 'Invalid Date'}
+                          {slot.from_time && slot.to_time ? ` from ${slot.from_time} to ${slot.to_time}` : ' (All day)'}
+                          {' '}({slot.slot_type})
+                        </li>
+                      ))}
+                    </ul>
+                  </div>
+                )}
+              </div>
+            </>
+          )}
 
-        <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
-          <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Availability</h3>
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Recurring Availability</label>
-            {viewedUserProfile.availability?.general_rules && viewedUserProfile.availability.general_rules.length > 0 ? (
-              <ul className="mt-1 list-disc list-inside pl-5 space-y-1 text-sm text-gray-900 dark:text-gray-100">
-                {viewedUserProfile.availability.general_rules.map((rule, index) => (
-                  <li key={index}>Every {rule.weekday} from {rule.from_time} to {rule.to_time}</li>
-                ))}
-              </ul>
-            ) : <p className="mt-1 text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">Not specified.</p>}
+          {/* Account & System Information Section */}
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">Account & System</h2>
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+            <ProfileField 
+                icon="admin_panel_settings" 
+                label="Assigned Roles" 
+                value={(assignedRoleNames && assignedRoleNames.length > 0 
+                       ? assignedRoleNames 
+                       : (assignedRoleIds.length > 0 ? assignedRoleIds : ['No roles assigned']))} 
+            />
+            <ProfileField icon="fingerprint" label="User ID (Firebase UID)" value={uid} />
+            <ProfileField icon="history_toggle_off" label="Profile Created" value={formatDate(createdAt)} />
+            {/* Last updated is in header */}
           </div>
-          <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Specific Date Slots</label>
-            {viewedUserProfile.availability?.specific_slots && viewedUserProfile.availability.specific_slots.length > 0 ? (
-              <ul className="mt-1 list-disc list-inside pl-5 space-y-1 text-sm text-gray-900 dark:text-gray-100">
-                {viewedUserProfile.availability.specific_slots.map((slot, index) => (
-                  <li key={index} className={`${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                    {slot.date ? format(parseISO(slot.date), 'PPP') : 'Invalid Date'}
-                    {slot.from_time && slot.to_time ? ` from ${slot.from_time} to ${slot.to_time}` : ' (All day)'}
-                    {' '}({slot.slot_type})
-                  </li>
-                ))}
-              </ul>
-            ) : <p className="mt-1 text-sm text-gray-900 dark:text-gray-100 bg-gray-50 dark:bg-gray-700 px-3 py-2 rounded-md">No specific date slots defined.</p>}
-          </div>
         </div>
       </div>
-
-      <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
-        <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Account & System Information</h2>
-        <ProfileField label="Assigned Roles" 
-            value={viewedUserProfile.assignedRoleNames && viewedUserProfile.assignedRoleNames.length > 0 
-                   ? viewedUserProfile.assignedRoleNames.join(', ') 
-                   : (viewedUserProfile.assignedRoleIds.length > 0 ? viewedUserProfile.assignedRoleIds.join(', ') : 'No roles assigned')} />
-        <ProfileField label="User ID (UID)" value={viewedUserProfile.uid} />
-        <ProfileField label="Profile Created" value={formatDate(viewedUserProfile.createdAt)} />
-        <ProfileField label="Profile Last Updated" value={formatDate(viewedUserProfile.updatedAt)} />
-      </div>
-    </div>
+    </main>
   );
 };
 
