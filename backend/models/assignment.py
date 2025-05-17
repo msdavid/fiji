@@ -1,5 +1,5 @@
 from pydantic import BaseModel, Field
-from typing import Optional, Literal
+from typing import Optional, Literal, Dict, Any
 from datetime import datetime
 
 class AssignmentBase(BaseModel):
@@ -31,6 +31,10 @@ class AssignmentResponse(AssignmentBase):
     userFirstName: Optional[str] = Field(None, description="First name of the assigned user.")
     userLastName: Optional[str] = Field(None, description="Last name of the assigned user.")
     userEmail: Optional[str] = Field(None, description="Email of the assigned user.")
+
+    # Added assignable entity details
+    assignableName: Optional[str] = Field(None, description="Name of the assignable entity (e.g., event name, working group name).")
+    # assignableDescription: Optional[str] = Field(None, description="Description of the assignable entity.") # Consider adding if needed
 
     class Config:
         from_attributes = True 

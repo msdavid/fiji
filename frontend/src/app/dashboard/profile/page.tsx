@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
-import { format, parseISO, isValid, parse as parseDateFns } from 'date-fns';
+import { format, parseISO, isValid } from 'date-fns'; // Removed unused parseDateFns
 
 // --- Availability Interfaces ---
 type Weekday = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
@@ -34,8 +34,19 @@ interface UserAvailability {
 }
 // --- End Availability Interfaces ---
 
+// --- Assignment Interface (for working groups) ---
+interface UserWorkingGroupAssignment {
+  id: string;
+  assignableId: string; // This is the working group ID
+  assignableName?: string; // Name of the working group
+  status: string;
+  // Add other relevant fields from AssignmentResponse if needed
+}
+// --- End Assignment Interface ---
+
+
 interface UserDataFromBackend {
-  uid: string;
+  id: string; // Changed from uid to id to match backend UserResponse
   email: string;
   firstName: string;
   lastName: string;
@@ -75,7 +86,9 @@ const ProfilePage = () => {
   const router = useRouter();
 
   const [profile, setProfile] = useState<UserDataFromBackend | null>(null);
+  const [workingGroupAssignments, setWorkingGroupAssignments] = useState<UserWorkingGroupAssignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
+  const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
   
@@ -117,7 +130,7 @@ const ProfilePage = () => {
         specific_slots: profileData.availability?.specific_slots?.map(s => ({
             ...s, 
             id: s.id || Math.random().toString(36).substr(2, 9), 
-            date: s.date ? format(parseISO(s.date), 'yyyy-MM-dd') : '',
+            date: s.date && isValid(parseISO(s.date)) ? format(parseISO(s.date), 'yyyy-MM-dd') : '', // Check validity before formatting
             from_time: s.from_time || '', 
             to_time: s.to_time || '',     
         })) || [],
@@ -133,7 +146,7 @@ const ProfilePage = () => {
       return;
     }
 
-    const fetchProfile = async () => {
+    const fetchProfileAndAssignments = async () => {
       if (!idToken) { 
         setError("Authentication token is missing.");
         setIsLoading(false);
@@ -149,6 +162,26 @@ const ProfilePage = () => {
         setProfile(fetchedProfileData);
         initializeFormData(fetchedProfileData); 
         setError(null);
+
+        // After fetching profile, fetch working group assignments
+        if (fetchedProfileData.id) { // Use 'id' from UserDataFromBackend
+          setIsLoadingAssignments(true);
+          try {
+            const assignments = await apiClient<UserWorkingGroupAssignment[]>({
+              method: 'GET',
+              path: `/assignments?userId=me&assignableType=workingGroup`,
+              token: idToken,
+            });
+            setWorkingGroupAssignments(assignments.filter(a => a.status === 'active')); // Show only active memberships
+          } catch (assignErr: any) {
+            console.error("Failed to fetch working group assignments:", assignErr);
+            // Optionally set a specific error for assignments or add to general error
+            setError(prev => prev ? `${prev}\nFailed to load working group memberships.` : "Failed to load working group memberships.");
+          } finally {
+            setIsLoadingAssignments(false);
+          }
+        }
+
       } catch (err: any) {
         console.error("Failed to fetch profile:", err);
         setError(err.message || (err.response?.data?.detail) || "Failed to fetch profile.");
@@ -156,7 +189,7 @@ const ProfilePage = () => {
         setIsLoading(false);
       }
     };
-    fetchProfile();
+    fetchProfileAndAssignments();
   }, [user, authLoading, idToken, router, initializeFormData]);
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -249,7 +282,7 @@ const ProfilePage = () => {
         })),
     };
 
-    const updatePayload: Omit<EditableUserProfile, 'availability' | 'preferences'> & { 
+    const updatePayload: Omit<EditableUserProfile, 'availability' | 'preferences' | 'email'> & { 
       skills?: string[], 
       qualifications?: string[], 
       preferences?: string, 
@@ -299,18 +332,19 @@ const ProfilePage = () => {
   if (authLoading || (isLoading && !isEditing && !profile)) {
     return <div className="flex justify-center items-center min-h-screen"><p>Loading profile...</p></div>;
   }
-  if (error && !isEditing) {
+  if (error && !isEditing && !profile) { // Show error only if profile hasn't loaded at all
     return <div className="p-8 text-center text-red-500">Error: {error}</div>;
   }
   if (!profile && !isEditing) {
     return <div className="p-8 text-center">Profile data not found.</div>;
   }
 
-  const currentProfileData = profile || initialFormData;
-  const pageTitle = currentProfileData ? `${currentProfileData.firstName} ${currentProfileData.lastName}` : "User Profile";
+  const currentProfileData = profile || initialFormData; // Use profile if available, otherwise initial (empty) form data
+  const pageTitle = currentProfileData && currentProfileData.firstName ? `${currentProfileData.firstName} ${currentProfileData.lastName}` : "User Profile";
+
 
   const ProfileDetailItem = ({ label, value, isTextArea = false }: { label: string; value: string | undefined | null; isTextArea?: boolean }) => {
-    if (value === null || value === undefined || value.trim() === '') return null;
+    if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
     return (
       <div>
         <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">{label}</label>
@@ -336,7 +370,7 @@ const ProfilePage = () => {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
           {isEditing ? `Editing Profile: ${pageTitle}` : pageTitle}
         </h1>
-        {!isEditing && currentProfileData && (
+        {!isEditing && currentProfileData && currentProfileData.id && ( // Ensure profile is loaded before showing edit button
           <button onClick={() => { setIsEditing(true); if(profile) initializeFormData(profile); setError(null); }}
             className="mt-4 sm:mt-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm">
             Edit Profile
@@ -345,9 +379,12 @@ const ProfilePage = () => {
       </div>
 
       {isLoading && isEditing && <p>Loading edit form...</p>}
+      {error && isEditing && <div className="my-4 p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
+      {error && !isEditing && profile && <div className="my-4 p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
+
 
       <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8">
-        {!isEditing && currentProfileData ? (
+        {!isEditing && currentProfileData && currentProfileData.id ? ( // Ensure profile is loaded before rendering view mode
           // VIEW MODE
           <div className="md:flex md:space-x-6">
             <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center md:items-start">
@@ -384,6 +421,24 @@ const ProfilePage = () => {
                     <ProfileDetailItem label="Roles" value={currentProfileData.assignedRoleNames.join(', ')} />
                 )}
               </div>
+              
+              {/* My Working Groups Section */}
+              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">My Working Groups</h2>
+                {isLoadingAssignments ? <p className="text-md text-gray-800 dark:text-gray-200">Loading memberships...</p> :
+                  workingGroupAssignments.length > 0 ? (
+                    <ul className="list-disc list-inside mt-1 space-y-1">
+                      {workingGroupAssignments.map((assignment) => (
+                        <li key={assignment.id} className="text-md text-gray-800 dark:text-gray-200">
+                          {/* TODO: Link to /dashboard/admin/working-groups/{assignment.assignableId} if user has view permission for that specific group, or a general user-facing WG view page */}
+                          {assignment.assignableName || `Group ID: ${assignment.assignableId}`} (Status: {assignment.status})
+                        </li>
+                      ))}
+                    </ul>
+                  ) : <p className="mt-1 text-md text-gray-800 dark:text-gray-200">Not a member of any working groups.</p>
+                }
+              </div>
+
 
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">Availability</h2>
@@ -392,7 +447,7 @@ const ProfilePage = () => {
                   {currentProfileData.availability?.general_rules && currentProfileData.availability.general_rules.length > 0 ? (
                     <ul className="list-disc list-inside mt-1 space-y-1">
                       {currentProfileData.availability.general_rules.map((rule, index) => (
-                        <li key={index} className="text-md text-gray-800 dark:text-gray-200">
+                        <li key={rule.id || index} className="text-md text-gray-800 dark:text-gray-200">
                           Every {rule.weekday} from {rule.from_time} to {rule.to_time}
                         </li>
                       ))}
@@ -404,8 +459,8 @@ const ProfilePage = () => {
                   {currentProfileData.availability?.specific_slots && currentProfileData.availability.specific_slots.length > 0 ? (
                     <ul className="list-disc list-inside mt-1 space-y-1">
                       {currentProfileData.availability.specific_slots.map((slot, index) => (
-                        <li key={index} className={`text-md ${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
-                          {slot.date ? format(parseISO(slot.date), 'PPP') : 'Invalid Date'}
+                        <li key={slot.id || index} className={`text-md ${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                          {slot.date && isValid(parseISO(slot.date)) ? format(parseISO(slot.date), 'PPP') : 'Invalid Date'}
                           {slot.from_time && slot.to_time ? ` from ${slot.from_time} to ${slot.to_time}` : ' (All day)'}
                           {' '}({slot.slot_type})
                         </li>
@@ -416,7 +471,7 @@ const ProfilePage = () => {
               </div>
             </div>
           </div>
-        ) : !isLoading && isEditing && currentProfileData ? ( 
+        ) : !isLoading && isEditing && currentProfileData && currentProfileData.id ? ( 
           // EDIT MODE
           <div className="md:flex md:space-x-6">
             {/* Left Column: Profile Picture (display only) */}
@@ -440,7 +495,7 @@ const ProfilePage = () => {
             {/* Right Column: Form Fields */}
             <div className="flex-grow">
               <form onSubmit={handleSubmit} className="space-y-6">
-                {error && <div className="p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
+                {/* Error display moved to top of page for edit mode */}
                 
                 <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
                 <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
@@ -534,7 +589,11 @@ const ProfilePage = () => {
               </form>
             </div>
           </div>
-        ) : null}
+        ) : null }
+        {/* Fallback for when profile is null but not loading and not editing - e.g. initial state or error */}
+        {!isLoading && !isEditing && (!currentProfileData || !currentProfileData.id) && (
+            <div className="text-center p-4">Could not load profile information.</div>
+        )}
       </div>
     </div>
   );
