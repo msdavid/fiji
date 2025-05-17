@@ -1,14 +1,15 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation';
+import { useRouter, usePathname } from 'next/navigation'; // Import usePathname
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebaseConfig';
 import { useAuth } from '@/context/AuthContext';
 import React, { useState, useEffect, useRef } from 'react';
 
 export default function DashboardNav() {
-  const router = useRouter();
+  const router = useRouter(); 
+  const pathname = usePathname(); // Get current pathname
   const { user, userProfile, loading: authLoading, hasPrivilege } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null); 
@@ -18,7 +19,7 @@ export default function DashboardNav() {
       await signOut(auth);
       setIsDropdownOpen(false); 
       router.push('/login');
-    } catch (error) { // Corrected syntax: removed underscore
+    } catch (error) { 
       console.error('Logout Error:', error);
     }
   };
@@ -41,7 +42,7 @@ export default function DashboardNav() {
     };
   }, [isDropdownOpen]);
 
-  const isAdmin = userProfile?.assignedRoleIds?.includes('sysadmin');
+  const isAdmin = !!userProfile && Array.isArray(userProfile.assignedRoleIds) && userProfile.assignedRoleIds.includes('sysadmin');
 
   if (authLoading && !user) {
     return (
@@ -67,36 +68,84 @@ export default function DashboardNav() {
   const displayName = userProfile?.firstName ? userProfile.firstName : (user.email || "User");
   const avatarInitial = userProfile?.firstName ? userProfile.firstName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : '');
 
-  const linkClassName = "text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-150 ease-in-out";
+  const getLinkClassName = (path: string) => {
+    const baseStyle = "text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-150 ease-in-out px-3 py-2 rounded-md";
+    const activeStyle = "text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-md";
+    
+    if (pathname === path || (path !== "/dashboard" && pathname.startsWith(path))) { // Use pathname from usePathname()
+        return activeStyle;
+    }
+    return baseStyle;
+  };
+
 
   const navLinks = [];
 
-  if (isAdmin) {
-    navLinks.push(
-      <Link key="users" href="/dashboard/admin/users" className={linkClassName} onClick={() => setIsDropdownOpen(false)}>
-        Users
-      </Link>
-    );
-    navLinks.push(
-      <Link key="wg" href="/dashboard/admin/working-groups" className={linkClassName} onClick={() => setIsDropdownOpen(false)}>
-        Working Groups
-      </Link>
-    );
-  }
+  navLinks.push(
+    <Link key="dashboard" href="/dashboard" className={getLinkClassName("/dashboard")} onClick={() => setIsDropdownOpen(false)}>
+      Dashboard
+    </Link>
+  );
+  
+  navLinks.push(
+    <Link key="events" href="/dashboard/events" className={getLinkClassName("/dashboard/events")} onClick={() => setIsDropdownOpen(false)}>
+      Events
+    </Link>
+  );
 
   if (hasPrivilege && hasPrivilege('donations', 'list')) {
     navLinks.push(
-      <Link key="donations" href="/dashboard/donations" className={linkClassName} onClick={() => setIsDropdownOpen(false)}>
+      <Link key="donations" href="/dashboard/donations" className={getLinkClassName("/dashboard/donations")} onClick={() => setIsDropdownOpen(false)}>
         Donations
       </Link>
     );
   }
 
-  navLinks.push(
-    <Link key="events" href="/dashboard/events" className={linkClassName} onClick={() => setIsDropdownOpen(false)}>
-      Events
-    </Link>
-  );
+  if (hasPrivilege && (hasPrivilege('reports', 'view_volunteer_hours') || hasPrivilege('reports', 'view_event_participation'))) {
+    navLinks.push(
+      <Link key="reports" href="/dashboard/reports" className={getLinkClassName("/dashboard/reports")} onClick={() => setIsDropdownOpen(false)}>
+        Reports
+      </Link>
+    );
+  }
+  
+  const adminLinks = [];
+  if (hasPrivilege && hasPrivilege('users', 'list')) { 
+    adminLinks.push(
+      <Link key="admin-users" href="/dashboard/admin/users" className={getLinkClassName("/dashboard/admin/users")} onClick={() => setIsDropdownOpen(false)}>
+        Users
+      </Link>
+    );
+  }
+  if (hasPrivilege && hasPrivilege('working_groups', 'list')) { 
+    adminLinks.push(
+      <Link key="admin-wg" href="/dashboard/admin/working-groups" className={getLinkClassName("/dashboard/admin/working-groups")} onClick={() => setIsDropdownOpen(false)}>
+        Working Groups
+      </Link>
+    );
+  }
+  if (hasPrivilege && hasPrivilege('roles', 'list')) { 
+    adminLinks.push(
+      <Link key="admin-roles" href="/dashboard/admin/roles" className={getLinkClassName("/dashboard/admin/roles")} onClick={() => setIsDropdownOpen(false)}>
+        Roles
+      </Link>
+    );
+  }
+  if (hasPrivilege && hasPrivilege('invitations', 'list')) { 
+    adminLinks.push(
+      <Link key="admin-invitations" href="/dashboard/admin/invitations" className={getLinkClassName("/dashboard/admin/invitations")} onClick={() => setIsDropdownOpen(false)}>
+        Invitations
+      </Link>
+    );
+  }
+
+  if (adminLinks.length > 0) {
+    navLinks.push(
+      <span key="admin-separator" className="text-gray-300 dark:text-gray-700 hidden md:inline">|</span>
+    );
+    navLinks.push(...adminLinks);
+  }
+
 
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-sm">
@@ -107,9 +156,19 @@ export default function DashboardNav() {
                 Fiji
             </Link>
           </div>
-          <div className="flex items-center space-x-4"> 
+          <div className="hidden md:flex items-center space-x-1 sm:space-x-2"> 
             {navLinks}
-            <div className="relative" ref={dropdownRef}>
+          </div>
+          <div className="flex items-center">
+            <div className="md:hidden">
+              <button 
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)} 
+                className="p-2 rounded-md text-gray-400 hover:text-white hover:bg-gray-700 focus:outline-none"
+              >
+                <span className="material-icons">menu</span>
+              </button>
+            </div>
+            <div className="relative ml-3" ref={dropdownRef}>
               <button
                 id="user-menu-button"
                 onClick={() => setIsDropdownOpen(!isDropdownOpen)}
@@ -131,7 +190,22 @@ export default function DashboardNav() {
                   aria-orientation="vertical" 
                   aria-labelledby="user-menu-button"
                 >
-                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                  <div className="py-1 md:hidden"> {/* Mobile Nav Links Section */}
+                    {navLinks.map(link => {
+                      if (React.isValidElement(link) && typeof link.props.href === 'string') {
+                        // Filter out separators for mobile dropdown
+                        if (link.key === "admin-separator") return null;
+                        return React.cloneElement(link as React.ReactElement<any>, {
+                          className: `${getLinkClassName(link.props.href)} w-full block px-4 py-2 text-left !bg-transparent hover:!bg-gray-100 dark:hover:!bg-gray-700`, // Override active styles for dropdown view
+                          onClick: () => setIsDropdownOpen(false)
+                        });
+                      }
+                      return null;
+                    })}
+                     <hr className="my-1 border-gray-200 dark:border-gray-700"/>
+                  </div>
+
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 md:border-b-0">
                     <p className="text-xs text-gray-500 dark:text-gray-400">Signed in as</p>
                     <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</p>
                   </div>

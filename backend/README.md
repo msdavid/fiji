@@ -11,7 +11,7 @@ This directory contains the Python FastAPI backend for Project Fiji.
 - `tests/`: Pytest unit and integration tests for the backend.
   - `conftest.py`: Pytest fixtures and configuration for tests.
   - `test_*.py`: Test files for different modules and endpoints.
-- `utils/`: Utility scripts, such as `initialize_firestore.py`.
+- `utils/`: Utility scripts for various administrative or maintenance tasks.
 - `Dockerfile`: For building the backend Docker image.
 - `pyproject.toml`: Project metadata and dependencies, managed by `uv`.
 - `uv.lock`: Lockfile for reproducible dependency installation.
@@ -101,6 +101,64 @@ This backend uses `pytest` for unit and integration testing. Tests are located i
 - `tests/test_*.py`: Individual test files for different modules or features (e.g., `test_main.py` for basic app endpoints, `test_roles.py` for role management APIs).
 
 Tests use FastAPI's `TestClient` to make HTTP requests to the application endpoints and assert responses. Firestore interactions are mocked using `unittest.mock.MagicMock` (via `pytest-mock`).
+
+## Utility Scripts
+
+The `backend/utils/` directory contains scripts for various administrative, setup, or maintenance tasks.
+
+### `initialize_firestore.py`
+- **Purpose:** Sets up initial Firestore collections and essential documents (e.g., the `sysadmin` role, default application settings if any).
+- **Usage:** Typically run once during initial project setup or when new core data structures are introduced.
+  ```bash
+  python backend/utils/initialize_firestore.py
+  ```
+  Ensure environment variables (`GOOGLE_CLOUD_PROJECT`, and potentially `GOOGLE_APPLICATION_CREDENTIALS` for local execution) are set.
+
+### `create-role.py`
+- **Purpose:** A command-line script to create new roles with specified privileges in Firestore.
+- **Usage:**
+  ```bash
+  python backend/utils/create-role.py <roleName> --description "Role description" --privileges '{"resource": ["action1", "action2"]}'
+  ```
+  Example:
+  ```bash
+  python backend/utils/create-role.py event_manager --description "Manages events" --privileges '{"events": ["create", "edit", "view", "delete", "manage_assignments"], "users": ["view"]}'
+  ```
+
+### `create-invitation.py`
+- **Purpose:** Generates a new registration invitation token and stores it in Firestore.
+- **Usage:**
+  ```bash
+  python backend/utils/create-invitation.py <user_email_to_invite> --role <role_id_to_assign> [--expires-in-hours <hours>]
+  ```
+  Example:
+  ```bash
+  python backend/utils/create-invitation.py new.volunteer@example.com --role volunteer_basic
+  ```
+  The script will output the invitation token.
+
+### `create-admin-user.py` (Example)
+- **Purpose:** An example script to directly create a user in Firebase Authentication and Firestore, assigning them the `sysadmin` role. Useful for initial superuser setup.
+- **Usage:**
+  ```bash
+  python backend/utils/create-admin-user.py <admin_email> <admin_password> [--firstName <FirstName>] [--lastName <LastName>]
+  ```
+  **Caution:** Use strong, unique passwords. This script directly handles credentials.
+
+### `cleanup_orphan_assignments.py`
+- **Purpose:** Identifies and optionally deletes orphaned assignment records from the `assignments` collection. An assignment is considered orphaned if its referenced `assignableId` (for an event or working group) no longer exists in the respective `events` or `workingGroups` collection. This helps maintain data integrity.
+- **Usage:**
+    - **Dry Run (Recommended First):** Lists potential orphans without deleting.
+      ```bash
+      python backend/utils/cleanup_orphan_assignments.py
+      # or
+      python backend/utils/cleanup_orphan_assignments.py --dry-run
+      ```
+    - **Execute Deletion:** After reviewing the dry run, use this to delete the identified orphans. You will be prompted for confirmation.
+      ```bash
+      python backend/utils/cleanup_orphan_assignments.py --execute
+      ```
+- **Prerequisites:** Ensure environment variables (`GOOGLE_CLOUD_PROJECT`, and `GOOGLE_APPLICATION_CREDENTIALS` if needed for local execution) are correctly set up for Firestore access.
 
 ## Linting and Formatting
 
