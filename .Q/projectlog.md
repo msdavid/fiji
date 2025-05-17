@@ -1,6 +1,25 @@
 # Project Log - Fiji
 
-## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Table Styling Refinement -->
+## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Table Aesthetic Enhancement -->
+- **Q Agent:** Mauro
+- **Objective:** Enhance the visual aesthetics and hierarchy of the users table in the admin dashboard.
+### Activity:
+- Modified `frontend/src/app/dashboard/admin/users/page.tsx` with the following Tailwind CSS class changes:
+  - **Table Card (`div` wrapping table):**
+    - Light mode: `bg-gray-50` -> `bg-white`.
+    - Dark mode: Kept `dark:bg-gray-700`.
+  - **Table Header (`thead`):**
+    - Light mode: Kept `bg-gray-50`.
+    - Dark mode: `dark:bg-gray-700` -> `dark:bg-gray-600`.
+  - **Table Dividers (`table` and `tbody` elements):**
+    - Light mode: Kept `divide-gray-200`.
+    - Dark mode: `dark:divide-gray-700` -> `dark:divide-gray-500`.
+  - **Table Body (`tbody`):**
+    - Background kept at `bg-white dark:bg-gray-700`.
+  - These changes aim to improve visual separation and overall aesthetics in both light and dark modes.
+
+---
+## Session (YYYY-MM-DD HH:MM) <!-- Previous entry: Table Styling Refinement -->
 - **Q Agent:** Mauro
 - **Objective:** Improve visual contrast of the users table in the admin dashboard.
 ### Activity:

@@ -167,9 +167,9 @@ const AdminUserManagementPage = () => {
       )}
 
       {users.length > 0 && (
-        <div className="overflow-x-auto bg-gray-50 dark:bg-gray-700 shadow-md rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
-            <thead className="bg-gray-50 dark:bg-gray-700">
+        <div className="overflow-x-auto bg-white dark:bg-gray-700 shadow-md rounded-lg">
+          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-500">
+            <thead className="bg-gray-50 dark:bg-gray-600">
               <tr>
                 <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
                 <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
@@ -178,7 +178,7 @@ const AdminUserManagementPage = () => {
                 <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
               </tr>
             </thead>
-            <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-700">
+            <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-500">
               {users.map((userEntry) => (
                 <tr key={userEntry.uid}>
                   <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{userEntry.firstName} {userEntry.lastName}</td>
