@@ -12,11 +12,24 @@ interface EventFormData {
   description: string;
   dateTime: string; 
   endTime: string;  
-  location: string; 
+  location: string; // This will be mapped to 'venue' for the backend
   volunteersRequired: number;
   status: string;
   organizerUserId: string | null; 
   icon: string; 
+
+  // Fields that might be in formData from fetch but not for update
+  id?: string;
+  createdByUserId?: string;
+  createdAt?: string;
+  updatedAt?: string;
+  creatorFirstName?: string;
+  creatorLastName?: string;
+  organizerFirstName?: string;
+  organizerLastName?: string;
+  organizerEmail?: string;
+  isCurrentUserSignedUp?: boolean;
+  currentUserAssignmentStatus?: string;
 }
 
 interface UserSearchResult {
@@ -95,13 +108,17 @@ export default function EditEventPage() {
       const formattedDateTime = eventData.dateTime ? formatDateTimeForInput(eventData.dateTime) : '';
       const formattedEndTime = eventData.endTime ? formatDateTimeForInput(eventData.endTime) : '';
       
-      const { durationMinutes, ...restOfEventData } = eventData; 
+      // Map backend 'venue' to frontend 'location'
+      const location = eventData.venue; 
+      const { venue, ...restOfEventDataForFrontend } = eventData;
+
 
       const currentSelectedIcon = searchParams.get('selectedIcon');
       const iconToSet = currentSelectedIcon || eventData.icon || 'event';
       
-      let draftData = { 
-        ...restOfEventData, 
+      let draftData: Partial<EventFormData> = { 
+        ...restOfEventDataForFrontend, 
+        location: location, // Use mapped venue as location
         dateTime: formattedDateTime,
         endTime: formattedEndTime, 
         organizerUserId: eventData.organizerUserId || null, 
@@ -316,11 +333,20 @@ export default function EditEventPage() {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       
-      const updatePayload: Partial<EventFormData> = { ...formData };
-      if (updatePayload.icon === undefined) {
-        updatePayload.icon = 'event'; 
-      }
-
+      // Construct payload with only allowed fields for EventUpdate
+      const updatePayload: { [key: string]: any } = {};
+      if (formData.eventName !== undefined) updatePayload.eventName = formData.eventName;
+      if (formData.eventType !== undefined) updatePayload.eventType = formData.eventType;
+      if (formData.purpose !== undefined) updatePayload.purpose = formData.purpose;
+      if (formData.description !== undefined) updatePayload.description = formData.description;
+      if (formData.dateTime !== undefined) updatePayload.dateTime = formData.dateTime;
+      if (formData.endTime !== undefined) updatePayload.endTime = formData.endTime;
+      if (formData.location !== undefined) updatePayload.venue = formData.location; // Map location to venue
+      if (formData.volunteersRequired !== undefined) updatePayload.volunteersRequired = formData.volunteersRequired;
+      if (formData.status !== undefined) updatePayload.status = formData.status;
+      // organizerUserId can be null to clear it, so include if present in formData
+      if (formData.organizerUserId !== undefined) updatePayload.organizerUserId = formData.organizerUserId; 
+      updatePayload.icon = formData.icon || 'event'; // Ensure icon is always sent, default if not set
 
       const response = await fetch(`${backendUrl}/events/${eventId}`, {
         method: 'PUT',
@@ -338,10 +364,8 @@ export default function EditEventPage() {
           if (typeof errorData.detail === 'string') {
             errorMessage = errorData.detail;
           } else if (Array.isArray(errorData.detail) && errorData.detail.length > 0 && errorData.detail[0].msg) {
-            // Handle FastAPI validation errors (array of objects)
             errorMessage = errorData.detail.map((err: any) => `${err.loc.join('.')} - ${err.msg}`).join('; ');
           } else {
-            // Fallback for other non-string detail types
             errorMessage = JSON.stringify(errorData.detail);
           }
         }
@@ -355,7 +379,7 @@ export default function EditEventPage() {
       }, 1500);
 
     } catch (err: any) {
-      setError(err.message); // err.message should now be a more readable string
+      setError(err.message);
     } finally {
       setSubmitting(false);
     }

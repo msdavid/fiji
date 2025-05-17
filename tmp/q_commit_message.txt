@@ -1,13 +1,13 @@
-Fix(events): Improve error message display on event edit form
+Fix(events): Prevent sending extra fields in event update payload
 
-- Modified the `handleSubmit` function in
-  `frontend/src/app/dashboard/events/[eventId]/edit/page.tsx`
-  to better parse backend error responses.
-- If `errorData.detail` from the backend is an array (typical for
-  FastAPI validation errors), the message from the first error
-  object is extracted and displayed.
-- If `errorData.detail` is a string, it's used directly.
-- If `errorData.detail` is another non-string type, it's stringified.
-- This prevents the display of `[object Object]` when validation
-  errors occur, showing a more user-friendly message instead.
+- Modified `handleSubmit` in `frontend/src/app/dashboard/events/[eventId]/edit/page.tsx`
+  to explicitly pick allowed fields for the event update payload.
+- This ensures that only fields defined in the backend `EventUpdate`
+  Pydantic model are sent, preventing "Extra inputs are not permitted" errors.
+- Mapped frontend `formData.location` to `venue` in the payload,
+  aligning with backend model expectations.
+- Also updated `fetchEventData` to map backend `venue` to frontend `location`
+  when populating the form.
+- Added potentially extraneous fields to `EventFormData` interface for clarity,
+  though they are not used in the update payload.
 - Updated `.Q/projectlog.md`.
