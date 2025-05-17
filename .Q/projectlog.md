@@ -1,13 +1,23 @@
 # Project Log - Fiji
 
-## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Add Edit Link to Admin Users Table -->
+## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Create Placeholder Admin User Edit Page -->
+- **Q Agent:** Mauro
+- **Objective:** Create a placeholder page for editing user details by an admin to resolve 404 errors.
+### Activity:
+- Created `frontend/src/app/dashboard/admin/users/[userId]/edit/page.tsx`.
+  - This page fetches the user's data based on `userId` from the URL.
+  - It displays a title like "Edit User: [User Name]" and a message indicating it's a placeholder.
+  - Includes basic loading, error handling, and a "Back to User List" link.
+  - This resolves the 404 error when clicking the "Edit" link on the admin users table. Full form functionality is a future task.
+
+---
+## Session (YYYY-MM-DD HH:MM) <!-- Previous entry: Add Edit Link to Admin Users Table -->
 - **Q Agent:** Mauro
 - **Objective:** Add an "Edit" link to the actions column in the admin users table.
 ### Activity:
 - Modified `frontend/src/app/dashboard/admin/users/page.tsx`:
   - Added a new `<Link>` component in the actions column for each user.
   - This link is styled with `text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200` and points to `/dashboard/admin/users/[userId]/edit`.
-  - The creation of the actual edit page is a separate task.
 
 ---
 ## Session (YYYY-MM-DD HH:MM) <!-- Previous entry: Add Profile Picture Field & Display -->
