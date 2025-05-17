@@ -286,3 +286,8 @@ You'll need two separate terminal windows to run the backend and frontend simult
         npm run dev
         ```
     *   The frontend application should be accessible at `http://localhost:3000` (or another port like 3002 if 3000 is in use). Check the terminal output for the exact URL.
+    *   To run the frontend on a different port (e.g., 3001), use the `--port` flag (or `-p`). When using `npm run dev`, you need to pass arguments to the `next dev` script using `--`:
+        ```bash
+        # In frontend/ directory, to run on port 3001
+        npm run dev -- --port 3001
+        ```
