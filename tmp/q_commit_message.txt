@@ -1,18 +1,11 @@
-Refactor(events): Implement three-section layout for event cards
+Fix(events): Remove duplicate navbar from event detail page
 
-The event cards on the events listing page have been refactored to a
-three-section layout:
-1.  Left section: Displays a circular placeholder (calendar icon).
-2.  Right section (top): Contains event details (name, type, venue, date, status, description).
-3.  Right section (bottom): Shows creation metadata (creator, creation date) and the 'Edit' button.
+The event detail page (`frontend/src/app/dashboard/events/[eventId]/page.tsx`)
+contained its own `<nav>` element, which caused a duplicate navbar when
+rendered within the main dashboard layout.
 
-Key changes:
--   Implemented a flexbox layout for the three sections within each card.
--   Added a placeholder SVG calendar icon in the left section.
--   Added `border-r` and `border-t` for visual separation between sections.
--   The main `Link` component now wraps the icon and details sections, making most of the card clickable.
--   The 'Edit' button uses `e.stopPropagation()` to ensure it doesn't trigger the card's navigation.
--   Adjusted padding, font sizes, and line-clamping for responsiveness (e.g., `sm:p-6`, `sm:text-xl`, `sm:line-clamp-3`).
--   Event name (`eventName`) now uses `truncate` to prevent overflow.
--   Creator's User ID is substringed (`.substring(0,8)`) for brevity on the card.
--   Added a `TODO` comment in the `Event` interface and near the icon for future implementation of dynamic event icons.
+This commit removes the redundant `<nav>` element from the event detail page.
+The "Back to Events" link has been moved to the top of the `main` content
+area, just above the event title, to maintain navigation functionality.
+The outer `div` with `min-h-screen` and background styling was also removed
+as these should be handled by the parent layout.

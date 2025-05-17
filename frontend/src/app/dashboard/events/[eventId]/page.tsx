@@ -71,7 +71,6 @@ export default function EventDetailPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   
-  // State for the selected user from UserSearchInput
   const [selectedUserToAssign, setSelectedUserToAssign] = useState<UserSearchResult | null>(null);
 
   const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
@@ -192,8 +191,7 @@ export default function EventDetailPage() {
         body: JSON.stringify({ userId: selectedUserToAssign.id, assignableId: event.id, assignableType: 'event', status: 'confirmed_admin' }),
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'Failed to assign volunteer');
-      setSelectedUserToAssign(null); // Clear selection after assignment
-      // Consider clearing the UserSearchInput text as well if it's a separate component state
+      setSelectedUserToAssign(null); 
       await fetchEventAssignments(event.id); 
       await fetchEventDetails(); 
     } catch (err: any) { setAssignmentsError(err.message); } 
@@ -251,17 +249,19 @@ export default function EventDetailPage() {
   const creatorName = event.creatorFirstName && event.creatorLastName ? `${event.creatorFirstName} ${event.creatorLastName}` : event.createdByUserId;
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
-      <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6"> 
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/dashboard" className="flex-shrink-0 text-xl font-bold text-indigo-600 dark:text-indigo-400">Fiji Platform</Link>
-            <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">← Back to Events</Link>
-          </div>
-        </div>
-      </nav>
+    // Removed the outer div with min-h-screen and bg-gray-100/dark:bg-gray-800 as this should be handled by the layout
+    // <div className="min-h-screen bg-gray-100 dark:bg-gray-800"> 
+    // Removed the <nav> element
+    // <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6"> 
+    // ...
+    // </nav>
 
       <main className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
+        <div className="mb-6"> {/* Container for Back link */}
+            <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                ← Back to Events
+            </Link>
+        </div>
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg overflow-hidden">
           <div className="p-6 sm:p-8">
             <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-4"> 
@@ -353,6 +353,6 @@ export default function EventDetailPage() {
           </div>
         </div>
       </main>
-    </div>
+    // </div>
   );
 }
