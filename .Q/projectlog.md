@@ -2,7 +2,7 @@
 
 ## Session 2024-07-29 (Continued)
 
-*   **Refactored Event Models and Endpoints (Backend & Frontend)**
+*   **Refactored Event Models and Endpoints (Backend & Frontend)** (This was a previous, reverted effort)
     *   **Goal:** Add `point_of_contact` to events and align models with a more robust structure.
     *   **Backend (`backend/models/event.py`):**
         *   Added `point_of_contact: Optional[str]` to `Event`, `EventCreate`, `EventUpdate`.
@@ -40,7 +40,7 @@
         *   `point_of_contact` was not added to the card display to keep it concise.
         *   Adjusted dynamic status logic and status filtering to align with new status values.
 
-*   Added `point_of_contact` field to the `Event` model (`backend/models/event.py`). (Initial commit for this feature)
+*   Added `point_of_contact` field to the `Event` model (`backend/models/event.py`). (Initial commit for this feature during the reverted refactor)
     *   Updated `Event`, `EventCreate`, and `EventUpdate` Pydantic models.
 *   **Reverted commit `458d41a`**: "Revert \"fix: Add temporary data mapping for legacy events\"". This undid changes related to temporary data mapping for legacy events.
 *   **Reverted commit `e910580`**: "Revert \"Revert \\"fix: Add temporary data mapping for legacy events\\"\"". This re-applied the changes from "fix: Add temporary data mapping for legacy events" by undoing the previous revert.
@@ -52,3 +52,46 @@
     *   `458d41a` - Revert "fix: Add temporary data mapping for legacy events"
     *   `e910580` - Revert "Revert "fix: Add temporary data mapping for legacy events""
     *   `d94b380` - Revert "Revert "Revert "fix: Add temporary data mapping for legacy events"""
+
+---
+## Session 2024-07-30 
+**Developer:** Mauro
+**Agent:** Q
+**Sprint Objective:** Add "Point of Contact" field to Events.
+
+**Key Activities:**
+
+1.  **Backend Model Update (`backend/models/event.py`):**
+    *   Added `point_of_contact: Optional[str] = Field(None, max_length=255, ...)` to the `EventBase` Pydantic model.
+    *   Added `point_of_contact: Optional[str] = Field(None, max_length=255)` to the `EventUpdate` Pydantic model.
+    *   This ensures the field is available for event creation, updates, and is included in database representations and API responses.
+
+2.  **Frontend - Create Event Form (`frontend/src/app/dashboard/events/new/page.tsx`):**
+    *   Updated the local `EventFormData` interface to include `point_of_contact?: string;`.
+    *   Added `point_of_contact: ''` to `initialFormData`.
+    *   Added a new text input field in the JSX for "Point of Contact".
+    *   Ensured the `handleSubmit` function correctly includes `point_of_contact` in the payload sent to the backend.
+    *   Corrected mapping of frontend `location` to backend `venue` in the payload.
+
+3.  **Frontend - Edit Event Form (`frontend/src/app/dashboard/events/[eventId]/edit/page.tsx`):**
+    *   Updated the local `EventFormData` interface to include `point_of_contact?: string;`.
+    *   Modified `fetchEventData` to include `point_of_contact` when populating form data from the backend.
+    *   Added a new text input field in the JSX for "Point of Contact".
+    *   Updated `handleSubmit` to include `point_of_contact` in the update payload sent to the backend.
+
+4.  **Frontend - Event Detail View (`frontend/src/app/dashboard/events/[eventId]/page.tsx`):**
+    *   Updated the local `Event` interface to include `point_of_contact?: string;`.
+    *   Modified the JSX to display the "Point of Contact" information if it is present for the event.
+
+5.  **Backend Tests Update (`backend/tests/test_events.py`):**
+    *   Added new fixtures: `mock_event_payload_with_poc`, `mock_created_event_doc_with_poc`, `mock_organizer_user_doc`, `mock_creator_user_doc` to support testing the new field.
+    *   Added new tests for core event CRUD operations:
+        *   `test_create_event_with_poc`: Verifies creation with `point_of_contact`.
+        *   `test_get_event_with_poc`: Verifies retrieval of `point_of_contact`.
+        *   `test_update_event_with_poc`: Verifies updating `point_of_contact`.
+    *   Updated existing test fixtures and data to include `point_of_contact` for consistency and ensured correct `datetime` object usage.
+
+6.  **Version Control:**
+    *   Staged all changes.
+    *   Generated a detailed commit message summarizing backend, frontend, and test enhancements.
+    *   Committed changes with hash `be8e310`.
