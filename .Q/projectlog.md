@@ -53,14 +53,24 @@
 ## Sprint 6: Working Group Participation & Availability
 *   **Goal:** Enable authorized users to assign/unassign members to working groups via backend APIs. Allow users to specify their availability on their profile.
 *   **Key Deliverables:**
-    *   Backend API endpoints for managing working group members.
-    *   Frontend UI for users to update their availability.
-    *   `assignments` collection updated/utilized for working group memberships.
-*   **Main Task Areas:**
+    *   Backend API endpoints for managing working group members. (Verified existing)
+    *   Frontend UI for users to update their availability. (Verified existing)
+    *   `assignments` collection updated/utilized for working group memberships. (Verified backend logic)
+    *   Display user's working group memberships on profile page. (Implemented)
+*   **Main Task Areas & Outcomes:**
     *   **Backend (FastAPI & Firestore):**
-        *   Implement API endpoints for assigning/revoking working group members.
-        *   Update user profile API to handle availability data.
+        *   API endpoints for assigning/revoking working group members in `backend/routers/working_groups.py` were confirmed to be complete and functional.
+        *   User profile API in `backend/routers/users.py` and `User` model in `backend/models/user.py` were confirmed to already support detailed availability data.
+        *   Created a new router `backend/routers/assignments.py` with a `GET /assignments` endpoint. This endpoint allows fetching assignments (e.g., for the current user, for a specific entity) and enriches the response with the name of the assignable entity.
+        *   Updated `backend/models/assignment.py` by adding `assignableName: Optional[str]` to `AssignmentResponse`.
+        *   Included the new assignments router in `backend/main.py`.
     *   **Frontend (Next.js & Tailwind UI):**
-        *   Enhance User Profile page to include availability management.
-        *   Display user's working group memberships.
-*   **Current Status:** Sprint started.
+        *   The User Profile page (`frontend/src/app/dashboard/profile/page.tsx`) was confirmed to have a comprehensive UI for managing availability (general rules and specific date slots).
+        *   The User Profile page was enhanced to fetch and display the current user's active working group memberships under a "My Working Groups" section.
+*   **Files Modified/Created in Sprint 6:**
+    *   `backend/models/assignment.py`
+    *   `backend/routers/assignments.py` (new file)
+    *   `backend/main.py`
+    *   `frontend/src/app/dashboard/profile/page.tsx`
+    *   `.Q/projectlog.md`
+*   **Status:** Sprint completed.
