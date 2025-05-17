@@ -2,6 +2,43 @@
 
 ## Session DATE_TIME_PLACEHOLDER
 
+**Goal:** Update the styling guide with the new dashboard navigation bar and avatar dropdown styles.
+
+**Activities:**
+
+1.  **Reviewed `DashboardNav.tsx`:** Re-read the component to accurately capture all relevant Tailwind CSS classes for the navigation bar, main links, avatar button, and dropdown menu.
+2.  **Read Existing Styling Guide:** Loaded the content of `.Q/styling.md`.
+3.  **Updated `.Q/styling.md`:**
+    *   Added a new sub-section under "Specific Component Patterns" titled "**Navigation Bar (`DashboardNav.tsx`)**".
+    *   Documented the classes for:
+        *   The main `nav` container and its inner layout.
+        *   The brand link.
+        *   The area for navigation links and individual link styling.
+    *   Detailed the **Avatar Dropdown** structure and styling:
+        *   Avatar button (referenced a new entry under "Buttons" section).
+        *   Dropdown panel (positioning, background, shadow, ring).
+        *   Header section within the dropdown (padding, border, text styles for "Signed in as" and user display name).
+        *   Menu item sections and individual menu items (links and buttons).
+        *   Styling for standard and destructive menu items, including hover states.
+    *   Added a specific entry for "**Avatar Button (Navbar)**" under Section 5 "Buttons".
+    *   Updated Section 6 "Icons (Material Icons)" to include "**Dropdown Menu Item Icons**" with variants for standard and destructive items, including `group-hover` effects.
+    *   Adjusted existing color palette entries (e.g., Primary Indigo hover, Destructive Red text/backgrounds, Neutral Backgrounds/Text) to reflect usage in the dropdown menu and its items.
+    *   Updated typography section to include "Navbar Brand Link" and "Navbar Links" styles.
+    *   Ensured consistency with classes extracted from `DashboardNav.tsx`.
+
+**Files Modified:**
+
+*   `.Q/styling.md`
+
+**Next Steps:**
+
+*   Commit the changes.
+
+---
+(Previous log entries remain below)
+
+## Session DATE_TIME_PLACEHOLDER
+
 **Goal:** Implement a modern avatar dropdown for user profile, preferences, and logout in the dashboard navigation bar.
 
 **Activities:**
@@ -40,37 +77,6 @@
     *   Confirmed basic responsiveness.
     *   Reviewed ARIA attributes for accessibility (`aria-expanded`, `aria-haspopup`, `aria-labelledby`, `role="menu"`, `role="menuitem"`).
     *   Verified styling consistency with the project's guide.
-
-**Files Modified:**
-
-*   `frontend/src/components/dashboard/DashboardNav.tsx`
-
-**Next Steps:**
-
-*   Commit the changes.
-
----
-(Previous log entries remain below)
-
-## Session DATE_TIME_PLACEHOLDER
-
-**Goal:** Beautify the dashboard navigation bar.
-
-**Activities:**
-
-1.  **Reviewed Styling Guide:** Read `.Q/styling.md` to understand the existing styling conventions.
-2.  **Inspected `DashboardNav.tsx`:** Read the content of `frontend/src/components/dashboard/DashboardNav.tsx`.
-3.  **Applied Styling Enhancements to `DashboardNav.tsx`:**
-    *   Increased the font size of the "Fiji" brand link from `text-xl` to `text-2xl`.
-    *   Updated navigation link styling:
-        *   Set `text-sm font-medium`.
-        *   Used `text-gray-700 dark:text-gray-300` for base color.
-        *   Used `hover:text-indigo-600 dark:hover:text-indigo-400` for hover color.
-        *   Added `transition-colors duration-150 ease-in-out` for smoother hover effect.
-    *   Removed the `|` separators between navigation links and replaced them with `space-x-4` on the parent `div` for consistent spacing.
-    *   Adjusted the logout button padding from `py-2 px-3` to `py-2 px-4` to match the primary button style in the guide.
-    *   Styled the "Loading navigation..." text to `text-sm text-gray-500 dark:text-gray-400`.
-    *   Simplified the logic for rendering navigation links by directly mapping over the `navLinks` array instead of using `forEach` and `push` to a separate `renderedNavItems` array. (This was an implicit improvement during refactoring for clarity).
 
 **Files Modified:**
 
