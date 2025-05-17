@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List, Optional
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
+from google.cloud.firestore_v1.field_path import FieldPath # Corrected explicit import for FieldPath
 import datetime
 
 # Use direct imports from subdirectories of 'backend'
@@ -19,7 +20,7 @@ EVENTS_COLLECTION = "events"
 ASSIGNMENTS_COLLECTION = "assignments"
 USERS_COLLECTION = "users"
 
-async def _get_user_details(db: firestore.AsyncClient, user_id: str) -> dict: # Changed to AsyncClient
+async def _get_user_details(db: firestore.AsyncClient, user_id: str) -> dict:
     """Helper function to fetch user details."""
     if not user_id:
         return {}
@@ -37,7 +38,7 @@ async def _get_user_details(db: firestore.AsyncClient, user_id: str) -> dict: # 
 )
 async def create_event(
     event_data: EventCreate,
-    db: firestore.AsyncClient = Depends(get_db), # Changed to AsyncClient
+    db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
     try:
@@ -81,7 +82,7 @@ async def create_event(
 
 @router.get("", response_model=List[EventWithSignupStatus])
 async def list_events(
-    db: firestore.AsyncClient = Depends(get_db), # Changed to AsyncClient
+    db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac),
     status_filter: Optional[str] = Query(None, alias="status"),
 ):
@@ -89,7 +90,7 @@ async def list_events(
         query = db.collection(EVENTS_COLLECTION)
         if status_filter:
             query = query.where(filter=FieldFilter("status", "==", status_filter))
-        query = query.order_by("dateTime", direction=firestore.Query.ASCENDING) # Ensure dateTime field exists and is sortable
+        query = query.order_by("dateTime", direction=firestore.Query.ASCENDING)
 
         docs_snapshot = query.stream()
         user_assignments = {}
@@ -106,13 +107,15 @@ async def list_events(
                 all_user_ids_to_fetch.add(event_data["createdByUserId"])
 
         user_details_map = {}
-        # Batch fetch user details if many users
         user_ids_list = list(all_user_ids_to_fetch)
         MAX_FIRESTORE_IN_QUERY_LIMIT = 30
         for i in range(0, len(user_ids_list), MAX_FIRESTORE_IN_QUERY_LIMIT):
             batch_ids = user_ids_list[i:i+MAX_FIRESTORE_IN_QUERY_LIMIT]
             if not batch_ids: continue
-            users_snapshot = await db.collection(USERS_COLLECTION).where(firestore.FieldPath.document_id(), "in", batch_ids).get()
+            
+            users_snapshot = await db.collection(USERS_COLLECTION).where(
+                FieldPath.document_id(), "in", batch_ids 
+            ).get()
             for user_doc_snap in users_snapshot:
                 user_details_map[user_doc_snap.id] = user_doc_snap.to_dict()
 
@@ -147,7 +150,7 @@ async def list_events(
 @router.get("/{event_id}", response_model=EventWithSignupStatus)
 async def get_event(
     event_id: str,
-    db: firestore.AsyncClient = Depends(get_db), # Changed to AsyncClient
+    db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac)
 ):
     try:
@@ -165,9 +168,9 @@ async def get_event(
 
         if event_data.get("organizerUserId"):
             organizer_details = await _get_user_details(db, event_data["organizerUserId"])
-            event_data["organizerFirstName"] = organizer_details.get("firstName")
-            event_data["organizerLastName"] = organizer_details.get("lastName")
-            event_data["organizerEmail"] = organizer_details.get("email")
+            response_data["organizerFirstName"] = organizer_details.get("firstName")
+            response_data["organizerLastName"] = organizer_details.get("lastName")
+            response_data["organizerEmail"] = organizer_details.get("email")
 
         is_signed_up = None
         assignment_status = None
@@ -192,7 +195,7 @@ async def get_event(
 
 @router.put("/{event_id}", response_model=EventResponse, dependencies=[Depends(require_permission("events", "edit"))])
 async def update_event(
-    event_id: str, event_update_data: EventUpdate, db: firestore.AsyncClient = Depends(get_db) # Changed to AsyncClient
+    event_id: str, event_update_data: EventUpdate, db: firestore.AsyncClient = Depends(get_db) 
 ):
     try:
         doc_ref = db.collection(EVENTS_COLLECTION).document(event_id)
@@ -209,7 +212,6 @@ async def update_event(
         final_start_time_str = update_data_dict.get("dateTime", existing_event_data.get("dateTime"))
         final_end_time_str = update_data_dict.get("endTime", existing_event_data.get("endTime"))
         
-        # Ensure they are datetime objects for comparison if they are strings
         final_start_time = final_start_time_str
         if isinstance(final_start_time_str, str):
              final_start_time = datetime.datetime.fromisoformat(final_start_time_str.replace("Z", "+00:00"))
@@ -223,7 +225,7 @@ async def update_event(
 
         if "organizerUserId" in update_data_dict:
             org_uid = update_data_dict["organizerUserId"]
-            if org_uid is not None: # Allow unsetting organizer
+            if org_uid is not None: 
                 organizer_doc = await db.collection(USERS_COLLECTION).document(org_uid).get()
                 if not organizer_doc.exists:
                     raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Organizer user with ID '{org_uid}' not found.")
@@ -254,34 +256,28 @@ async def update_event(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.delete("/{event_id}", status_code=status.HTTP_204_NO_CONTENT, dependencies=[Depends(require_permission("events", "delete"))])
-async def delete_event(event_id: str, db: firestore.AsyncClient = Depends(get_db)): # Changed to AsyncClient
+async def delete_event(event_id: str, db: firestore.AsyncClient = Depends(get_db)): 
     try:
         event_doc_ref = db.collection(EVENTS_COLLECTION).document(event_id)
         event_doc = await event_doc_ref.get()
         if not event_doc.exists:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Event '{event_id}' not found")
         
-        # Delete related assignments
         assignments_query = db.collection(ASSIGNMENTS_COLLECTION) \
             .where(filter=FieldFilter("assignableId", "==", event_id)) \
             .where(filter=FieldFilter("assignableType", "==", "event"))
         
         assignments_snapshot = assignments_query.stream()
         
-        # Use a batch for deleting assignments
         batch = db.batch()
         async for assignment_doc in assignments_snapshot:
             batch.delete(assignment_doc.reference)
-        await batch.commit() # Commit batch deletion of assignments
+        await batch.commit() 
 
-        # After assignments are deleted, delete the event itself
         await event_doc_ref.delete()
         
     except Exception as e:
-        # Log the error for more details
         print(f"Error deleting event {event_id} and its assignments: {e}")
-        # import traceback
-        # print(traceback.format_exc())
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 
@@ -289,7 +285,7 @@ async def delete_event(event_id: str, db: firestore.AsyncClient = Depends(get_db
 @router.post("/{event_id}/signup", response_model=AssignmentResponse, status_code=status.HTTP_201_CREATED)
 async def self_signup_for_event(
     event_id: str,
-    db: firestore.AsyncClient = Depends(get_db), # Changed to AsyncClient
+    db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
     event_ref = db.collection(EVENTS_COLLECTION).document(event_id)
@@ -298,8 +294,7 @@ async def self_signup_for_event(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Event not found.")
 
     event_data = event_doc.to_dict()
-    # Ensure event status allows signups
-    if event_data.get("status") not in ["open_for_signup", "Open for Signup"]: # Check common variations
+    if event_data.get("status") not in ["open_for_signup", "Open for Signup"]: 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Event is not open for signups.")
 
     existing_assignment_query = db.collection(ASSIGNMENTS_COLLECTION) \
@@ -343,7 +338,7 @@ async def self_signup_for_event(
 @router.delete("/{event_id}/signup", status_code=status.HTTP_204_NO_CONTENT)
 async def withdraw_event_signup(
     event_id: str,
-    db: firestore.AsyncClient = Depends(get_db), # Changed to AsyncClient
+    db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
     assignment_query = db.collection(ASSIGNMENTS_COLLECTION) \
@@ -369,7 +364,7 @@ async def withdraw_event_signup(
     response_model=List[AssignmentResponse],
     dependencies=[Depends(require_permission("events", "manage_assignments"))]
 )
-async def list_event_assignments(event_id: str, db: firestore.AsyncClient = Depends(get_db)): # Changed to AsyncClient
+async def list_event_assignments(event_id: str, db: firestore.AsyncClient = Depends(get_db)): 
     event_ref = db.collection(EVENTS_COLLECTION).document(event_id)
     event_doc = await event_ref.get()
     if not event_doc.exists:
@@ -409,7 +404,7 @@ async def list_event_assignments(event_id: str, db: firestore.AsyncClient = Depe
 async def admin_create_event_assignment( 
     event_id: str,
     assignment_create_data: AssignmentCreate, 
-    db: firestore.AsyncClient = Depends(get_db), # Changed to AsyncClient
+    db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
     event_ref = db.collection(EVENTS_COLLECTION).document(event_id)
@@ -440,7 +435,6 @@ async def admin_create_event_assignment(
     assignment_data_dict["assignableId"] = event_id 
     assignment_data_dict["assignableType"] = "event" 
     assignment_data_dict["assignedByUserId"] = current_rbac_user.uid
-    # assignmentDate is already part of AssignmentCreate via AssignmentBase default_factory
     assignment_data_dict["createdAt"] = firestore.SERVER_TIMESTAMP
     assignment_data_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
     
@@ -466,7 +460,7 @@ async def admin_update_event_assignment(
     event_id: str,
     assignment_id: str,
     assignment_update_data: AssignmentUpdate,
-    db: firestore.AsyncClient = Depends(get_db) # Changed to AsyncClient
+    db: firestore.AsyncClient = Depends(get_db) 
 ):
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document(assignment_id)
     assignment_doc = await assignment_ref.get()
@@ -505,7 +499,7 @@ async def admin_update_event_assignment(
 async def admin_delete_event_assignment( 
     event_id: str,
     assignment_id: str,
-    db: firestore.AsyncClient = Depends(get_db) # Changed to AsyncClient
+    db: firestore.AsyncClient = Depends(get_db) 
 ):
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document(assignment_id)
     assignment_doc = await assignment_ref.get()

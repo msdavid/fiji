@@ -1,6 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List, Optional, Dict, Set
-from firebase_admin import firestore # For FieldPath
+from firebase_admin import firestore 
+from google.cloud.firestore_v1.field_path import FieldPath # Explicit import for FieldPath
 from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import EmailStr
 import datetime
@@ -30,7 +31,6 @@ EVENTS_COLLECTION = "events"
 )
 async def get_volunteer_hours_summary(
     db: firestore.AsyncClient = Depends(get_db)
-    # TODO: Add date range and event_id filters
 ):
     user_hours_map: Dict[str, Dict[str, any]] = {} 
     grand_total_hours = 0.0
@@ -71,9 +71,9 @@ async def get_volunteer_hours_summary(
                 batch_user_ids = user_ids_to_fetch[i:i + MAX_FIRESTORE_IN_QUERY_LIMIT]
                 if not batch_user_ids: 
                     continue
-
+                
                 users_query_snapshot = await db.collection(USERS_COLLECTION).where(
-                    firestore.FieldPath.document_id(), "in", batch_user_ids
+                    FieldPath.document_id(), "in", batch_user_ids 
                 ).get()
 
                 for user_doc in users_query_snapshot:
@@ -101,23 +101,19 @@ async def get_volunteer_hours_summary(
 @router.get(
     "/event-participation/summary",
     response_model=EventParticipationSummaryReport,
-    dependencies=[Depends(require_permission("reports", "view_event_participation"))] # Define this permission
+    dependencies=[Depends(require_permission("reports", "view_event_participation"))] 
 )
 async def get_event_participation_summary(
     db: firestore.AsyncClient = Depends(get_db)
-    # TODO: Add date range filters (e.g., based on event date)
 ):
-    event_participation_map: Dict[str, Dict[str, any]] = {} # Key: eventId
+    event_participation_map: Dict[str, Dict[str, any]] = {} 
     overall_participant_assignments = 0
     unique_volunteers_set: Set[str] = set()
 
     try:
-        # Step 1: Aggregate participation data from assignments
         assignments_query = db.collection(ASSIGNMENTS_COLLECTION).where(
             filter=FieldFilter("assignableType", "==", "event")
         )
-        # Consider filtering by assignment status, e.g., 'confirmed' or 'attended'
-        # assignments_query = assignments_query.where(filter=FieldFilter("status", "in", ["confirmed", "attended"]))
         
         assignments_snapshot = assignments_query.stream()
 
@@ -136,7 +132,7 @@ async def get_event_participation_summary(
             if event_id not in event_participation_map:
                 event_participation_map[event_id] = {
                     "eventId": event_id,
-                    "eventName": None, # To be fetched later
+                    "eventName": None, 
                     "participantCount": 0,
                     "totalHoursContributed": 0.0
                 }
@@ -145,7 +141,6 @@ async def get_event_participation_summary(
             if isinstance(hours_contributed, (float, int)) and hours_contributed > 0:
                 event_participation_map[event_id]["totalHoursContributed"] += hours_contributed
         
-        # Step 2: Fetch event details (names)
         event_ids_to_fetch = list(event_participation_map.keys())
         if event_ids_to_fetch:
             MAX_FIRESTORE_IN_QUERY_LIMIT = 30
@@ -155,18 +150,15 @@ async def get_event_participation_summary(
                     continue
                 
                 events_query_snapshot = await db.collection(EVENTS_COLLECTION).where(
-                    firestore.FieldPath.document_id(), "in", batch_event_ids
+                    FieldPath.document_id(), "in", batch_event_ids 
                 ).get()
 
                 for event_doc in events_query_snapshot:
                     if event_doc.id in event_participation_map:
                         event_data = event_doc.to_dict()
                         event_participation_map[event_doc.id]["eventName"] = event_data.get("name", "Unknown Event Name")
-                        # TODO: Add eventDate if needed and available in Event model/data
-                        # event_participation_map[event_doc.id]["eventDate"] = event_data.get("date") 
 
         detailed_breakdown = [EventParticipationReportItem(**data) for data in event_participation_map.values()]
-        # Sort by event name or date if available
         detailed_breakdown.sort(key=lambda x: x.eventName or x.eventId)
 
         return EventParticipationSummaryReport(
@@ -178,8 +170,6 @@ async def get_event_participation_summary(
 
     except Exception as e:
         print(f"Error generating event participation summary: {e}")
-        # import traceback
-        # print(traceback.format_exc())
         raise HTTPException(
             status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
             detail=f"An unexpected error occurred while generating the report: {str(e)}"
