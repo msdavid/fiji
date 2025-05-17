@@ -44,7 +44,7 @@ const DonationsPage = () => {
         path: '/donations',
         token: idToken,
         method: 'GET',
-        params: { limit: 100, sort_by: 'donationDate', sort_order: 'desc' } // Example params
+        params: { limit: 100, sort_by: 'donationDate', sort_order: 'desc' }
       });
       setDonations(data);
     } catch (err: any) {
@@ -58,7 +58,6 @@ const DonationsPage = () => {
   useEffect(() => {
     if (!authLoading) {
       if (!user) {
-        // router.push('/login'); // Handled by AuthContext or layout typically
         return;
       }
       fetchDonations();
@@ -66,23 +65,23 @@ const DonationsPage = () => {
   }, [authLoading, user, fetchDonations]);
 
   if (authLoading || isLoading) {
-    return <div className="p-8 text-center">Loading donations...</div>;
+    return <div className="py-8 text-center">Loading donations...</div>; // Adjusted padding
   }
 
   if (!canViewDonations && user) {
     return (
-        <div className="p-8 text-center">
+        <div className="py-8 text-center"> {/* Adjusted padding */}
             <p className="text-red-500">{error || "You don't have permission to view donations."}</p>
         </div>
     );
   }
   
   if (error && donations.length === 0) {
-     return <div className="p-8 text-center text-red-500">Error: {error}</div>;
+     return <div className="py-8 text-center text-red-500">Error: {error}</div>; {/* Adjusted padding */}
   }
 
   return (
-    <div className="container mx-auto p-4 sm:p-6">
+    <div> {/* Removed container mx-auto p-4 sm:p-6 */}
       <div className="flex justify-between items-center mb-6">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-200">Donations</h1>
         {canCreateDonations && (
@@ -129,11 +128,9 @@ const DonationsPage = () => {
                     {donation.recordedByUserFirstName || donation.recordedByUserId} {donation.recordedByUserLastName || ''}
                   </td>
                   <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    {/* Placeholder for View/Edit/Delete links if needed */}
                     <Link href={`/dashboard/donations/${donation.id}`} legacyBehavior>
                         <a className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-200">View</a>
                     </Link>
-                    {/* Add Edit/Delete links based on permissions later */}
                   </td>
                 </tr>
               ))}

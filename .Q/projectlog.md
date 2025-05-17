@@ -1,10 +1,134 @@
 # Project Log - Fiji
 
-## Session (2024-07-24 10:00) <!-- Replace with actual date and time -->
+## Session (2024-07-25 10:00) <!-- Replace with actual date and time -->
+- **Q Agent:** Q
+- **User:** Mauro
+- **Objective:** Resolve donations page access issue for sysadmin, fix related bugs, and refine UI layout for donations and profile pages.
+
+### Activity:
+- **Donations Page Access for Sysadmin:**
+    - **Issue:** User "sysadmin" reported "You don't have permission to view donations" despite backend logic granting sysadmins universal access.
+    - **Investigation:**
+        - Reviewed backend RBAC logic (`backend/dependencies/rbac.py`). Confirmed `is_sysadmin` flag correctly grants permissions.
+        - Added temporary logging to `rbac.py` to verify user role retrieval. Confirmed `assignedRoleIds: ['sysadmin']` was fetched.
+        - Inspected frontend donations page (`frontend/src/app/dashboard/donations/page.tsx`). Found that permission check (`hasPrivilege`) was done client-side using `AuthContext` *before* API call.
+        - Inspected `frontend/src/context/AuthContext.tsx`. Found that `hasPrivilege` function was missing.
+    - **Fix:**
+        - Implemented `hasPrivilege` function in `AuthContext.tsx`. This function now checks if `userProfile.assignedRoleIds` includes "sysadmin" and grants permission accordingly.
+        - Added `hasPrivilege` to `AuthContextType` and included it in the context provider's value.
+        - Removed temporary logging from `backend/dependencies/rbac.py`.
+    - **Result:** Sysadmin user can now access the donations page.
+
+- **Donations Page - Firestore Serialization Error:**
+    - **Issue:** After fixing access, an error `("Cannot convert to a Firestore Value", datetime.date(YYYY, M, D), "Invalid type", <class 'datetime.date'>)` occurred when interacting with donations.
+    - **Investigation:**
+        - Identified `donationDate` field in `backend/models/donation.py` was typed as `datetime.date`.
+    - **Fix:**
+        - Changed `donationDate` type from `date` to `str` in `DonationBase` and `DonationUpdate` models.
+        - Added Pydantic validators to ensure `donationDate` (when provided) conforms to "YYYY-MM-DD" format.
+    - **Result:** Firestore serialization error resolved.
+
+- **Donations Page - View Link 404 Error:**
+    - **Issue:** "View" link on donations listing page led to a 404.
+    - **Fix:**
+        - Created placeholder page `frontend/src/app/dashboard/donations/[donationId]/page.tsx` to display individual donation details.
+        - Implemented fetching donation details, permission checks, loading states, and error handling.
+
+- **UI Layout Consistency and Refinements:**
+    - **Dashboard Navigation - Conditional Donations Link:**
+        - Modified `frontend/src/components/dashboard/DashboardNav.tsx` to conditionally render the "Donations" link based on `hasPrivilege('donations', 'list')`.
+    - **Dashboard Page Width Consistency:**
+        - **Issue:** Donations page appeared wider than the navigation bar and other dashboard pages.
+        - **Fix (`DashboardLayout.tsx`):** Applied `max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-6` to the main content wrapper in `frontend/src/app/dashboard/layout.tsx`.
+        - **Fix (Individual Pages):**
+            - Removed redundant container/padding classes from `frontend/src/app/dashboard/donations/page.tsx`.
+            - Removed redundant container/padding classes from `frontend/src/app/dashboard/donations/[donationId]/page.tsx`.
+            - Removed redundant container/padding classes from `frontend/src/app/dashboard/page.tsx`.
+    - **Profile Page (`frontend/src/app/dashboard/profile/page.tsx`) Layout Enhancements:**
+        - **Width:** Initially made full width, then adjusted to `max-w-3xl mx-auto` for the main card container per user request, making it intentionally narrower than other pages.
+        - **Background:** Removed page-specific background color to inherit from `DashboardLayout`, fixing "dark box" effect.
+        - **Card Layout (View Mode):**
+            - Changed to a two-column layout: profile picture on the left, details on the right.
+            - Added a vertical divider between columns.
+            - Page title (user's full name) moved above the card. "Edit Profile" button also moved above the card.
+            - "First Name" and "Last Name" fields removed from within the card (now part of page title).
+            - "Phone" and "Email" fields made inline within the card.
+        - **Card Layout (Edit Mode):**
+            - Adjusted to mimic the two-column proportions of view mode: profile picture (display-only) on the left, form fields on the right.
+
+### Commits to be made:
+- `fix(auth): Implement hasPrivilege in AuthContext for frontend RBAC`
+- `fix(donations): Ensure donationDate is string for Firestore compatibility`
+- `feat(donations): Add donation detail page for view functionality`
+- `feat(nav): Conditionally render Donations link based on permissions`
+- `style(layout): Standardize dashboard page width and padding via DashboardLayout`
+- `style(profile): Refine profile page layout and card design`
+
+---
+## Session (2024-07-24 12:00) <!-- Replace with actual date and time -->
+- **Q Agent:** Q
+- **User:** Mauro
+- **Objective:** Enhance user availability input, refactor user preferences field, add emergency contact details, and resolve related bugs.
+
+### Activity:
+- **Structured User Availability Enhancement (Post-Sprint 5):**
+    - **Goal:** Improve user experience for inputting availability by changing from free-text/comma-separated dates to a structured format.
+    - **Backend (`models/user.py`):**
+        - Defined `GeneralAvailabilityRule` model (weekday, from_time, to_time) with time validation.
+        - Defined `SpecificDateSlot` model (date, optional from/to times, slot_type) with time and date validation (date stored as "YYYY-MM-DD" string).
+        - Updated `UserAvailability` model to use `List[GeneralAvailabilityRule]` and `List[SpecificDateSlot]`.
+        - Added regex patterns for time (`HH:MM`) and date (`YYYY-MM-DD`) string validation.
+    - **Backend (`routers/users.py`):**
+        - Updated `_sanitize_user_data_fields` to correctly initialize/handle the new structured `availability` (empty lists for `general_rules` and `specific_slots` if missing/malformed).
+    - **Frontend (`profile/page.tsx`):**
+        - Defined corresponding TypeScript interfaces for `GeneralAvailabilityRule`, `SpecificDateSlot`, and `UserAvailability`.
+        - Implemented UI in edit mode for dynamically adding, viewing, and removing multiple general availability rules (weekday select, time inputs).
+        - Implemented UI in edit mode for dynamically adding, viewing, and removing multiple specific date slots (date input, optional time inputs, type select).
+        - Updated form state (`formData`) to manage arrays of these structured objects, including frontend-only `id` for list item keying.
+        - Updated `handleSubmit` to process and send the structured availability payload, stripping frontend `id`s.
+        - Added client-side validation for time logic (to_time > from_time, consistency of optional times) before submitting.
+        - Updated view mode to display the structured availability information clearly.
+    - **Frontend (`admin/profile/[userId]/page.tsx`):**
+        - Updated `UserProfileData` interface and display logic to render the new structured availability information in a read-only format.
+    - **Bug Fixes during Availability Enhancement:**
+        - Resolved backend `TypeError` related to Firestore not handling `datetime.date` objects by ensuring dates in `SpecificDateSlot` are stored as "YYYY-MM-DD" strings.
+        - Added frontend validation to prevent "to_time must be after from_time" errors from backend.
+
+- **User Preferences Field Refactor:**
+    - **Goal:** Simplify the `preferences` field from a dictionary to a plain string.
+    - **Backend (`models/user.py`):** Changed `preferences` type from `Optional[Dict[str, Any]]` to `Optional[str]`.
+    - **Backend (`routers/users.py`):** Updated `_sanitize_user_data_fields` to handle `preferences` as a string (setting to `None` if non-string data encountered).
+    - **Frontend (`profile/page.tsx`):**
+        - Updated interfaces; removed JSON parsing/stringifying for `preferences`. Textarea now binds directly to the string.
+        - Updated placeholder text for preferences textarea.
+    - **Frontend (`admin/profile/[userId]/page.tsx`):** Updated interface and display logic for string `preferences`.
+
+- **Emergency Contact Details Field Addition:**
+    - **Goal:** Add a new field for users' emergency contact information.
+    - **Backend (`models/user.py`):** Added `emergencyContactDetails: Optional[str]` to `UserBase` and `UserUpdate`.
+    - **Backend (`routers/users.py`):** Updated `_sanitize_user_data_fields` for the new field.
+    - **Frontend (`profile/page.tsx`):** Added field to interfaces, form state, `initializeFormData`, `handleSubmit`, edit mode (textarea), and view mode.
+    - **Frontend (`admin/profile/[userId]/page.tsx`):** Added field to interface and display logic.
+
+- **Styling Refinement (`profile/page.tsx`):**
+    - Ensured form input fields (text inputs, textareas, selects) consistently use full width of their containers by defining and applying `baseInputStyles` which includes `w-full`.
+
+- **Commits:**
+    - `feat(backend): Implement Sprint 5 User Availability & Donations` (initial Sprint 5 backend work)
+    - `feat(frontend): Implement Sprint 5 UI for Availability & Donations` (initial Sprint 5 frontend work)
+    - `fix(frontend): Align frontend profile phone field and backend User model typing`
+    - `fix(backend): Store availability dates as strings in Firestore`
+    - `fix(frontend): Add client-side validation for availability times`
+    - `feat: Implement structured user availability input` (major availability enhancement)
+    - `refactor: Change user preferences field to string type`
+    - `feat: Add emergency contact details field to user profile`
+    - `style(frontend): Ensure profile form inputs use full width`
+
+---
+## Session (2024-07-24 10:00) 
 - **Q Agent:** Q
 - **User:** Mauro
 - **Objective:** Complete backend tasks for Sprint 4 (Working Group and Assignment Management), address runtime errors, and refactor Pydantic models.
-
 ### Activity:
 - **Sprint 4 Review & Backend Implementation:**
     - Reviewed `.Q/sprints.md` and `docs/technical-specs.md` for Sprint 4 requirements.
@@ -227,4 +351,6 @@
 - Modified `frontend/src/app/page.tsx` to implement a redirect from `/` to `/login`.
   - Replaced existing content with `next/navigation`'s `redirect` function.
 
+## Previous Sessions
 
+... (previous log entries remain unchanged) ...

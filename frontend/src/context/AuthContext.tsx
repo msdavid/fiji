@@ -1,6 +1,6 @@
 'use client';
 
-import { createContext, useContext, useEffect, useState, ReactNode } from 'react';
+import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
 import { onAuthStateChanged, User, getIdToken } from 'firebase/auth';
 import { auth } from '@/lib/firebaseConfig';
 
@@ -16,7 +16,9 @@ interface UserProfile {
   skills?: string;
   qualifications?: string;
   preferences?: string;
-  profilePictureUrl?: string | null; // Added profile picture URL
+  profilePictureUrl?: string | null;
+  // Consider adding a 'privileges' map here if you want full RBAC on frontend
+  // For example: privileges?: Record<string, string[]>; 
 }
 
 interface AuthContextType {
@@ -25,14 +27,17 @@ interface AuthContextType {
   userProfile: UserProfile | null; 
   loading: boolean;
   error: Error | null;
+  hasPrivilege: (resource: string, action: string) => boolean; // Added hasPrivilege
 }
 
+// Provide a default no-op hasPrivilege for the default context value
 const defaultAuthContextValue: AuthContextType = {
   user: null,
   idToken: null,
   userProfile: null,
   loading: true,
   error: null,
+  hasPrivilege: () => false, 
 };
 
 const AuthContext = createContext<AuthContextType>(defaultAuthContextValue);
@@ -77,7 +82,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                     const errorData = await response.json();
                     errorDetails += `: ${errorData.detail || errorData.message || response.statusText}`;
                   } catch (e) {
-                    // If parsing errorData fails, use the original statusText
                     errorDetails += `: ${response.statusText}`;
                   }
                   throw new Error(`Failed to fetch user profile. ${errorDetails}`);
@@ -122,8 +126,35 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     };
   }, []);
 
+  const hasPrivilege = useCallback((resource: string, action: string): boolean => {
+    if (loading || !userProfile) {
+      // console.log("hasPrivilege: Loading or no userProfile, returning false.");
+      return false; 
+    }
+    
+    // Sysadmin override: if user has 'sysadmin' role ID, grant all permissions
+    if (userProfile.assignedRoleIds && userProfile.assignedRoleIds.includes('sysadmin')) {
+      // console.log(`hasPrivilege: User is sysadmin. Granting ${action} on ${resource}.`);
+      return true;
+    }
+    
+    // TODO: Implement more granular privilege checking for non-sysadmin users.
+    // This would typically involve:
+    // 1. Fetching the detailed privileges for all of the user's assignedRoleIds from the backend.
+    //    This could be a map like: { "donations": ["list", "create"], "events": ["view"] }
+    // 2. Storing this privilege map in the userProfile or a separate state.
+    // 3. Checking against this map here:
+    //    const resourcePrivileges = userProfile.privileges?.[resource];
+    //    if (resourcePrivileges && resourcePrivileges.includes(action)) {
+    //      return true;
+    //    }
+
+    console.warn(`hasPrivilege: Basic implementation. User is not sysadmin. Denying '${action}' on '${resource}'. Full RBAC check for non-sysadmins needs to be implemented by fetching role privileges for roles: ${userProfile.assignedRoleIds.join(', ')}.`);
+    return false;
+  }, [userProfile, loading]);
+
   return (
-    <AuthContext.Provider value={{ user, idToken, userProfile, loading, error }}>
+    <AuthContext.Provider value={{ user, idToken, userProfile, loading, error, hasPrivilege }}>
       {children}
     </AuthContext.Provider>
   );
@@ -131,9 +162,8 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  // The check for context === defaultAuthContextValue is a heuristic and might not be perfectly reliable
-  // for detecting if used outside a provider, especially if initial state matches default.
-  // Standard practice is `if (context === undefined)` when no default value is provided to createContext.
-  // For now, we rely on correct usage.
+  if (context === undefined) { // Standard check for context usage outside provider
+    throw new Error('useAuth must be used within an AuthProvider');
+  }
   return context;
 };

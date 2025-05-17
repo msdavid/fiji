@@ -9,7 +9,7 @@ import React from 'react'; // Import React for JSX elements in array and keys
 
 export default function DashboardNav() {
   const router = useRouter();
-  const { user, userProfile, loading: authLoading } = useAuth();
+  const { user, userProfile, loading: authLoading, hasPrivilege } = useAuth(); // Added hasPrivilege
 
   const handleLogout = async () => {
     try {
@@ -47,7 +47,7 @@ export default function DashboardNav() {
   const displayName = userProfile?.firstName ? userProfile.firstName : (user.email || "Profile");
 
   const linkClassName = "text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400";
-  const separatorClassName = "text-gray-400 dark:text-gray-500 select-none"; // Added select-none
+  const separatorClassName = "text-gray-400 dark:text-gray-500 select-none";
 
   const navLinkComponents = [];
 
@@ -60,6 +60,15 @@ export default function DashboardNav() {
     navLinkComponents.push(
       <Link key="wg" href="/dashboard/admin/working-groups" className={linkClassName}>
         Working Groups
+      </Link>
+    );
+  }
+
+  // Conditionally add Donations link
+  if (hasPrivilege && hasPrivilege('donations', 'list')) {
+    navLinkComponents.push(
+      <Link key="donations" href="/dashboard/donations" className={linkClassName}>
+        Donations
       </Link>
     );
   }
@@ -96,7 +105,6 @@ export default function DashboardNav() {
                 Fiji Platform
             </Link>
           </div>
-          {/* Using space-x-3 for spacing around links and separators */}
           <div className="flex items-center space-x-3"> 
             {renderedNavItems}
             <button

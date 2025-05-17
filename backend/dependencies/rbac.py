@@ -1,5 +1,5 @@
 from fastapi import Depends, HTTPException, status
-from typing import List, Dict, Any, Set, Optional 
+from typing import List, Dict, Any, Set, Optional
 from firebase_admin import firestore # Import firestore for type hinting
 
 # Use direct imports from subdirectories of 'backend'
@@ -32,7 +32,7 @@ class RBACUser:
 
 async def get_current_user_with_rbac( # Made async
     db: firestore.AsyncClient = Depends(get_db), # Use AsyncClient
-    firebase_user: dict = Depends(get_firebase_user) 
+    firebase_user: dict = Depends(get_firebase_user)
 ) -> RBACUser:
     """
     FastAPI dependency to get the current authenticated user along with their
@@ -45,7 +45,7 @@ async def get_current_user_with_rbac( # Made async
         )
 
     uid = firebase_user.get("uid")
-    email = firebase_user.get("email") 
+    email = firebase_user.get("email")
 
     if not uid:
         raise HTTPException(
@@ -64,7 +64,7 @@ async def get_current_user_with_rbac( # Made async
     
     user_data = user_doc.to_dict()
     assigned_role_ids: List[str] = user_data.get("assignedRoleIds", []) # Changed from role_names to role_ids
-    if assigned_role_ids is None: 
+    if assigned_role_ids is None:
         assigned_role_ids = [] # Ensure it's a list
     
     is_sysadmin = "sysadmin" in assigned_role_ids # Check against role ID "sysadmin"
@@ -109,5 +109,5 @@ def require_permission(resource: str, action: str):
                 status_code=status.HTTP_403_FORBIDDEN,
                 detail=f"User does not have permission to perform '{action}' on '{resource}'.",
             )
-        return current_rbac_user 
+        return current_rbac_user
     return _permission_checker

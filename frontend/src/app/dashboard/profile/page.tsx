@@ -40,7 +40,7 @@ interface UserDataFromBackend {
   firstName: string;
   lastName: string;
   phone?: string | null;
-  emergencyContactDetails?: string | null; // New field
+  emergencyContactDetails?: string | null; 
   skills?: string | string[]; 
   qualifications?: string | string[]; 
   preferences?: string | null; 
@@ -58,7 +58,7 @@ interface EditableUserProfile {
   lastName:string;
   email: string; 
   phone?: string;
-  emergencyContactDetails?: string; // New field
+  emergencyContactDetails?: string; 
   skills?: string; 
   qualifications?: string; 
   preferences?: string; 
@@ -84,7 +84,7 @@ const ProfilePage = () => {
     lastName: '',
     email: '', 
     phone: '',
-    emergencyContactDetails: '', // New field
+    emergencyContactDetails: '', 
     skills: '', 
     qualifications: '', 
     preferences: '', 
@@ -107,7 +107,7 @@ const ProfilePage = () => {
       lastName: profileData.lastName || '',
       email: profileData.email || '', 
       phone: profileData.phone || '',
-      emergencyContactDetails: profileData.emergencyContactDetails || '', // New field
+      emergencyContactDetails: profileData.emergencyContactDetails || '', 
       skills: arrayFieldToString(profileData.skills),
       qualifications: arrayFieldToString(profileData.qualifications),
       preferences: profileData.preferences || '', 
@@ -258,7 +258,7 @@ const ProfilePage = () => {
       firstName: formData.firstName,
       lastName: formData.lastName,
       phone: formData.phone,
-      emergencyContactDetails: formData.emergencyContactDetails || undefined, // New field
+      emergencyContactDetails: formData.emergencyContactDetails || undefined, 
       preferences: formData.preferences || undefined, 
       availability: availabilityPayload, 
     };
@@ -307,48 +307,82 @@ const ProfilePage = () => {
   }
 
   const currentProfileData = profile || initialFormData;
+  const pageTitle = currentProfileData ? `${currentProfileData.firstName} ${currentProfileData.lastName}` : "User Profile";
+
+  const ProfileDetailItem = ({ label, value, isTextArea = false }: { label: string; value: string | undefined | null; isTextArea?: boolean }) => {
+    if (value === null || value === undefined || value.trim() === '') return null;
+    return (
+      <div>
+        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">{label}</label>
+        {isTextArea ? (
+          <p className="mt-1 text-md text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{value}</p>
+        ) : (
+          <p className="mt-1 text-md text-gray-800 dark:text-gray-200">{value}</p>
+        )}
+      </div>
+    );
+  };
+
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
-      <div className="max-w-3xl mx-auto">
-        <div className="mb-6">
-            <Link href="/dashboard" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-              ← Back to Dashboard
-            </Link>
-        </div>
+    <div className="max-w-3xl mx-auto"> 
+      <div className="mb-4">
+          <Link href="/dashboard" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+            ← Back to Dashboard
+          </Link>
+      </div>
 
-        <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8">
-          <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-8">
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">Your Profile</h1>
-            {!isEditing && currentProfileData && (
-              <button onClick={() => { setIsEditing(true); if(profile) initializeFormData(profile); setError(null); }}
-                className="mt-4 sm:mt-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm">
-                Edit Profile
-              </button>
-            )}
-          </div>
+      <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+          {isEditing ? `Editing Profile: ${pageTitle}` : pageTitle}
+        </h1>
+        {!isEditing && currentProfileData && (
+          <button onClick={() => { setIsEditing(true); if(profile) initializeFormData(profile); setError(null); }}
+            className="mt-4 sm:mt-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm">
+            Edit Profile
+          </button>
+        )}
+      </div>
 
-          {isLoading && isEditing && <p>Loading edit form...</p>}
-          
-          {!isEditing && currentProfileData ? (
-            <div className="space-y-6">
-              <div className="mb-6">
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Profile Picture</label>
-                {currentProfileData.profilePictureUrl ? <img src={currentProfileData.profilePictureUrl} alt="Profile" className="mt-2 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"/> : <div className="mt-2 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">No Picture</div>}
-              </div>
-              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">First Name</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.firstName}</p></div>
-              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Last Name</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.lastName}</p></div>
-              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Email</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.email}</p></div>
-              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Phone</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.phone || 'N/A'}</p></div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Emergency Contact Details</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{currentProfileData.emergencyContactDetails || 'N/A'}</p>
-              </div>
-              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Skills</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{arrayFieldToString(currentProfileData.skills) || 'N/A'}</p></div>
-              <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Qualifications</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{arrayFieldToString(currentProfileData.qualifications) || 'N/A'}</p></div>
-              <div>
-                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Preferences</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{currentProfileData.preferences || 'N/A'}</p>
+      {isLoading && isEditing && <p>Loading edit form...</p>}
+
+      <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8">
+        {!isEditing && currentProfileData ? (
+          // VIEW MODE
+          <div className="md:flex md:space-x-6">
+            <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center md:items-start">
+              {currentProfileData.profilePictureUrl ? (
+                <img 
+                  src={currentProfileData.profilePictureUrl} 
+                  alt="Profile" 
+                  className="w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"
+                />
+              ) : (
+                <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
+                  No Picture
+                </div>
+              )}
+            </div>
+
+            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3"></div>
+
+            <div className="flex-grow space-y-4">
+              <div className="space-y-3">
+                <div className="flex flex-col sm:flex-row sm:space-x-6">
+                  <div className="flex-1">
+                    <ProfileDetailItem label="Phone" value={currentProfileData.phone || 'N/A'} />
+                  </div>
+                  <div className="flex-1 mt-3 sm:mt-0">
+                    <ProfileDetailItem label="Email" value={currentProfileData.email} />
+                  </div>
+                </div>
+                <ProfileDetailItem label="Emergency Contact Details" value={currentProfileData.emergencyContactDetails || 'N/A'} isTextArea />
+                <ProfileDetailItem label="Skills" value={arrayFieldToString(currentProfileData.skills) || 'N/A'} isTextArea />
+                <ProfileDetailItem label="Qualifications" value={arrayFieldToString(currentProfileData.qualifications) || 'N/A'} isTextArea />
+                <ProfileDetailItem label="Preferences" value={currentProfileData.preferences || 'N/A'} isTextArea />
+                {currentProfileData.assignedRoleNames && currentProfileData.assignedRoleNames.length > 0 && (
+                    <ProfileDetailItem label="Roles" value={currentProfileData.assignedRoleNames.join(', ')} />
+                )}
               </div>
 
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -358,131 +392,149 @@ const ProfilePage = () => {
                   {currentProfileData.availability?.general_rules && currentProfileData.availability.general_rules.length > 0 ? (
                     <ul className="list-disc list-inside mt-1 space-y-1">
                       {currentProfileData.availability.general_rules.map((rule, index) => (
-                        <li key={index} className="text-lg text-gray-800 dark:text-gray-200">
+                        <li key={index} className="text-md text-gray-800 dark:text-gray-200">
                           Every {rule.weekday} from {rule.from_time} to {rule.to_time}
                         </li>
                       ))}
                     </ul>
-                  ) : <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">Not specified.</p>}
+                  ) : <p className="mt-1 text-md text-gray-800 dark:text-gray-200">Not specified.</p>}
                 </div>
-                <div className="mt-4">
+                <div className="mt-3">
                   <h3 className="text-md font-medium text-gray-500 dark:text-gray-400">Specific Date Slots</h3>
                   {currentProfileData.availability?.specific_slots && currentProfileData.availability.specific_slots.length > 0 ? (
                     <ul className="list-disc list-inside mt-1 space-y-1">
                       {currentProfileData.availability.specific_slots.map((slot, index) => (
-                        <li key={index} className={`text-lg ${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                        <li key={index} className={`text-md ${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                           {slot.date ? format(parseISO(slot.date), 'PPP') : 'Invalid Date'}
                           {slot.from_time && slot.to_time ? ` from ${slot.from_time} to ${slot.to_time}` : ' (All day)'}
                           {' '}({slot.slot_type})
                         </li>
                       ))}
                     </ul>
-                  ) : <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">No specific date slots defined.</p>}
+                  ) : <p className="mt-1 text-md text-gray-800 dark:text-gray-200">No specific date slots defined.</p>}
                 </div>
               </div>
-              {currentProfileData.assignedRoleNames && currentProfileData.assignedRoleNames.length > 0 && (
-                  <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                      <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Roles</label>
-                      <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{currentProfileData.assignedRoleNames.join(', ')}</p>
-                  </div>
-              )}
             </div>
-          ) : !isLoading && isEditing && currentProfileData ? ( 
-            <form onSubmit={handleSubmit} className="space-y-6">
-              {error && <div className="p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
-              
-              <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
-              <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
-              <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className={`mt-1 ${disabledInputStyles}`} /></div>
-              <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} /></div>
-              <div>
-                <label htmlFor="emergencyContactDetails" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Emergency Contact Details</label>
-                <textarea name="emergencyContactDetails" id="emergencyContactDetails" value={formData.emergencyContactDetails || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} placeholder="e.g., Name, Relation, Phone Number"/>
-              </div>
-              <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
-              <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
-              <div>
-                <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences</label>
-                <textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} placeholder="Enter any preferences as free text (e.g., communication, interests)"/>
-              </div>
-              
-              <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Edit Availability</h2>
+          </div>
+        ) : !isLoading && isEditing && currentProfileData ? ( 
+          // EDIT MODE
+          <div className="md:flex md:space-x-6">
+            {/* Left Column: Profile Picture (display only) */}
+            <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center md:items-start">
+              {currentProfileData.profilePictureUrl ? (
+                <img 
+                  src={currentProfileData.profilePictureUrl} 
+                  alt="Profile" 
+                  className="w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"
+                />
+              ) : (
+                <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
+                  No Picture
+                </div>
+              )}
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center md:text-left">Profile picture can be updated via Gravatar or future upload feature.</p>
+            </div>
+
+            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3"></div>
+            
+            {/* Right Column: Form Fields */}
+            <div className="flex-grow">
+              <form onSubmit={handleSubmit} className="space-y-6">
+                {error && <div className="p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
                 
-                <div className="space-y-3 mb-6">
-                  <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">General Recurring Availability</h3>
-                  {formData.availability.general_rules.map((rule, index) => (
-                    <div key={rule.id || index} className="p-3 border dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30">
-                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-                        <div>
-                          <label htmlFor={`ga_weekday_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Weekday</label>
-                          <select name={`ga_weekday_${index}`} value={rule.weekday} onChange={(e) => handleGeneralRuleChange(index, 'weekday', e.target.value as Weekday)} className={`${baseInputStyles} text-sm`}>
-                            {weekdays.map(day => <option key={day} value={day}>{day}</option>)}
-                          </select>
+                <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
+                <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
+                <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className={`mt-1 ${disabledInputStyles}`} /></div>
+                <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} /></div>
+                <div>
+                  <label htmlFor="emergencyContactDetails" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Emergency Contact Details</label>
+                  <textarea name="emergencyContactDetails" id="emergencyContactDetails" value={formData.emergencyContactDetails || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} placeholder="e.g., Name, Relation, Phone Number"/>
+                </div>
+                <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
+                <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
+                <div>
+                  <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences</label>
+                  <textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} placeholder="Enter any preferences as free text (e.g., communication, interests)"/>
+                </div>
+                
+                <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Edit Availability</h2>
+                  
+                  <div className="space-y-3 mb-6">
+                    <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">General Recurring Availability</h3>
+                    {formData.availability.general_rules.map((rule, index) => (
+                      <div key={rule.id || index} className="p-3 border dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30">
+                        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                          <div>
+                            <label htmlFor={`ga_weekday_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Weekday</label>
+                            <select name={`ga_weekday_${index}`} value={rule.weekday} onChange={(e) => handleGeneralRuleChange(index, 'weekday', e.target.value as Weekday)} className={`${baseInputStyles} text-sm`}>
+                              {weekdays.map(day => <option key={day} value={day}>{day}</option>)}
+                            </select>
+                          </div>
+                          <div>
+                            <label htmlFor={`ga_from_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">From Time</label>
+                            <input type="time" name={`ga_from_${index}`} value={rule.from_time} onChange={(e) => handleGeneralRuleChange(index, 'from_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
+                          </div>
+                          <div>
+                            <label htmlFor={`ga_to_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">To Time</label>
+                            <input type="time" name={`ga_to_${index}`} value={rule.to_time} onChange={(e) => handleGeneralRuleChange(index, 'to_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
+                          </div>
                         </div>
-                        <div>
-                          <label htmlFor={`ga_from_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">From Time</label>
-                          <input type="time" name={`ga_from_${index}`} value={rule.from_time} onChange={(e) => handleGeneralRuleChange(index, 'from_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
-                        </div>
-                        <div>
-                          <label htmlFor={`ga_to_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">To Time</label>
-                          <input type="time" name={`ga_to_${index}`} value={rule.to_time} onChange={(e) => handleGeneralRuleChange(index, 'to_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
-                        </div>
+                        <button type="button" onClick={() => removeGeneralRule(rule.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
+                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                        </button>
                       </div>
-                      <button type="button" onClick={() => removeGeneralRule(rule.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
-                        <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                      </button>
-                    </div>
-                  ))}
-                  <button type="button" onClick={addGeneralRule} className="text-sm px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">
-                    + Add General Rule
+                    ))}
+                    <button type="button" onClick={addGeneralRule} className="text-sm px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">
+                      + Add General Rule
+                    </button>
+                  </div>
+                  
+                  <div className="space-y-3">
+                     <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Specific Date Slots</h3>
+                     {formData.availability.specific_slots.map((slot, index) => (
+                       <div key={slot.id || index} className="p-3 border dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30">
+                         <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
+                           <div>
+                             <label htmlFor={`sd_date_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Date</label>
+                             <input type="date" name={`sd_date_${index}`} value={slot.date} onChange={(e) => handleSpecificSlotChange(index, 'date', e.target.value)} className={`${baseInputStyles} text-sm`} />
+                           </div>
+                           <div>
+                             <label htmlFor={`sd_from_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">From (Optional)</label>
+                             <input type="time" name={`sd_from_${index}`} value={slot.from_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'from_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
+                           </div>
+                           <div>
+                             <label htmlFor={`sd_to_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">To (Optional)</label>
+                             <input type="time" name={`sd_to_${index}`} value={slot.to_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'to_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
+                           </div>
+                           <div>
+                              <label htmlFor={`sd_type_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Type</label>
+                              <select name={`sd_type_${index}`} value={slot.slot_type} onChange={(e) => handleSpecificSlotChange(index, 'slot_type', e.target.value as SlotType)} className={`${baseInputStyles} text-sm`}>
+                                  {slotTypes.map(type => <option key={type} value={type} className="capitalize">{type.charAt(0).toUpperCase() + type.slice(1)}</option>)}
+                              </select>
+                           </div>
+                         </div>
+                         <button type="button" onClick={() => removeSpecificSlot(slot.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
+                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                         </button>
+                       </div>
+                     ))}
+                     <button type="button" onClick={addSpecificSlot} className="text-sm px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">
+                       + Add Specific Date Slot
+                     </button>
+                  </div>
+                </div>
+
+                <div className="flex items-center justify-end space-x-3 pt-4">
+                  <button type="button" onClick={() => { setIsEditing(false); if (profile) initializeFormData(profile); setError(null); }} className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium border border-gray-300 dark:border-gray-500 rounded-md shadow-sm">Cancel</button>
+                  <button type="submit" disabled={isLoading} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50">
+                    {isLoading ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
-                
-                <div className="space-y-3">
-                   <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Specific Date Slots</h3>
-                   {formData.availability.specific_slots.map((slot, index) => (
-                     <div key={slot.id || index} className="p-3 border dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30">
-                       <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
-                         <div>
-                           <label htmlFor={`sd_date_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Date</label>
-                           <input type="date" name={`sd_date_${index}`} value={slot.date} onChange={(e) => handleSpecificSlotChange(index, 'date', e.target.value)} className={`${baseInputStyles} text-sm`} />
-                         </div>
-                         <div>
-                           <label htmlFor={`sd_from_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">From (Optional)</label>
-                           <input type="time" name={`sd_from_${index}`} value={slot.from_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'from_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
-                         </div>
-                         <div>
-                           <label htmlFor={`sd_to_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">To (Optional)</label>
-                           <input type="time" name={`sd_to_${index}`} value={slot.to_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'to_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
-                         </div>
-                         <div>
-                            <label htmlFor={`sd_type_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Type</label>
-                            <select name={`sd_type_${index}`} value={slot.slot_type} onChange={(e) => handleSpecificSlotChange(index, 'slot_type', e.target.value as SlotType)} className={`${baseInputStyles} text-sm`}>
-                                {slotTypes.map(type => <option key={type} value={type} className="capitalize">{type.charAt(0).toUpperCase() + type.slice(1)}</option>)}
-                            </select>
-                         </div>
-                       </div>
-                       <button type="button" onClick={() => removeSpecificSlot(slot.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
-                         <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
-                       </button>
-                     </div>
-                   ))}
-                   <button type="button" onClick={addSpecificSlot} className="text-sm px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">
-                     + Add Specific Date Slot
-                   </button>
-                </div>
-              </div>
-
-              <div className="flex items-center justify-end space-x-3 pt-4">
-                <button type="button" onClick={() => { setIsEditing(false); if (profile) initializeFormData(profile); setError(null); }} className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium border border-gray-300 dark:border-gray-500 rounded-md shadow-sm">Cancel</button>
-                <button type="submit" disabled={isLoading} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50">
-                  {isLoading ? 'Saving...' : 'Save Changes'}
-                </button>
-              </div>
-            </form>
-          ) : null}
-        </div>
+              </form>
+            </div>
+          </div>
+        ) : null}
       </div>
     </div>
   );

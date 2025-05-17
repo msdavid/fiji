@@ -1,31 +1,26 @@
 'use client';
 
-import { useAuth } from '@/context/AuthContext'; // Still needed for user display name/email
+import { useAuth } from '@/context/AuthContext'; 
 
 export default function DashboardPage() {
-  const { user, loading: authContextLoading } = useAuth(); // Renamed to avoid conflict if page had its own loading
+  const { user, loading: authContextLoading } = useAuth(); 
 
-  // Primary loading, authError, and !user checks are handled by DashboardLayout.
-  // This component renders if user is authenticated.
-  // authContextLoading check here is for content specific to this page if needed.
-  if (authContextLoading && !user) { // Or a more specific loading state for this page's data
+  if (authContextLoading && !user) { 
     return (
-      <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-        <div className="px-4 py-6 sm:px-0">
-          <div>Loading dashboard content...</div>
-        </div>
+      // This div is okay for a loading state specific to this page's content,
+      // but the layout already handles overall page loading.
+      // If this page had its own data fetching, this loading state would be more relevant.
+      // For now, it will likely not be seen due to layout's loading.
+      <div> 
+        <div>Loading dashboard content...</div>
       </div>
     );
   }
   
-  // If we reach here, user object should be available from useAuth.
-  // If user is null here, it means DashboardLayout's logic might need review,
-  // or there's a race condition with AuthContext.
-  // For now, assume user is populated by the time layout allows rendering.
-
   return (
-    <div className="max-w-7xl mx-auto py-6 sm:px-6 lg:px-8">
-      <div className="px-4 py-6 sm:px-0">
+    // Removed the redundant max-w-7xl container. Content will now be constrained by DashboardLayout.
+    <div> 
+      <div className="px-4 py-6 sm:px-0"> {/* This inner padding can be kept or adjusted if needed */}
         <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
           <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
             Welcome to your Dashboard, {user?.displayName || user?.email}!
