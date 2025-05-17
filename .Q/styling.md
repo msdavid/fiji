@@ -68,19 +68,32 @@ This document outlines the key styling principles and common patterns used in th
 *   **Margins:** Consistent bottom margins (`mb-6`, `mb-8`). Top padding (`pt-8`).
 *   **Flexbox:** Used extensively (`flex items-center`, `justify-between`, `space-x-4` for nav items).
 *   **Dividers:** `border-b border-gray-200 dark:border-gray-700` (sections, dropdown header), `border-t` (dropdown sections).
+*   **Page-Level Control Sections (e.g., Search/Filter Bars):**
+    *   May be enclosed in a styled card (`bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 md:p-6`) for visual grouping.
+    *   Alternatively, controls can be placed directly on the page background (within the main page padding provided by `DashboardLayout`), typically using a grid (`grid grid-cols-1 md:grid-cols-2 gap-4`) and appropriate margins (`mb-6`) for spacing. The choice depends on the desired visual hierarchy and page complexity.
 
 ## 4. Card Styling
-(Content as before)
+(Content as before, but note that "Search Bar Container" might be superseded by the more general note in Section 3)
+*   **General Content/Form Card:** `bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8`
+*   **Item Cards (e.g., assigned volunteers):** `bg-white dark:bg-gray-800 rounded-lg shadow-md p-4`
+*   **Search Bar Container (Full-width context):** `mb-6 bg-white dark:bg-gray-900 rounded-lg shadow-md` (This is one option for control grouping, see also Section 3 "Page-Level Control Sections").
+*   **Event Listing Cards:**
+    *   Outer: `bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col group hover:shadow-xl transition-shadow duration-200 ease-in-out`
+    *   Structure: Two-column flex layout (icon on left, details on right).
+    *   Icon Section: `flex-shrink-0 p-3 sm:p-4 flex items-start justify-center border-r border-gray-200 dark:border-gray-700`
+        *   Icon Background: `w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center`
+    *   Details Section: `flex flex-col flex-grow p-4 sm:p-6 overflow-hidden`
+        *   Metadata Footer: `pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-gray-200 dark:border-gray-700`
 
 ## 5. Buttons
-(Content as before, ensure Primary button style matches logout button in nav if applicable, or create a specific nav button style)
+(Content as before)
 *   **Primary (Indigo):** `py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50 inline-flex items-center`
 *   **Avatar Button (Navbar):** `flex items-center justify-center w-10 h-10 bg-indigo-100 dark:bg-indigo-800 rounded-full text-indigo-600 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500 transition-colors duration-150 ease-in-out`
     *   Avatar Initial: `text-lg font-medium`
     *   Avatar Icon: `material-icons text-xl`
 
 ## 6. Icons (Material Icons)
-(Content as before, ensure dropdown item icon styles are covered)
+(Content as before)
 *   **Dropdown Menu Item Icons:** `material-icons text-lg mr-2 text-gray-500 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400` (for standard items) or `group-hover:text-red-700 dark:group-hover:text-red-300` (for destructive items).
 
 ## 7. Forms & Inputs
