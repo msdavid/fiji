@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -27,8 +27,27 @@ interface Event {
   organizerUserId?: string;
   organizerFirstName?: string;
   organizerLastName?: string;
-  icon?: string; // Added icon field
+  icon?: string;
 }
+
+const EVENT_STATUSES = {
+  ALL: "",
+  DRAFT: "draft",
+  OPEN_FOR_SIGNUP: "open_for_signup",
+  ONGOING: "ongoing", 
+  COMPLETED: "completed",
+  CANCELLED: "cancelled",
+};
+
+const EVENT_STATUS_LABELS: { [key: string]: string } = {
+  [EVENT_STATUSES.ALL]: "All Statuses",
+  [EVENT_STATUSES.DRAFT]: "Draft",
+  [EVENT_STATUSES.OPEN_FOR_SIGNUP]: "Open For Signup",
+  [EVENT_STATUSES.ONGOING]: "Ongoing", 
+  [EVENT_STATUSES.COMPLETED]: "Completed",
+  [EVENT_STATUSES.CANCELLED]: "Cancelled",
+};
+
 
 export default function EventsPage() {
   const router = useRouter();
@@ -37,13 +56,13 @@ export default function EventsPage() {
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const isSysAdminUser = userProfile?.assignedRoleIds?.includes('sysadmin');
-  // TODO: Replace with privilege-based check if available, e.g., hasPrivilege('events', 'create')
-  const canCreateEvents = isSysAdminUser; 
-  // TODO: Replace with privilege-based check if available, e.g., hasPrivilege('events', 'edit_any') or check ownership for 'edit_own'
-  const canEditEvents = isSysAdminUser; 
+  const [searchTerm, setSearchTerm] = useState('');
+  const [statusFilter, setStatusFilter] = useState(EVENT_STATUSES.ALL);
 
-  const fetchEvents = useCallback(async () => {
+  const isSysAdminUser = userProfile?.assignedRoleIds?.includes('sysadmin');
+  const canCreateEvents = isSysAdminUser; 
+
+  const fetchEvents = useCallback(async (currentStatusFilter: string) => {
     if (!user) return;
 
     setIsLoadingEvents(true);
@@ -54,7 +73,12 @@ export default function EventsPage() {
         throw new Error("Authentication token not available.");
       }
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events`, {
+      let url = `${backendUrl}/events`;
+      if (currentStatusFilter && currentStatusFilter !== EVENT_STATUSES.ALL) {
+        url += `?status=${currentStatusFilter}`;
+      }
+
+      const response = await fetch(url, {
         headers: {
           'Authorization': `Bearer ${token}`,
         },
@@ -66,7 +90,7 @@ export default function EventsPage() {
       }
       const data: Event[] = await response.json();
       setEvents(data);
-    } catch (err: any) {
+    } catch (err: any) { // Explicitly type err as any or a more specific error type
       setError(err.message || 'An unexpected error occurred while fetching events.');
       console.error("Fetch events error:", err);
     } finally {
@@ -83,9 +107,28 @@ export default function EventsPage() {
         fetchUserProfile();
     }
     if (user && userProfile) {
-      fetchEvents();
+      fetchEvents(statusFilter);
     }
-  }, [user, authLoading, router, userProfile, fetchUserProfile, fetchEvents]);
+  }, [user, authLoading, router, userProfile, fetchUserProfile, fetchEvents, statusFilter]);
+
+  const displayedEvents = useMemo(() => {
+    if (!searchTerm.trim()) {
+      return events;
+    }
+    const lowercasedSearchTerm = searchTerm.toLowerCase();
+    return events.filter(event => {
+      const eventNameMatch = event.eventName.toLowerCase().includes(lowercasedSearchTerm);
+      const descriptionMatch = event.description && event.description.toLowerCase().includes(lowercasedSearchTerm);
+      
+      let creatorFullName = '';
+      if (event.creatorFirstName || event.creatorLastName) {
+        creatorFullName = `${event.creatorFirstName || ''} ${event.creatorLastName || ''}`.trim().toLowerCase();
+      }
+      const creatorMatch = creatorFullName.includes(lowercasedSearchTerm);
+
+      return eventNameMatch || descriptionMatch || creatorMatch;
+    });
+  }, [events, searchTerm]);
 
 
   if (authLoading || isLoadingEvents || (!userProfile && user)) {
@@ -101,7 +144,7 @@ export default function EventsPage() {
   return (
     <main>
       <div>
-        <div className="flex justify-between items-center mb-8">
+        <div className="flex justify-between items-center mb-6">
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
             Events
           </h1>
@@ -114,18 +157,49 @@ export default function EventsPage() {
           )}
         </div>
 
+        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+          <div>
+            <label htmlFor="search-events" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Search Events
+            </label>
+            <input
+              type="text"
+              id="search-events"
+              placeholder="Search by name, description, or creator..."
+              value={searchTerm}
+              onChange={(e) => setSearchTerm(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+            />
+          </div>
+          <div>
+            <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+              Filter by Status
+            </label>
+            <select
+              id="status-filter"
+              value={statusFilter}
+              onChange={(e) => setStatusFilter(e.target.value)}
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+            >
+              {Object.entries(EVENT_STATUS_LABELS).map(([value, label]) => (
+                <option key={value} value={value}>{label}</option>
+              ))}
+            </select>
+          </div>
+        </div>
+
         {error && (
           <div className="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
             {error}
           </div>
         )}
 
-        {events.length === 0 && !isLoadingEvents && !error && (
+        {displayedEvents.length === 0 && !isLoadingEvents && !error && (
           <div className="text-center py-10 bg-white dark:bg-gray-900 shadow rounded-lg">
             <p className="text-gray-500 dark:text-gray-400">
-              No events found.
+              {searchTerm || statusFilter !== EVENT_STATUSES.ALL ? 'No events match your criteria.' : 'No events found.'}
             </p>
-            {canCreateEvents && (
+            {canCreateEvents && !searchTerm && statusFilter === EVENT_STATUSES.ALL && (
                 <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
                     You can <Link href="/dashboard/events/new" className="text-indigo-600 hover:underline dark:text-indigo-400">create one now</Link>.
                 </p>
@@ -133,77 +207,72 @@ export default function EventsPage() {
           </div>
         )}
 
-        {events.length > 0 && (
+        {displayedEvents.length > 0 && (
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {events.map((event) => (
-              <div key={event.id} className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col group hover:shadow-xl transition-shadow duration-200 ease-in-out">
-                <Link href={`/dashboard/events/${event.id}`} className="flex flex-grow"> {/* Link wraps the content sections */}
-                  {/* Left Section: Icon */}
-                  <div className="flex-shrink-0 p-4 sm:p-6 flex items-center justify-center border-r border-gray-200 dark:border-gray-700">
-                    <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
-                      <span className="material-icons text-3xl sm:text-4xl text-gray-500 dark:text-gray-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-300 transition-colors duration-150">
-                        {event.icon || 'event'} {/* Display fetched icon or default */}
-                      </span>
-                    </div>
-                  </div>
+            {displayedEvents.map((event) => {
+              // Determine status class based on event.status
+              let statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'; // Default
+              if (event.status === EVENT_STATUSES.ONGOING) {
+                statusClass = 'status-ongoing-blinking'; // Custom blinking class
+              } else if (event.status === EVENT_STATUSES.OPEN_FOR_SIGNUP) {
+                statusClass = 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100';
+              } else if (event.status === EVENT_STATUSES.DRAFT) {
+                statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100';
+              } else if (event.status === EVENT_STATUSES.COMPLETED) {
+                statusClass = 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100';
+              } else if (event.status === EVENT_STATUSES.CANCELLED) {
+                statusClass = 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100';
+              }
 
-                  {/* Right Section: Details Column */}
-                  <div className="flex flex-col flex-grow p-4 sm:p-6 overflow-hidden">
-                    {/* Right-Top: Event Details */}
-                    <div className="flex-grow">
-                      <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200 mb-1 sm:mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate transition-colors duration-150" title={event.eventName}>
-                        {event.eventName}
-                      </h2>
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
-                        {event.eventType || 'General Event'} - Venue: {event.venue || 'N/A'}
-                      </p>
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
-                        Date: {format(parseISO(event.dateTime), 'PP p')}
-                      </p>
-                      <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-2 sm:mb-3">
-                        Status: <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
-                          event.status === 'open_for_signup' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' :
-                          event.status === 'draft' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100' :
-                          event.status === 'completed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100' :
-                          event.status === 'cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100' :
-                          'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
-                        }`}>{event.status.replace(/_/g, ' ')}</span>
-                      </p>
-                      {event.description && (
-                        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 line-clamp-2 sm:line-clamp-3" title={event.description}>
-                          {event.description}
-                        </p>
-                      )}
-                    </div>
-
-                    {/* Right-Bottom: Creation Details & Edit Button */}
-                    <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-gray-200 dark:border-gray-700">
-                      <div className="flex justify-between items-center">
-                        <div>
-                          <p className="text-xs text-gray-500 dark:text-gray-500">
-                            By: {event.creatorFirstName || ''} {event.creatorLastName || event.createdByUserId.substring(0,8)}
-                          </p>
-                          <p className="text-xs text-gray-500 dark:text-gray-500">
-                            On: {format(parseISO(event.createdAt), 'PP')}
-                          </p>
-                        </div>
-                        {canEditEvents && (
-                          <button
-                            onClick={(e) => {
-                              e.stopPropagation(); // Prevent outer Link navigation
-                              router.push(`/dashboard/events/${event.id}/edit`);
-                            }}
-                            className="text-xs sm:text-sm py-1 px-2 sm:px-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md whitespace-nowrap"
-                          >
-                            Edit
-                          </button>
-                        )}
+              return (
+                <div key={event.id} className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col group hover:shadow-xl transition-shadow duration-200 ease-in-out">
+                  <Link href={`/dashboard/events/${event.id}`} className="flex flex-grow">
+                    <div className="flex-shrink-0 p-3 sm:p-4 flex items-start justify-center border-r border-gray-200 dark:border-gray-700">
+                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
+                        <span className="material-icons text-3xl sm:text-4xl text-indigo-500 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-500 transition-colors duration-150">
+                          {event.icon || 'event'}
+                        </span>
                       </div>
                     </div>
-                  </div>
-                </Link>
-              </div>
-            ))}
+                    <div className="flex flex-col flex-grow p-4 sm:p-6 overflow-hidden">
+                      <div className="flex-grow">
+                        <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200 mb-1 sm:mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate transition-colors duration-150" title={event.eventName}>
+                          {event.eventName}
+                        </h2>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                          {event.eventType || 'General Event'} - Venue: {event.venue || 'N/A'}
+                        </p>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
+                          Date: {format(parseISO(event.dateTime), 'PP p')}
+                        </p>
+                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-2 sm:mb-3">
+                          Status: <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}`}>
+                            {EVENT_STATUS_LABELS[event.status] || event.status.replace(/_/g, ' ')}
+                          </span>
+                        </p>
+                        {event.description && (
+                          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 line-clamp-2 sm:line-clamp-3" title={event.description}>
+                            {event.description}
+                          </p>
+                        )}
+                      </div>
+                      <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-gray-200 dark:border-gray-700">
+                        <div className="flex justify-between items-center">
+                          <div>
+                            <p className="text-xs text-gray-500 dark:text-gray-500">
+                              By: {event.creatorFirstName || ''} {event.creatorLastName || event.createdByUserId.substring(0,8)}
+                            </p>
+                            <p className="text-xs text-gray-500 dark:text-gray-500">
+                              On: {format(parseISO(event.createdAt), 'PP')}
+                            </p>
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </div>
+              );
+            })}
           </div>
         )}
       </div>

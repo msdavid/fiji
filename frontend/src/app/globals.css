@@ -24,3 +24,30 @@ body {
   color: var(--foreground);
   font-family: var(--font-sans), Arial, Helvetica, sans-serif; /* Use --font-sans here */
 }
+
+/* Animation for ongoing event status */
+@keyframes slow-green-blink {
+  0%, 100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.6;
+  }
+}
+
+.status-ongoing-blinking {
+  /* Tailwind's green-500 for background, green-800 for text */
+  /* In dark mode, green-600 for background, green-100 for text */
+  /* These specific colors can be adjusted if needed */
+  background-color: #22c55e; /* bg-green-500 */
+  color: #166534; /* text-green-800 */
+  animation: slow-green-blink 2s infinite ease-in-out;
+}
+
+/* Dark mode specific styles for the blinking status */
+/* This assumes your Tailwind dark mode is class-based, e.g. <html class="dark"> */
+/* If it's media-query based, this might need adjustment or be handled by Tailwind's dark: prefix directly in the component */
+.dark .status-ongoing-blinking {
+  background-color: #16a34a; /* bg-green-600 (example, adjust as needed for dark mode visibility) */
+  color: #dcfce7; /* text-green-100 (example) */
+}

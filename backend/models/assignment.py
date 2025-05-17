@@ -19,18 +19,24 @@ class AssignmentUpdate(BaseModel):
     status: Optional[str] = None
     performanceNotes: Optional[str] = None
     hoursContributed: Optional[float] = None
-    updatedAt: datetime = Field(default_factory=datetime.utcnow)
+    # Removed updatedAt from here as it should be set by the server, not the client during update
+    # updatedAt: datetime = Field(default_factory=datetime.utcnow) 
 
 class AssignmentResponse(AssignmentBase):
     id: str = Field(..., description="Unique ID of the assignment.")
     createdAt: datetime
     updatedAt: datetime
 
+    # Added user details fields
+    userFirstName: Optional[str] = Field(None, description="First name of the assigned user.")
+    userLastName: Optional[str] = Field(None, description="Last name of the assigned user.")
+    userEmail: Optional[str] = Field(None, description="Email of the assigned user.")
+
     class Config:
-        from_attributes = True # Changed from orm_mode
+        from_attributes = True 
         json_encoders = {
             datetime: lambda v: v.isoformat() if v else None
         }
 
-class AssignmentInDB(AssignmentResponse):
+class AssignmentInDB(AssignmentResponse): # This can often be an alias or inherit directly if no changes
     pass

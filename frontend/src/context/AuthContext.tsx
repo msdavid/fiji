@@ -1,8 +1,8 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { onAuthStateChanged, User, getIdToken } from 'firebase/auth';
-import { auth } from '@/lib/firebaseConfig';
+import { User } from 'firebase/auth'; // Updated import
+import { auth } from '@/lib/firebaseConfig'; // Firebase auth instance
 
 // Define the structure of the user profile fetched from your backend
 interface UserProfile {
@@ -27,7 +27,7 @@ interface AuthContextType {
   userProfile: UserProfile | null; 
   loading: boolean;
   error: Error | null;
-  hasPrivilege: (resource: string, action: string) => boolean; // Added hasPrivilege
+  hasPrivilege: (resource: string, action: string) => boolean;
 }
 
 // Provide a default no-op hasPrivilege for the default context value
@@ -50,69 +50,71 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [error, setError] = useState<Error | null>(null);
 
   useEffect(() => {
-    const unsubscribe = onAuthStateChanged(
-      auth,
+    // Use onIdTokenChanged to listen for auth state changes and token refreshes
+    const unsubscribe = auth.onIdTokenChanged(
       async (currentUser) => {
         setLoading(true);
-        setError(null);
-        setUser(null); 
-        setIdToken(null); 
-        setUserProfile(null); 
+        setError(null); // Clear previous errors at the start of handling a new auth state or token
 
         if (currentUser) {
-          setUser(currentUser); 
+          setUser(currentUser);
           try {
-            const token = await getIdToken(currentUser);
-            setIdToken(token); 
+            const token = await currentUser.getIdToken(); // Gets current or refreshed token
+            setIdToken(token);
 
             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-
-            if (backendUrl && token) {
-              try {
-                const response = await fetch(`${backendUrl}/users/me`, {
-                  headers: {
-                    'Authorization': `Bearer ${token}`,
-                    'Content-Type': 'application/json',
-                  },
-                });
-
-                if (!response.ok) {
-                  let errorDetails = `HTTP error ${response.status}`;
-                  try {
-                    const errorData = await response.json();
-                    errorDetails += `: ${errorData.detail || errorData.message || response.statusText}`;
-                  } catch (e) {
-                    errorDetails += `: ${response.statusText}`;
-                  }
-                  throw new Error(`Failed to fetch user profile. ${errorDetails}`);
-                }
-                
-                const profileData = await response.json(); 
-                setUserProfile(profileData as UserProfile);
-
-              } catch (profileError: any) {
-                console.error("Error fetching user profile:", profileError.message);
-                setError(prevError => prevError ? new Error(`${prevError.message}; Profile fetch error: ${profileError.message}`) : new Error(`Profile fetch error: ${profileError.message}`));
-              }
-            } else if (!backendUrl) {
+            if (!backendUrl) {
               const msg = "Backend URL (NEXT_PUBLIC_BACKEND_URL) is not configured. Cannot fetch user profile.";
               console.error(msg);
-              setError(prevError => prevError ? new Error(`${prevError.message}; ${msg}`) : new Error(msg));
-            } else if (!token) {
-                const msg = "ID Token is null. Cannot fetch user profile.";
-                console.error(msg);
-                setError(prevError => prevError ? new Error(`${prevError.message}; ${msg}`) : new Error(msg));
+              setError(new Error(msg));
+              setUserProfile(null); // Ensure profile is cleared
+              setLoading(false);
+              return; // Exit early
+            }
+
+            // Fetch user profile with the (potentially new) token
+            try {
+              const response = await fetch(`${backendUrl}/users/me`, {
+                headers: {
+                  'Authorization': `Bearer ${token}`,
+                  'Content-Type': 'application/json',
+                },
+              });
+
+              if (!response.ok) {
+                let errorDetails = `HTTP error ${response.status}`;
+                try {
+                  const errorData = await response.json();
+                  errorDetails += `: ${errorData.detail || errorData.message || response.statusText}`;
+                } catch (e) {
+                  errorDetails += `: ${response.statusText}`; // Fallback if errorData parsing fails
+                }
+                throw new Error(`Failed to fetch user profile. ${errorDetails}`);
+              }
+              
+              const profileData = await response.json();
+              setUserProfile(profileData as UserProfile);
+            } catch (profileError: any) {
+              console.error("Error fetching user profile:", profileError.message);
+              setError(new Error(`Profile fetch error: ${profileError.message}`));
+              setUserProfile(null); // Clear profile on fetch error
             }
           } catch (tokenError: any) {
             console.error("Error getting ID token:", tokenError.message);
             setError(tokenError);
+            setIdToken(null); // Clear token if retrieval fails
+            setUserProfile(null); // Clear profile as well
           }
+        } else {
+          // User is signed out
+          setUser(null);
+          setIdToken(null);
+          setUserProfile(null);
         }
-        
         setLoading(false);
       },
-      (authError) => { 
-        console.error("Auth state change error observer:", authError.message);
+      (authError) => { // Error observer for onIdTokenChanged itself
+        console.error("Auth ID token listener error:", authError.message);
         setError(authError);
         setUser(null);
         setIdToken(null);
@@ -121,34 +123,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       }
     );
 
-    return () => {
-      unsubscribe();
-    };
-  }, []);
+    // Cleanup subscription on unmount
+    return () => unsubscribe();
+  }, []); // Empty dependency array ensures this effect runs only once on mount
 
   const hasPrivilege = useCallback((resource: string, action: string): boolean => {
     if (loading || !userProfile) {
-      // console.log("hasPrivilege: Loading or no userProfile, returning false.");
       return false; 
     }
     
-    // Sysadmin override: if user has 'sysadmin' role ID, grant all permissions
     if (userProfile.assignedRoleIds && userProfile.assignedRoleIds.includes('sysadmin')) {
-      // console.log(`hasPrivilege: User is sysadmin. Granting ${action} on ${resource}.`);
       return true;
     }
     
     // TODO: Implement more granular privilege checking for non-sysadmin users.
-    // This would typically involve:
-    // 1. Fetching the detailed privileges for all of the user's assignedRoleIds from the backend.
-    //    This could be a map like: { "donations": ["list", "create"], "events": ["view"] }
-    // 2. Storing this privilege map in the userProfile or a separate state.
-    // 3. Checking against this map here:
-    //    const resourcePrivileges = userProfile.privileges?.[resource];
-    //    if (resourcePrivileges && resourcePrivileges.includes(action)) {
-    //      return true;
-    //    }
-
     console.warn(`hasPrivilege: Basic implementation. User is not sysadmin. Denying '${action}' on '${resource}'. Full RBAC check for non-sysadmins needs to be implemented by fetching role privileges for roles: ${userProfile.assignedRoleIds.join(', ')}.`);
     return false;
   }, [userProfile, loading]);
@@ -162,7 +150,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (context === undefined) { // Standard check for context usage outside provider
+  if (context === undefined) {
     throw new Error('useAuth must be used within an AuthProvider');
   }
   return context;
