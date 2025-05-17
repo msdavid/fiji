@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO } from 'date-fns';
+import UserSearchInput from '@/components/admin/UserSearchInput'; 
 
 interface WorkingGroup {
   id: string;
@@ -18,7 +19,7 @@ interface WorkingGroup {
   updatedAt: string;
 }
 
-interface Assignment { // Re-using from event detail page, ensure consistency
+interface Assignment { 
   id: string;
   userId: string;
   assignableId: string;
@@ -33,6 +34,13 @@ interface Assignment { // Re-using from event detail page, ensure consistency
   userEmail?: string;
 }
 
+interface UserSearchResult { 
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+}
+
 export default function WorkingGroupDetailPage() {
   const router = useRouter();
   const params = useParams();
@@ -43,14 +51,15 @@ export default function WorkingGroupDetailPage() {
   const [workingGroup, setWorkingGroup] = useState<WorkingGroup | null>(null);
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [error, setError] = useState<string | null>(null); 
+  const [assignmentsError, setAssignmentsError] = useState<string | null>(null); 
   const [actionInProgress, setActionInProgress] = useState(false);
-  const [assignUserId, setAssignUserId] = useState('');
+  
+  const [selectedUserToAssign, setSelectedUserToAssign] = useState<UserSearchResult | null>(null);
+
 
   const canView = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'view') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'manage_assignments') : userProfile.assignedRoleIds?.includes('sysadmin'));
-  // const canEditGroup = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
-
 
   const fetchWorkingGroupDetails = useCallback(async () => {
     if (!user || !groupId || !canView) {
@@ -73,7 +82,7 @@ export default function WorkingGroupDetailPage() {
 
   const fetchAssignments = useCallback(async () => {
     if (!user || !groupId || !canManageAssignments) return;
-    setActionInProgress(true); // Use actionInProgress to indicate loading assignments as well
+    setActionInProgress(true); setAssignmentsError(null); 
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -82,14 +91,14 @@ export default function WorkingGroupDetailPage() {
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'Failed to fetch assignments');
       setAssignments(await response.json());
-    } catch (err: any) { setError(err.message); } // Consider separate error state for assignments
+    } catch (err: any) { setAssignmentsError(err.message); } 
     finally { setActionInProgress(false); }
   }, [user, groupId, canManageAssignments]);
 
   useEffect(() => {
     if (!authLoading && !user) router.push('/login');
     if (user && !userProfile) fetchUserProfile();
-    if (user && userProfile && groupId) { // Ensure profile is loaded before permission checks
+    if (user && userProfile && groupId) { 
       fetchWorkingGroupDetails();
       if (canManageAssignments) fetchAssignments();
     }
@@ -97,37 +106,43 @@ export default function WorkingGroupDetailPage() {
 
   const handleAssignUser = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !groupId || !assignUserId.trim() || !canManageAssignments) return;
-    setActionInProgress(true); setError(null);
+    if (!user || !groupId || !selectedUserToAssign || !canManageAssignments) {
+        setAssignmentsError("Please select a user to assign.");
+        return;
+    }
+    setActionInProgress(true); setAssignmentsError(null);
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const payload = { userId: assignUserId, assignableId: groupId, assignableType: 'workingGroup', status: 'active' };
+      const payload = { userId: selectedUserToAssign.id, assignableId: groupId, assignableType: 'workingGroup', status: 'active' };
       const response = await fetch(`${backendUrl}/working-groups/${groupId}/assignments`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'Failed to assign user');
-      setAssignUserId('');
-      await fetchAssignments(); // Refresh list
-    } catch (err: any) { setError(err.message); }
+      setSelectedUserToAssign(null); 
+      await fetchAssignments(); 
+    } catch (err: any) { setAssignmentsError(err.message); }
     finally { setActionInProgress(false); }
   };
 
   const handleRemoveAssignment = async (assignmentId: string) => {
     if (!user || !groupId || !canManageAssignments || !confirm("Remove this user from the group?")) return;
-    setActionInProgress(true); setError(null);
+    setActionInProgress(true); setAssignmentsError(null);
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      await fetch(`${backendUrl}/working-groups/${groupId}/assignments/${assignmentId}`, {
+      const response = await fetch(`${backendUrl}/working-groups/${groupId}/assignments/${assignmentId}`, {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      // No need to check response.ok for 204 if not parsing JSON
-      await fetchAssignments(); // Refresh list
-    } catch (err: any) { setError(err.message); }
+      if (!response.ok && response.status !== 204) { 
+        const errorData = await response.json().catch(() => ({ detail: 'Failed to remove user from group' }));
+        throw new Error(errorData.detail || 'Failed to remove user from group');
+      }
+      await fetchAssignments(); 
+    } catch (err: any) { setAssignmentsError(err.message); }
     finally { setActionInProgress(false); }
   };
 
@@ -151,17 +166,15 @@ export default function WorkingGroupDetailPage() {
   if (!workingGroup) return <div className="p-8 text-center">Working group not found. <Link href="/dashboard/admin/working-groups" className="text-indigo-600 hover:underline">Back to list</Link></div>;
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
-      <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/dashboard" className="text-xl font-bold text-indigo-600 dark:text-indigo-400">Fiji Platform</Link>
-            <Link href="/dashboard/admin/working-groups" className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">← Back to Working Groups</Link>
-          </div>
+    // Removed the outer div with min-h-screen and bg-gray-100, as layout provides this
+    <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        {/* Removed <nav> element */}
+        <div className="mb-6"> {/* Container for back link */}
+            <Link href="/dashboard/admin/working-groups" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                ← Back to Working Groups
+            </Link>
         </div>
-      </nav>
 
-      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8">
           <div className="mb-6">
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{workingGroup.groupName}</h1>
@@ -174,30 +187,32 @@ export default function WorkingGroupDetailPage() {
             </p>
           </div>
 
-          {error && <p className="text-red-500 text-sm mb-4">{error}</p>}
+          {error && !assignmentsError && <p className="text-red-500 text-sm mb-4">{error}</p>}
 
           {canManageAssignments && (
             <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Manage Members</h2>
               <form onSubmit={handleAssignUser} className="mb-6 p-4 border dark:border-gray-700 rounded-md">
                 <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Assign User</h3>
-                <div className="flex items-center gap-2">
-                  <input
-                    type="text"
-                    value={assignUserId}
-                    onChange={(e) => setAssignUserId(e.target.value)}
-                    placeholder="Enter User ID to assign"
-                    className="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-800 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
-                    required
+                <div className="space-y-2">
+                  <UserSearchInput 
+                    onUserSelected={(u) => setSelectedUserToAssign(u)}
+                    label="Search for user to assign:"
+                    placeholder="Type name or email..."
                   />
-                  <button type="submit" disabled={actionInProgress || !assignUserId.trim()} className="py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md disabled:opacity-50">
-                    {actionInProgress ? 'Assigning...' : 'Assign'}
+                  <button 
+                    type="submit" 
+                    disabled={actionInProgress || !selectedUserToAssign} 
+                    className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md disabled:opacity-50"
+                  >
+                    {actionInProgress ? 'Assigning...' : `Assign ${selectedUserToAssign ? (selectedUserToAssign.firstName || selectedUserToAssign.email) : ''}`}
                   </button>
                 </div>
+                {assignmentsError && <p className="text-red-500 text-sm mt-2">{assignmentsError}</p>}
               </form>
 
               <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Current Members ({assignments.length})</h3>
-              {actionInProgress && assignments.length === 0 ? <p>Loading members...</p> : assignments.length > 0 ? (
+              {actionInProgress && assignments.length === 0 && !assignmentsError ? <p>Loading members...</p> : assignments.length > 0 ? (
                 <ul className="space-y-3">
                   {assignments.map((assignment) => (
                     <li key={assignment.id} className="p-3 bg-gray-50 dark:bg-gray-800 rounded-md shadow-sm flex justify-between items-center">
@@ -220,10 +235,10 @@ export default function WorkingGroupDetailPage() {
               ) : (
                 <p className="text-gray-500 dark:text-gray-400">No users currently assigned to this working group.</p>
               )}
+              {assignmentsError && <p className="text-red-500 text-sm mt-2">{assignmentsError}</p>}
             </div>
           )}
         </div>
       </main>
-    </div>
   );
 }

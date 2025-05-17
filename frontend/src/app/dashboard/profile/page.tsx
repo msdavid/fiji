@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useAuth } from '@/context/AuthContext'; 
 import apiClient from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
-import Link from 'next/link'; // Import Link for navigation
+import Link from 'next/link'; 
 
 interface UserDataFromBackend {
   uid: string;
@@ -14,9 +14,10 @@ interface UserDataFromBackend {
   phoneNumber?: string;
   skills?: string | string[]; 
   qualifications?: string | string[]; 
-  preferences?: string;
-  profilePictureUrl?: string | null; // Added profile picture URL
+  preferences?: Record<string, any> | string; 
+  profilePictureUrl?: string | null; 
   assignedRoleIds?: string[];
+  assignedRoleNames?: string[]; // Added for displaying role names
   status?: string;
   createdAt?: string; 
   updatedAt?: string;
@@ -30,7 +31,7 @@ interface EditableUserProfile {
   skills?: string; 
   qualifications?: string; 
   preferences?: string; 
-  profilePictureUrl?: string | null; // Added profile picture URL
+  profilePictureUrl?: string | null; 
 }
 
 const ProfilePage = () => {
@@ -50,14 +51,22 @@ const ProfilePage = () => {
     phoneNumber: '',
     skills: '', 
     qualifications: '', 
-    preferences: '',
+    preferences: '', 
     profilePictureUrl: '',
   });
 
-  const skillsToString = (s: string | string[] | undefined): string => {
-      if (Array.isArray(s)) return s.join('\n');
-      return s || '';
+  const arrayFieldToString = (fieldValue: string | string[] | undefined): string => {
+      if (Array.isArray(fieldValue)) return fieldValue.join('\n');
+      return fieldValue || '';
   };
+
+  const preferencesObjectToStringForTextarea = (prefs: Record<string, any> | string | undefined): string => {
+    if (typeof prefs === 'object' && prefs !== null) {
+      return JSON.stringify(prefs, null, 2); 
+    }
+    return prefs || '';
+  };
+
 
   useEffect(() => {
     if (authLoading) {
@@ -69,16 +78,17 @@ const ProfilePage = () => {
     }
 
     const fetchProfile = async () => {
-      if (!idToken || !user?.uid) {
-        setError("Authentication details are missing.");
+      if (!idToken) { // user.uid is implicitly checked by using /users/me
+        setError("Authentication token is missing.");
         setIsLoading(false);
         return;
       }
       try {
         setIsLoading(true);
+        // Use /users/me to fetch the current authenticated user's profile
         const fetchedProfileData = await apiClient<UserDataFromBackend>({
           method: 'GET',
-          path: `/users/${user.uid}`,
+          path: `/users/me`, 
           token: idToken,
         });
         setProfile(fetchedProfileData);
@@ -87,16 +97,16 @@ const ProfilePage = () => {
             lastName: fetchedProfileData.lastName || '',
             email: fetchedProfileData.email || '', 
             phoneNumber: fetchedProfileData.phoneNumber || '',
-            skills: skillsToString(fetchedProfileData.skills),
-            qualifications: skillsToString(fetchedProfileData.qualifications),
-            preferences: fetchedProfileData.preferences || '',
+            skills: arrayFieldToString(fetchedProfileData.skills),
+            qualifications: arrayFieldToString(fetchedProfileData.qualifications),
+            preferences: preferencesObjectToStringForTextarea(fetchedProfileData.preferences),
             profilePictureUrl: fetchedProfileData.profilePictureUrl || '',
         });
         setError(null);
       } catch (err: any) {
         console.error("Failed to fetch profile:", err);
         const errorMessage = err.message || 
-                             (typeof err.data?.detail === 'string' ? err.data.detail : null) || 
+                             (err.response?.data?.detail) || // Check for FastAPI error detail
                              "Failed to fetch profile. Please try again.";
         setError(errorMessage);
       } finally {
@@ -114,48 +124,66 @@ const ProfilePage = () => {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!idToken || !user?.uid) {
-      setError("Authentication details are missing for update.");
+    if (!idToken) {
+      setError("Authentication token is missing for update.");
       return;
     }
     try {
       setIsLoading(true);
       
-      const updatePayload: any = {
+      const updatePayload: Partial<EditableUserProfile> & { skills?: string[], qualifications?: string[], preferences?: Record<string, any> } = {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phoneNumber: formData.phoneNumber,
-        // profilePictureUrl: formData.profilePictureUrl, // Upload logic is separate
       };
       
-      if (typeof formData.preferences === 'string') {
-        updatePayload.preferences = formData.preferences.trim();
+      if (formData.preferences) {
+        try {
+          const parsedPreferences = JSON.parse(formData.preferences);
+          if (typeof parsedPreferences === 'object' && parsedPreferences !== null) {
+            updatePayload.preferences = parsedPreferences;
+          } else {
+            // If parsed but not an object (e.g. a string or number from JSON)
+            // This case might need specific handling or be an error.
+            // For now, if it's not an object, we might want to prevent update or default.
+            // Backend expects a dict.
+            setError("Preferences must be a valid JSON object.");
+            setIsLoading(false);
+            return;
+          }
+        } catch (parseError) {
+          setError("Preferences field contains invalid JSON. Please correct it or clear it.");
+          setIsLoading(false);
+          return;
+        }
+      } else {
+        updatePayload.preferences = {}; 
       }
+
       if (typeof formData.skills === 'string') {
-        updatePayload.skills = formData.skills.trim();
+        updatePayload.skills = formData.skills.split('\n').map(s => s.trim()).filter(s => s);
       }
       if (typeof formData.qualifications === 'string') {
-        updatePayload.qualifications = formData.qualifications.trim();
+        updatePayload.qualifications = formData.qualifications.split('\n').map(q => q.trim()).filter(q => q);
       }
-      // Note: profilePictureUrl is not included in the PUT payload here.
-      // Handling file uploads and URL updates typically requires a separate endpoint or logic.
-
+      
       const updatedProfileData = await apiClient<UserDataFromBackend>({
         method: 'PUT',
-        path: `/users/${user.uid}`,
+        path: `/users/me`, 
         token: idToken,
         data: updatePayload,
       });
 
-      setProfile(updatedProfileData);
+      setProfile(updatedProfileData); // Update profile state with new data from backend
+      // Re-initialize formData based on the successfully updated profile
       setFormData({
         firstName: updatedProfileData.firstName || '',
         lastName: updatedProfileData.lastName || '',
         email: updatedProfileData.email || '',
         phoneNumber: updatedProfileData.phoneNumber || '',
-        skills: skillsToString(updatedProfileData.skills), 
-        qualifications: skillsToString(updatedProfileData.qualifications), 
-        preferences: updatedProfileData.preferences || '', 
+        skills: arrayFieldToString(updatedProfileData.skills), 
+        qualifications: arrayFieldToString(updatedProfileData.qualifications), 
+        preferences: preferencesObjectToStringForTextarea(updatedProfileData.preferences), 
         profilePictureUrl: updatedProfileData.profilePictureUrl || '',
       });
       setIsEditing(false);
@@ -164,7 +192,7 @@ const ProfilePage = () => {
     } catch (err: any) { 
       console.error("Failed to update profile:", err);
       const errorMessage = err.message || 
-                           (typeof err.data?.detail === 'string' ? err.data.detail : null) || 
+                           (err.response?.data?.detail) ||
                            "Failed to update profile. Please try again.";
       setError(errorMessage);
     } finally {
@@ -180,7 +208,7 @@ const ProfilePage = () => {
     );
   }
 
-  if (error) { 
+  if (error && !isEditing) { // Only show full page error if not in edit mode (edit mode has its own error display)
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
         <div className="bg-red-50 dark:bg-red-800/30 border border-red-300 dark:border-red-600 text-red-700 dark:text-red-300 px-6 py-4 rounded-lg shadow-md">
@@ -205,8 +233,9 @@ const ProfilePage = () => {
     );
   }
   
-  const displaySkillsText = typeof profile.skills === 'string' ? profile.skills : (Array.isArray(profile.skills) ? profile.skills.join('\n') : 'Not specified');
-  const displayQualificationsText = typeof profile.qualifications === 'string' ? profile.qualifications : (Array.isArray(profile.qualifications) ? profile.qualifications.join('\n') : 'Not specified');
+  const displaySkillsText = arrayFieldToString(profile.skills);
+  const displayQualificationsText = arrayFieldToString(profile.qualifications);
+  // Preferences display logic moved directly into JSX for view mode
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
@@ -226,16 +255,18 @@ const ProfilePage = () => {
               <button
                 onClick={() => {
                     setIsEditing(true);
+                    // Ensure formData is correctly initialized from profile when starting edit
                     setFormData({
                         firstName: profile.firstName || '',
                         lastName: profile.lastName || '',
                         email: profile.email || '',
                         phoneNumber: profile.phoneNumber || '',
-                        skills: skillsToString(profile.skills),
-                        qualifications: skillsToString(profile.qualifications),
-                        preferences: profile.preferences || '',
+                        skills: arrayFieldToString(profile.skills),
+                        qualifications: arrayFieldToString(profile.qualifications),
+                        preferences: preferencesObjectToStringForTextarea(profile.preferences),
                         profilePictureUrl: profile.profilePictureUrl || '',
                     });
+                    setError(null); // Clear any previous view-mode errors
                 }}
                 className="mt-4 sm:mt-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
               >
@@ -286,18 +317,33 @@ const ProfilePage = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Preferences</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{profile.preferences || 'Not specified'}</p>
+                {typeof profile.preferences === 'object' && profile.preferences !== null && Object.keys(profile.preferences).length > 0 ? (
+                  <ul className="mt-1 list-disc list-inside space-y-1">
+                    {Object.entries(profile.preferences).map(([key, value]) => (
+                      <li key={key} className="text-lg text-gray-800 dark:text-gray-200">
+                        <span className="font-semibold capitalize">{key.replace(/([A-Z])/g, ' $1')}:</span> {String(value)}
+                      </li>
+                    ))}
+                  </ul>
+                ) : (
+                  <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">Not specified</p>
+                )}
               </div>
-              {profile.assignedRoleIds && profile.assignedRoleIds.length > 0 && (
+              {profile.assignedRoleNames && profile.assignedRoleNames.length > 0 && (
                   <div>
                       <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Roles</label>
-                      <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.assignedRoleIds.join(', ')}</p>
+                      <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.assignedRoleNames.join(', ')}</p>
                   </div>
               )}
             </div>
           ) : (
+            // EDITING FORM
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* Profile Picture Display in Edit Mode (Non-editable for now) */}
+              {error && ( // Display error within the form if in edit mode
+                <div className="p-3 bg-red-50 dark:bg-red-800/30 border border-red-300 dark:border-red-600 rounded-md">
+                    <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
+                </div>
+              )}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
                 {formData.profilePictureUrl ? (
@@ -361,7 +407,7 @@ const ProfilePage = () => {
                 />
               </div>
               <div>
-                <label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills</label>
+                <label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label>
                 <textarea
                   name="skills"
                   id="skills"
@@ -372,7 +418,7 @@ const ProfilePage = () => {
                 />
               </div>
               <div>
-                <label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications</label>
+                <label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label>
                 <textarea
                   name="qualifications"
                   id="qualifications"
@@ -383,13 +429,14 @@ const ProfilePage = () => {
                 />
               </div>
               <div>
-                <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences</label>
+                <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences (JSON format)</label>
                 <textarea
                   name="preferences"
                   id="preferences"
                   value={formData.preferences || ''}
                   onChange={handleInputChange}
                   rows={3}
+                  placeholder='e.g., {"communication": "email", "theme": "dark"}'
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
                 />
               </div>
@@ -398,15 +445,15 @@ const ProfilePage = () => {
                   type="button"
                   onClick={() => {
                     setIsEditing(false);
-                    if (profile) {
-                        setFormData({
+                    if (profile) { 
+                        setFormData({ // Reset form to original profile data
                             firstName: profile.firstName || '',
                             lastName: profile.lastName || '',
                             email: profile.email || '',
                             phoneNumber: profile.phoneNumber || '',
-                            skills: skillsToString(profile.skills),
-                            qualifications: skillsToString(profile.qualifications),
-                            preferences: profile.preferences || '',
+                            skills: arrayFieldToString(profile.skills),
+                            qualifications: arrayFieldToString(profile.qualifications),
+                            preferences: preferencesObjectToStringForTextarea(profile.preferences),
                             profilePictureUrl: profile.profilePictureUrl || '',
                         });
                     }

@@ -73,7 +73,6 @@ export default function WorkingGroupsListPage() {
 
   if (authLoading || isLoading) {
     return (
-      // This loading state is for the page content itself
       <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
         <p>Loading working groups...</p>
       </div>
@@ -126,26 +125,30 @@ export default function WorkingGroupsListPage() {
       ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
           {workingGroups.map((wg) => (
-            <div key={wg.id} className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden">
-              <div className="p-6">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">{wg.groupName}</h2>
-                <p className={`text-xs font-medium px-2 py-0.5 rounded-full inline-block mb-3 ${
-                  wg.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' 
-                                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100'
-                }`}>
-                  {wg.status}
-                </p>
-                <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 line-clamp-2" title={wg.description}>
-                  {wg.description || 'No description provided.'}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-500">
-                  Created by: {wg.creatorFirstName || ''} {wg.creatorLastName || wg.createdByUserId}
-                </p>
-                <p className="text-xs text-gray-500 dark:text-gray-500">
-                  Created on: {format(parseISO(wg.createdAt), 'PP')}
-                </p>
+            <Link key={wg.id} href={`/dashboard/admin/working-groups/${wg.id}`} className="block hover:shadow-xl transition-shadow duration-200 ease-in-out">
+              <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col">
+                <div className="p-6 flex-grow">
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2">{wg.groupName}</h2>
+                  <p className={`text-xs font-medium px-2 py-0.5 rounded-full inline-block mb-3 ${
+                    wg.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' 
+                                          : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100'
+                  }`}>
+                    {wg.status}
+                  </p>
+                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-1 line-clamp-2" title={wg.description}>
+                    {wg.description || 'No description provided.'}
+                  </p>
+                </div>
+                <div className="p-6 border-t border-gray-200 dark:border-gray-700 mt-auto">
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                    Created by: {wg.creatorFirstName || ''} {wg.creatorLastName || wg.createdByUserId}
+                    </p>
+                    <p className="text-xs text-gray-500 dark:text-gray-500">
+                    Created on: {format(parseISO(wg.createdAt), 'PP')}
+                    </p>
+                </div>
               </div>
-            </div>
+            </Link>
           ))}
         </div>
       )}

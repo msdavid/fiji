@@ -1,7 +1,7 @@
 # Software Requirements Specification (SRS)
 ## Project Fiji
 
-**Version:** 1.3 
+**Version:** 1.4 
 **Date:** {{YYYY-MM-DD}} 
 
 ## Table of Contents
@@ -28,6 +28,7 @@
         3.3.2 [Event Participation](#fr332-event-participation)
         3.3.3 [Event Reporting](#fr333-event-reporting)
         3.3.4 [Event Deletion](#fr334-event-deletion)
+        3.3.5 [Recurrent Event Management](#fr335-recurrent-event-management)
     3.4 [Working Group Management](#34-working-group-management)
         3.4.1 [Working Group CRUD](#fr341-working-group-crud)
         3.4.2 [Working Group Member Assignment](#fr342-working-group-member-assignment)
@@ -90,7 +91,7 @@ The scope of this document covers all technical specifications for the design, d
 *   **ADC:** Application Default Credentials
 
 ### 1.4 References
-*   Project Fiji Functional Specification Document (`.Q/functional-specifications.md`)
+*   Project Fiji Functional Specification Document (`docs/functional-specs.md`)
 *   Discussions regarding technical implementation choices.
 
 ### 1.5 Guiding Principles
@@ -107,7 +108,7 @@ Project Fiji is a web-based volunteer management system. It will consist of a Ne
 A summary of key product functions (detailed in Section 3):
 *   Secure user registration (invite-only) and profile management, including user search capabilities for administrative tasks.
 *   Role-based access control for differentiated user capabilities.
-*   Event creation (including assigning an organizer, defining start and end times), management (update, delete), and volunteer assignment (self-signup, admin assignment/withdrawal).
+*   Event creation (including assigning an organizer, defining start and end times, and recurrence rules), management (update, delete), and volunteer assignment (self-signup, admin assignment/withdrawal).
 *   Working group creation, management (CRUD), and member assignment.
 *   Volunteer availability tracking.
 *   Donation tracking (excluding online payment processing).
@@ -174,17 +175,24 @@ Details for each feature are derived from the FSD, with technical implementation
 ### 3.3 Event Management
 *   **FR3.3.1 Event Creation:**
     *   Authorized users (with `events:create` privilege) can create events.
-    *   Details as per existing SRS.
+    *   Event details include type, name, purpose, logistics (date, time, location, description), and volunteer requirements.
+    *   For recurrent events, users can define a recurrence rule (frequency, interval, days of week/month, end condition) during creation. The system will treat this event as a "template" and generate individual event "instances".
 *   **FR3.3.2 Event Participation:**
-    *   **Self-Signup/Withdrawal:** Volunteers can sign up for events marked "open_for_signup" (`POST /events/{event_id}/signup`) and withdraw their signup (`DELETE /events/{event_id}/signup`). No specific privilege is required for these actions beyond being an authenticated user.
-    *   **Admin Assignment/Removal:** Authorized users (with `events:manage_assignments` privilege) can manually assign volunteers to events (`POST /events/{event_id}/assignments`) and remove them (`DELETE /events/{event_id}/assignments/{assignment_id}`). They can also list all assignments for an event (`GET /events/{event_id}/assignments`).
-    *   Assignments are stored in the `assignments` collection, linking users to events.
+    *   **Self-Signup/Withdrawal:** Volunteers can sign up for individual event instances marked "open_for_signup" (`POST /events/{event_id}/signup`) and withdraw their signup (`DELETE /events/{event_id}/signup`). No specific privilege is required for these actions beyond being an authenticated user. This applies to both standalone events and instances of recurring events.
+    *   **Admin Assignment/Removal:** Authorized users (with `events:manage_assignments` privilege) can manually assign volunteers to individual event instances (`POST /events/{event_id}/assignments`) and remove them (`DELETE /events/{event_id}/assignments/{assignment_id}`). They can also list all assignments for an event instance (`GET /events/{event_id}/assignments`).
+    *   Assignments are stored in the `assignments` collection, linking users to event instances.
     *   Attendance tracking and performance notes will be part of the assignment record (editable via `PUT /events/{event_id}/assignments/{assignment_id}` by users with `events:manage_assignments`).
 *   **FR3.3.3 Event Reporting:**
-    *   Functionality to view event history, attendance, and feedback (if collected).
+    *   Functionality to view event history, attendance, and feedback (if collected). This includes reporting on individual instances and summaries for recurring series.
 *   **FR3.3.4 Event Deletion:**
     *   Authorized users (with `events:delete` privilege) can delete events.
-    *   Details as per existing SRS.
+    *   For a standalone event or a single instance of a recurring event, this removes the specific event document.
+    *   For a recurring event template, deletion will prompt an option to also delete all future, non-exception instances.
+*   **FR3.3.5 Recurrent Event Management:**
+    *   **Instance Generation:** The backend will generate individual event instances based on the `recurrenceRule` of a template event, up to a configurable future horizon (e.g., 12 months from the current date). A scheduled job or triggered function may handle ongoing generation.
+    *   **Template Modification:** When a recurring event template is modified (e.g., its description or recurrence rule changes), the system will provide an option to propagate these changes to all future, non-exception instances.
+    *   **Instance Modification (Exceptions):** An individual instance of a recurring event can be modified independently (e.g., its time or location). Such an instance becomes an "exception" (`isException: true`) and will no longer be automatically updated by changes to its parent template for the modified fields.
+    *   **Display:** API responses will differentiate between template events and instances, and link instances back to their template.
 
 ### 3.4 Working Group Management
 *   **FR3.4.1 Working Group CRUD:**
@@ -226,15 +234,16 @@ Details for each feature are derived from the FSD, with technical implementation
 ### 4.1 User Interfaces
 *   The primary user interface will be a web application built with Next.js and styled with Tailwind UI.
 *   The UI must be responsive.
-*   **Event Detail Page:** Will show event information, signup/withdraw buttons for volunteers, and roster management tools for authorized users.
+*   **Event Detail Page:** Will show event information, signup/withdraw buttons for volunteers, and roster management tools for authorized users. For recurring events, it will clearly indicate if it's a template or an instance, and provide navigation to other instances or the template.
 *   **Working Group Pages:** Will include a list page, a creation page, and a detail page with member management for authorized users.
 *   Other UI notes as per existing SRS.
 
 ### 4.2 Software Interfaces
 *   **FastAPI Backend API:**
     *   CRUD endpoints for core entities (users, roles, events).
+        *   `POST /events` and `PUT /events/{event_id}`: Request body will accept an optional `recurrenceRule` object. If provided, the event is treated as a template. The response will indicate if an event is a template or an instance.
     *   `GET /users/search?q={query}`.
-    *   Event Participation:
+    *   Event Participation (applies to individual event instances):
         *   `POST /events/{event_id}/signup`
         *   `DELETE /events/{event_id}/signup`
         *   `GET /events/{event_id}/assignments`
@@ -260,13 +269,39 @@ Details for each feature are derived from the FSD, with technical implementation
 *   HTTPS for all external communication. Secure internal networking for GCP services.
 
 ## 5. Non-Functional Requirements
-(Sections 5.1 to 5.7 remain largely unchanged from v1.2, unless specific performance or security aspects related to new features need highlighting. For now, assume they are covered by existing statements.)
+(Sections 5.1 to 5.7 remain largely unchanged from v1.3, unless specific performance or security aspects related to new features need highlighting. For now, assume they are covered by existing statements.)
 
 ## 6. Data Management
 
 ### 6.1 Data Model (Firestore)
 *   **`users`** (No changes in this sprint)
-*   **`events`** (No changes in this sprint)
+*   **`events`**
+    *   `id` (String, Document ID)
+    *   `eventType` (String)
+    *   `eventName` (String)
+    *   `purpose` (String, Optional)
+    *   `description` (String, Optional)
+    *   `location` (String, Optional)
+    *   `startDate` (Timestamp) - For template events, this is the start date of the first instance.
+    *   `endDate` (Timestamp) - For template events, this is the end date of the first instance.
+    *   `volunteersNeeded` (Integer, Optional)
+    *   `status` (String: e.g., "planned", "active", "completed", "cancelled")
+    *   `organizerUserId` (String, references `users.uid`, Optional)
+    *   `isOpenForSignup` (Boolean, default: `true`)
+    *   `createdByUserId` (String, references `users.uid`)
+    *   `createdAt` (Timestamp)
+    *   `updatedAt` (Timestamp)
+    *   **`isTemplate`** (Boolean, Optional, default: `false`): Marks the event document as a template for a recurring series.
+    *   **`recurrenceRule`** (Object, Optional): Stores the recurrence pattern if `isTemplate` is `true`.
+        *   `frequency` (String: "daily", "weekly", "monthly")
+        *   `interval` (Integer: e.g., 1, 2)
+        *   `daysOfWeek` (Array of String: e.g., `["monday", "wednesday"]`, applicable for "weekly" frequency)
+        *   `dayOfMonth` (Integer: e.g., 15, applicable for "monthly" frequency on a specific day)
+        *   `endDate` (Timestamp, Optional): The date after which no more instances are generated.
+        *   `count` (Integer, Optional): The total number of instances to generate. (System uses either `endDate` or `count`).
+    *   **`templateEventId`** (String, Optional): If the event is an instance, this field links to the ID of its parent template event.
+    *   **`isException`** (Boolean, Optional, default: `false`): Set to `true` if this instance has been modified independently of its template.
+    *   **`originalInstanceDate`** (Timestamp, Optional): For instances, this stores the originally scheduled start date based on the template.
 *   **`workingGroups`**
     *   `id` (String, Document ID)
     *   `groupName` (String)
@@ -278,7 +313,7 @@ Details for each feature are derived from the FSD, with technical implementation
 *   **`assignments`** (Links users to events or working groups)
     *   `id` (String, Document ID)
     *   `userId` (String, references `users.uid`)
-    *   `assignableId` (String, references `events` or `workingGroups` document ID)
+    *   `assignableId` (String, references `events` or `workingGroups` document ID. For recurring events, this will be the ID of an *instance*.)
     *   `assignableType` (String: "event", "workingGroup")
     *   `status` (String: e.g., "confirmed", "attended", "active", "cancelled_signup", "confirmed_admin")
     *   `assignedByUserId` (String, references `users.uid` or "self_signup")
@@ -298,7 +333,7 @@ Details for each feature are derived from the FSD, with technical implementation
 *   Existing notes remain. No new migration needs identified in this sprint.
 
 ## 7. Deployment and Operations
-(Sections 7.1 to 7.4 remain largely unchanged from v1.2.)
+(Sections 7.1 to 7.4 remain largely unchanged from v1.3.)
 
 ## 8. Authentication and Authorization
 (Sections 8.1 and 8.2 remain largely unchanged, but the RBAC section implicitly covers new privileges.)

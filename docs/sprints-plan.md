@@ -212,3 +212,35 @@ This document outlines the planned development sprints for Project Fiji. It prov
         *   Final security best practices check.
 
 ---
+
+## Sprint 10: Recurrent Event Functionality
+
+*   **Goal:** Implement the ability to create and manage recurrent events, including defining recurrence patterns, generating event instances, and handling modifications to templates and individual instances.
+*   **Key Deliverables:**
+    *   Backend logic for processing recurrence rules and managing event instances.
+    *   Updated Event Pydantic models and Firestore schema to support recurrence.
+    *   Modified Event API endpoints (`/events`) for CRUD operations on recurring event templates and their instances.
+    *   Frontend UI components for defining recurrence rules during event creation/editing.
+    *   Frontend UI for displaying recurring events, their series, and individual instances.
+    *   Adapted event participation logic for instances of recurring events.
+    *   Comprehensive backend and frontend tests for recurrence functionality.
+*   **Main Task Areas:**
+    *   **Backend (FastAPI & Firestore):**
+        *   Design and implement recurrence rule processing logic.
+        *   Develop mechanisms for generating and managing event instances (e.g., scheduled jobs or on-demand generation).
+        *   Update Event Pydantic models and Firestore `events` schema to include `isTemplate`, `recurrenceRule`, `templateEventId`, `isException`, `originalInstanceDate`.
+        *   Modify `POST /events` and `PUT /events/{event_id}` to handle `recurrenceRule` in request and differentiate template/instance in response.
+        *   Implement logic for propagating template changes to instances and handling exceptions.
+        *   Ensure RBAC is correctly applied to recurring event management.
+    *   **Frontend (Next.js & Tailwind UI):**
+        *   Develop UI components for selecting recurrence frequency (daily, weekly, monthly), interval, days of the week (for weekly), day of the month (for monthly), and end conditions (number of occurrences or end date).
+        *   Integrate recurrence UI into event creation and editing forms.
+        *   Update event listing and detail pages to clearly display recurring event series and individual instances.
+        *   Ensure event signup/withdrawal functionality works correctly for individual instances of recurring events.
+        *   Handle display and interaction logic for modifying/deleting recurring event templates versus individual instances.
+    *   **Testing:**
+        *   Write backend unit and integration tests for recurrence rule parsing, instance generation, template updates, and exception handling.
+        *   Write frontend tests for UI components related to defining and displaying recurrent events.
+        *   Conduct E2E testing for the complete recurrent event lifecycle.
+
+---

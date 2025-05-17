@@ -5,6 +5,7 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO } from 'date-fns'; 
+import UserSearchInput from '@/components/admin/UserSearchInput'; // Import the new component
 
 interface Event {
   id: string; 
@@ -47,11 +48,18 @@ interface Assignment {
   hoursContributed?: number;
 }
 
+interface UserSearchResult { // For UserSearchInput component
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+}
+
 
 export default function EventDetailPage() {
   const router = useRouter();
   const params = useParams();
-  const pageEventId = params.eventId as string; // ID from URL params
+  const pageEventId = params.eventId as string; 
 
   const { user, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth();
   const [event, setEvent] = useState<EventDetail | null>(null);
@@ -62,7 +70,9 @@ export default function EventDetailPage() {
 
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
-  const [assignUserId, setAssignUserId] = useState(''); 
+  
+  // State for the selected user from UserSearchInput
+  const [selectedUserToAssign, setSelectedUserToAssign] = useState<UserSearchResult | null>(null);
 
   const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('events', 'manage_assignments') : userProfile.assignedRoleIds?.includes('sysadmin'));
@@ -85,16 +95,15 @@ export default function EventDetailPage() {
       setEvent(data);
     } catch (err: any) {
       setError(err.message);
-      setEvent(null); // Clear event on error
+      setEvent(null); 
     } finally {
       setIsLoadingEvent(false);
     }
   }, [user, pageEventId]);
 
-  const fetchEventAssignments = useCallback(async (currentEventId: string) => { // Take eventId as param
+  const fetchEventAssignments = useCallback(async (currentEventId: string) => { 
     if (!user || !currentEventId || !canManageAssignments) return; 
     
-    console.log("Fetching assignments for event ID:", currentEventId); // Log the ID being used
     setIsLoadingAssignments(true);
     setAssignmentsError(null);
     try {
@@ -115,7 +124,7 @@ export default function EventDetailPage() {
     } finally {
       setIsLoadingAssignments(false);
     }
-  }, [user, canManageAssignments]); // Removed eventId from deps, pass as arg
+  }, [user, canManageAssignments]); 
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -125,19 +134,17 @@ export default function EventDetailPage() {
     if (user && !userProfile) {
         fetchUserProfile();
     }
-    if (user && pageEventId) { // Use pageEventId from params
+    if (user && pageEventId) { 
       fetchEventDetails();
     }
   }, [user, authLoading, pageEventId, router, fetchEventDetails, userProfile, fetchUserProfile]);
 
-  // New useEffect to fetch assignments when event is loaded and user can manage them
   useEffect(() => {
     if (event && event.id && canManageAssignments) {
-        if (event.id === pageEventId) { // Ensure consistency
+        if (event.id === pageEventId) { 
             fetchEventAssignments(event.id);
         } else {
             console.warn("Mismatch between pageEventId and loaded event.id", pageEventId, event.id);
-            // Potentially handle this case, e.g. by refetching event details or showing an error
         }
     }
   }, [event, canManageAssignments, fetchEventAssignments, pageEventId]);
@@ -171,7 +178,10 @@ export default function EventDetailPage() {
 
   const handleAssignVolunteer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !event || !assignUserId.trim()) return;
+    if (!user || !event || !selectedUserToAssign) {
+        setAssignmentsError("Please select a user to assign.");
+        return;
+    }
     setActionInProgress(true); setError(null); setAssignmentsError(null);
     try {
       const token = await user.getIdToken();
@@ -179,13 +189,14 @@ export default function EventDetailPage() {
       const response = await fetch(`${backendUrl}/events/${event.id}/assignments`, {
         method: 'POST',
         headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: assignUserId, assignableId: event.id, assignableType: 'event', status: 'confirmed_admin' }),
+        body: JSON.stringify({ userId: selectedUserToAssign.id, assignableId: event.id, assignableType: 'event', status: 'confirmed_admin' }),
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'Failed to assign volunteer');
-      setAssignUserId(''); 
+      setSelectedUserToAssign(null); // Clear selection after assignment
+      // Consider clearing the UserSearchInput text as well if it's a separate component state
       await fetchEventAssignments(event.id); 
       await fetchEventDetails(); 
-    } catch (err: any) { setAssignmentsError(err.message); } // Use assignmentsError
+    } catch (err: any) { setAssignmentsError(err.message); } 
     finally { setActionInProgress(false); }
   };
 
@@ -199,13 +210,13 @@ export default function EventDetailPage() {
         method: 'DELETE',
         headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!response.ok && response.status !== 204) { // Handle 204 No Content
+      if (!response.ok && response.status !== 204) { 
         const errorData = await response.json().catch(() => ({ detail: 'Failed to remove volunteer assignment' }));
         throw new Error(errorData.detail || 'Failed to remove volunteer assignment');
       }
       await fetchEventAssignments(event.id); 
       await fetchEventDetails();
-    } catch (err: any) { setAssignmentsError(err.message); } // Use assignmentsError
+    } catch (err: any) { setAssignmentsError(err.message); } 
     finally { setActionInProgress(false); }
   };
 
@@ -295,17 +306,18 @@ export default function EventDetailPage() {
                 
                 <form onSubmit={handleAssignVolunteer} className="mb-6 p-4 border dark:border-gray-700 rounded-md">
                   <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Assign Volunteer</h3>
-                  <div className="flex items-center gap-2">
-                    <input 
-                      type="text"
-                      value={assignUserId}
-                      onChange={(e) => setAssignUserId(e.target.value)}
-                      placeholder="Enter User ID to assign"
-                      className="flex-grow p-2 border border-gray-300 dark:border-gray-600 rounded-md dark:bg-gray-800 dark:text-white focus:ring-indigo-500 focus:border-indigo-500"
-                      required
+                  <div className="space-y-2">
+                    <UserSearchInput 
+                        onUserSelected={(u) => setSelectedUserToAssign(u)}
+                        label="Search for volunteer to assign:"
+                        placeholder="Type name or email..."
                     />
-                    <button type="submit" disabled={actionInProgress || !assignUserId.trim()} className="py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md disabled:opacity-50">
-                      {actionInProgress ? 'Assigning...' : 'Assign'}
+                    <button 
+                        type="submit" 
+                        disabled={actionInProgress || !selectedUserToAssign} 
+                        className="w-full py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md disabled:opacity-50"
+                    >
+                      {actionInProgress ? 'Assigning...' : `Assign ${selectedUserToAssign ? (selectedUserToAssign.firstName || selectedUserToAssign.email) : ''}`}
                     </button>
                   </div>
                   {assignmentsError && <p className="text-red-500 text-sm mt-2">{assignmentsError}</p>}

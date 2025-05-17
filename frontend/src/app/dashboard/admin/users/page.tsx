@@ -1,249 +1,214 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useAuth } from '@/context/AuthContext'; // Correctly import useAuth
-import apiClient from '@/lib/apiClient';
-import { useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
-import RoleManagementModal from '@/components/admin/RoleManagementModal';
+import { useRouter } from 'next/navigation';
+import { useAuth } from '@/context/AuthContext'; // Assuming useAuth provides user and token
+import { format, parseISO } from 'date-fns';
 
-// Matches UserResponse from backend
-interface User {
-  uid: string;
+interface UserProfile {
+  uid: string; // Firebase UID, which is the document ID in Firestore 'users' collection
+  id: string; // Explicitly adding id for clarity, same as uid
   email: string;
-  firstName: string;
-  lastName:string;
-  phoneNumber?: string | null;
-  assignedRoleIds: string[];
+  firstName?: string;
+  lastName?: string;
   status: string;
-  createdAt: string; // Assuming these are ISO strings
-  updatedAt: string; // Assuming these are ISO strings
+  assignedRoleIds?: string[];
+  assignedRoleNames?: string[];
+  createdAt: string; // ISO string
+  profilePictureUrl?: string;
 }
 
-// Custom hook for admin-specific authentication and authorization logic
-const useAdminAuthCheck = () => {
-  const { user, idToken, userProfile, loading: authLoading, error: authError } = useAuth();
-
-  // Check if the user has the 'sysadmin' role ID.
-  const hasAdminRole = userProfile?.assignedRoleIds?.includes('sysadmin');
-
-  const canAccessPage = user && idToken && hasAdminRole;
-
-  return { user, idToken, userProfile, canAccessPage, authLoading, authError };
-};
-
-
-const AdminUserManagementPage = () => {
-  const { idToken, canAccessPage, authLoading, authError, userProfile } = useAdminAuthCheck();
+export default function AdminUserManagementPage() {
   const router = useRouter();
-
-  const [users, setUsers] = useState<User[]>([]);
-  const [isLoading, setIsLoading] = useState(true); // For data fetching specific to this page
-  const [error, setError] = useState<string | null>(null); // For errors specific to this page's operations
-
-  const [isModalOpen, setIsModalOpen] = useState(false);
-  const [selectedUserForRoles, setSelectedUserForRoles] = useState<User | null>(null);
+  const { user, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const [users, setUsers] = useState<UserProfile[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  useEffect(() => {
-    // Wait for auth context to finish loading
-    if (authLoading) {
-      setIsLoading(true); // Keep page loading indicator active
-      return;
-    }
+  const canViewUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'list') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
+  const canEditUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'edit') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
+  // Define canDeleteUsers, assuming a 'users:delete' privilege or sysadmin
+  const canDeleteUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'delete') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
 
-    // Handle auth errors from context
-    if (authError) {
-      setError(`Authentication error: ${authError.message}`);
-      setIsLoading(false);
-      return;
-    }
 
-    // Check for page access permission
-    if (!canAccessPage) {
-      setError("Access Denied. You do not have permission to view this page.");
-      setIsLoading(false);
-      // Optionally, redirect: router.push('/dashboard');
-      return;
-    }
-
-    // Ensure ID token is available for API calls
-    if (!idToken) {
-        setError("Authentication token not available. Cannot fetch users.");
+  const fetchUsers = useCallback(async () => {
+    if (!user || !canViewUsers) {
+        if (user && !canViewUsers && adminUserProfile) setError("You don't have permission to view users.");
         setIsLoading(false);
         return;
     }
-
-    // Fetch users if authorized and token is present
-    const fetchUsers = async () => {
-      setIsLoading(true); // Start loading for user data fetch
-      setError(null); // Clear previous page-specific errors
-      try {
-        const data = await apiClient<User[]>({
-          path: '/users', // Ensure this is the correct endpoint for fetching all users
-          token: idToken,
-        });
-        setUsers(data);
-      } catch (err: any) {
-        console.error('Failed to fetch users:', err);
-        setError(err.data?.detail || err.message || 'Failed to load users.');
-      } finally {
-        setIsLoading(false); // Finish loading for user data fetch
+    setIsLoading(true);
+    setError(null);
+    try {
+      const token = await user.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      // TODO: Implement pagination in backend and add controls here
+      const response = await fetch(`${backendUrl}/users?limit=100`, { // Fetching up to 100 users for now
+        headers: { 'Authorization': `Bearer ${token}` },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to fetch users');
       }
-    };
+      const data: UserProfile[] = await response.json();
+      // Ensure 'id' field is populated if backend returns 'uid' or relies on Firestore doc ID mapping
+      const processedData = data.map(u => ({ ...u, id: u.id || u.uid }));
+      setUsers(processedData);
+    } catch (err: any) {
+      setError(err.message);
+      console.error("Fetch users error:", err);
+    } finally {
+      setIsLoading(false);
+    }
+  }, [user, canViewUsers, adminUserProfile]);
 
-    fetchUsers();
-  }, [canAccessPage, authLoading, authError, idToken, router]);
+  useEffect(() => {
+    if (!authLoading && !user) {
+      router.push('/login');
+      return;
+    }
+    if (user && !adminUserProfile) { // If user is loaded but admin profile isn't
+        fetchUserProfile(); // Fetch admin's own profile to get roles/privileges
+    }
+    if (user && adminUserProfile) { // Once admin profile is loaded, check permissions and fetch users
+        fetchUsers();
+    }
+  }, [user, authLoading, adminUserProfile, fetchUserProfile, router, fetchUsers]);
 
-  const handleOpenModal = (userToManage: User) => {
-    setSelectedUserForRoles(userToManage);
-    setIsModalOpen(true);
-  };
-
-  const handleCloseModal = () => {
-    setIsModalOpen(false);
-    setSelectedUserForRoles(null);
-  };
-
-  const handleRolesUpdated = (userId: string, updatedRoleIds: string[]) => {
-    setUsers(prevUsers =>
-      prevUsers.map(u => (u.uid === userId ? { ...u, assignedRoleIds: updatedRoleIds } : u))
-    );
-    // Optionally, show a success message
-  };
-
-  // Determine if the current admin user can manage roles (e.g., has 'sysadmin' role)
-  const canManageUserRoles = userProfile?.assignedRoleIds?.includes('sysadmin');
-
-  const filteredUsers = users.filter(user => {
-    if (!searchTerm.trim()) return true;
-    const term = searchTerm.toLowerCase().trim();
-    const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
+  const filteredUsers = users.filter(u => {
+    const term = searchTerm.toLowerCase();
     return (
-      fullName.includes(term) ||
-      user.email.toLowerCase().includes(term)
+      u.firstName?.toLowerCase().includes(term) ||
+      u.lastName?.toLowerCase().includes(term) ||
+      u.email.toLowerCase().includes(term)
     );
   });
 
-  if (authLoading || (isLoading && users.length === 0 && !error)) {
-    return <div className="flex justify-center items-center h-screen"><p className="text-lg">Loading users...</p></div>;
-  }
-
-  if (authError || !canAccessPage) {
+  if (authLoading || (!adminUserProfile && user)) {
     return (
-      <div className="container mx-auto p-6 max-w-4xl text-center">
-        <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-gray-200">Users</h1>
-        <p className="text-red-500 text-lg">{error || authError?.message || "Access Denied. You do not have permission to view this page."}</p>
-        <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-6 inline-block text-lg">
-          Go to Dashboard
-        </Link>
+      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
+        <p>Loading user data...</p>
       </div>
     );
   }
 
-  if (error && users.length === 0) { // This error is page-specific, e.g., failed to fetch users
-     return (
-      <div className="container mx-auto p-6 max-w-4xl text-center">
-        <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-gray-200">Users</h1>
-        <p className="text-red-500 text-lg">Error: {error}</p>
-        <Link href="/dashboard" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-6 inline-block text-lg">
-          Go to Dashboard
-        </Link>
-      </div>
+  if (!canViewUsers && adminUserProfile) {
+    return (
+        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 text-center">
+                <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400 mb-4">Access Denied</h1>
+                <p className="text-gray-700 dark:text-gray-300">You do not have permission to view this page.</p>
+                <Link href="/dashboard" className="mt-6 inline-block px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                    Go to Dashboard
+                </Link>
+            </div>
+        </main>
     );
   }
 
+  if (error) {
+    return (
+      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
+        <p className="text-red-500">Error: {error}</p>
+        <button onClick={fetchUsers} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
+          Retry
+        </button>
+      </main>
+    );
+  }
+  
   return (
-    <div className="container mx-auto p-4 sm:p-6">
-      <div className="flex justify-between items-center mb-2">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-200">Users</h1>
-      </div>
-      <div className="mb-6">
-        <Link href="/dashboard" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
-          ← Back to Dashboard
-        </Link>
-      </div>
+    <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <header className="mb-8">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">User Management</h1>
+      </header>
 
-      <div className="mb-4">
+      <div className="mb-6">
         <input
           type="text"
-          placeholder="Search by name or email..."
-          className="w-full p-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 focus:ring-indigo-500 focus:border-indigo-500"
+          placeholder="Search users by name or email..."
           value={searchTerm}
           onChange={(e) => setSearchTerm(e.target.value)}
+          className="w-full max-w-md p-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-800 dark:text-white"
         />
       </div>
 
-      {/* Display non-critical errors that occur after initial load, e.g. role update error */}
-      {error && <p className="text-red-500 mb-4 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 p-3 rounded">{error}</p>}
-
-      {isLoading ? (
-        <div className="text-center py-10">
-          <p className="text-gray-600 dark:text-gray-400 text-lg">Loading users...</p>
-        </div>
-      ) : users.length === 0 ? (
-        <div className="text-center py-10">
-          <p className="text-gray-600 dark:text-gray-400 text-lg">No users found.</p>
-        </div>
-      ) : filteredUsers.length === 0 ? (
-        <div className="text-center py-10">
-          <p className="text-gray-600 dark:text-gray-400 text-lg">
-            No users found matching "{searchTerm}".
+      {isLoading && users.length === 0 ? (
+         <div className="text-center py-10"><p>Loading users list...</p></div>
+      ) : !isLoading && filteredUsers.length === 0 ? (
+        <div className="text-center py-10 bg-white dark:bg-gray-900 shadow rounded-lg">
+          <p className="text-gray-500 dark:text-gray-400">
+            {users.length === 0 ? "No users found in the system." : "No users found matching your search criteria."}
           </p>
         </div>
       ) : (
-        <div className="overflow-x-auto bg-white dark:bg-gray-700 shadow-md rounded-lg">
-          <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-500">
-            <thead className="bg-gray-50 dark:bg-gray-600">
-              <tr>
-                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
-                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
-                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Roles</th>
-                <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
-              </tr>
-            </thead>
-            <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-500">
-              {filteredUsers.map((userEntry) => (
-                <tr key={userEntry.uid}>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{userEntry.firstName} {userEntry.lastName}</td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{userEntry.email}</td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300 capitalize">{userEntry.status}</td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
-                    {userEntry.assignedRoleIds.join(', ') || 'N/A'}
-                  </td>
-                  <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
-                    <button
-                      onClick={() => handleOpenModal(userEntry)}
-                      className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!canManageUserRoles}
-                    >
-                      Manage Roles
-                    </button>
-                    <Link href={`/dashboard/admin/profile/${userEntry.uid}`} className="ml-4 text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-200">
-                      View Profile
-                    </Link>
-                    <Link href={`/dashboard/admin/users/${userEntry.uid}/edit`} className="ml-4 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200">
-                      Edit
-                    </Link>
-                  </td>
+        <div className="shadow border-b border-gray-200 dark:border-gray-700 sm:rounded-lg overflow-hidden">
+          <div className="bg-white dark:bg-gray-700 overflow-x-auto">
+            <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-600">
+              <thead className="bg-gray-50 dark:bg-gray-600">
+                <tr>
+                  <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Name</th>
+                  <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
+                  <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Roles</th>
+                  <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Joined</th>
+                  <th scope="col" className="px-4 sm:px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
-              ))}
-            </tbody>
-          </table>
+              </thead>
+              <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-500">
+                {filteredUsers.map((userEntry) => (
+                  <tr key={userEntry.id}>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">
+                        <div className="flex items-center">
+                            {userEntry.profilePictureUrl ? (
+                                <img src={userEntry.profilePictureUrl} alt="Profile" className="h-8 w-8 rounded-full mr-3" />
+                            ) : (
+                                <div className="h-8 w-8 rounded-full bg-gray-300 dark:bg-gray-600 mr-3 flex items-center justify-center text-xs text-gray-600 dark:text-gray-300">
+                                    {userEntry.firstName?.[0] || ''}{userEntry.lastName?.[0] || ''}
+                                </div>
+                            )}
+                            <Link href={`/dashboard/admin/profile/${userEntry.id}`} className="hover:underline">
+                                {userEntry.firstName} {userEntry.lastName}
+                            </Link>
+                        </div>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{userEntry.email}</td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap">
+                      <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                        userEntry.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' 
+                        : userEntry.status === 'disabled' ? 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100'
+                        : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100' // for pending_verification or other statuses
+                      }`}>
+                        {userEntry.status}
+                      </span>
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                      {(userEntry.assignedRoleNames && userEntry.assignedRoleNames.length > 0) ? userEntry.assignedRoleNames.join(', ') : 'N/A'}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">
+                      {format(parseISO(userEntry.createdAt), 'PP')}
+                    </td>
+                    <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium">
+                      {canEditUsers && (
+                        <Link href={`/dashboard/admin/users/${userEntry.id}/edit`} className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-200 mr-3">
+                          Edit
+                        </Link>
+                      )}
+                      {canDeleteUsers && (
+                        <Link href={`/dashboard/admin/users/${userEntry.id}/delete`} className="text-red-600 hover:text-red-900 dark:text-red-400 dark:hover:text-red-200">
+                          Delete
+                        </Link>
+                      )}
+                    </td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
-
-      {selectedUserForRoles && idToken && (
-        <RoleManagementModal
-          user={selectedUserForRoles}
-          isOpen={isModalOpen}
-          onClose={handleCloseModal}
-          onRolesUpdated={handleRolesUpdated}
-        />
-      )}
-    </div>
+    </main>
   );
-};
-
-export default AdminUserManagementPage;
+}

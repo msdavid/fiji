@@ -99,6 +99,28 @@ Authorized users can create and manage events with the following details:
 - **Event History:** Access to records of past events.
 - **Participation Reports:** Data on attendance and volunteer involvement.
 
+#### 4.4.5. Recurrent Events
+- **Defining Recurrence:**
+    - Users with appropriate permissions will be able to mark an event as recurrent during creation or editing.
+    - Recurrence options will include:
+        - **Frequency:** Daily, Weekly, Monthly.
+        - **Interval:** e.g., every 1 day/week/month, or every 2 days/weeks/months.
+        - **For Weekly:** Selection of specific days of the week (e.g., Monday, Wednesday).
+        - **For Monthly:** Selection of a specific day of the month (e.g., the 15th). (Advanced monthly patterns like "3rd Tuesday of the month" will be considered for future enhancements).
+        - **End Condition:** The recurrence can end either after a specific number of occurrences or on a particular date.
+- **Instance Generation and Display:**
+    - The system will automatically generate individual event instances based on the defined recurrence rule, up to a configurable future horizon (e.g., 12 months).
+    - Recurring events and their individual instances will be clearly marked in event lists and calendar views.
+    - Users will be able to view all instances belonging to a recurring series.
+- **Participation in Recurring Events:**
+    - Volunteers will sign up for, and withdraw from, individual instances of a recurring event. Enrolling in one instance will not automatically enroll them in the entire series.
+- **Modifying Recurring Events:**
+    - Changes to the recurrence rule or common details of the main "template" event will prompt an option to update all future instances that have not been individually modified (exceptions).
+    - Modifying a single instance (e.g., changing its time, description, or location) will mark that instance as an exception. It will retain its unique changes and will not be overridden by subsequent template modifications for those specific fields.
+- **Deleting Recurring Events:**
+    - Deleting the main "template" event will prompt an option to delete all future instances that have not been individually modified.
+    - Deleting a single instance will only remove that specific occurrence.
+
 ### 4.5. Working Group Management
 - **Creation and Management:** Tools for creating and defining working groups.
 - **Assignments:** Assigning volunteers to specific working groups.
