@@ -75,10 +75,22 @@
         *   Added `icon: Optional[str] = Field(None, max_length=50)` to `EventUpdate`.
     *   Verified that `backend/routers/events.py` does not require direct modification for the `icon` field, as `model_dump()` in create/update endpoints will automatically include it due to Pydantic model updates. The `icon` field will now be saved to and retrieved from Firestore.
 
+10. **Displayed Dynamic Icons on Event Listing Page (`frontend/src/app/dashboard/events/page.tsx`):**
+    *   Updated the `Event` interface to include `icon?: string;`.
+    *   Modified the event card's left section to render a Material Icon using `<span class="material-icons">...</span>`.
+    *   Displays `event.icon` if available, otherwise defaults to 'event'.
+    *   Added `group-hover` styling to change icon color on card hover.
+
+11. **Improved Error Message Display on Event Edit Form (`frontend/src/app/dashboard/events/[eventId]/edit/page.tsx`):**
+    *   Modified the `handleSubmit` function to better parse backend error responses.
+    *   If `errorData.detail` from the backend is an array (typical for FastAPI validation errors), the message from the first error object (or a concatenation) is extracted and displayed.
+    *   If `errorData.detail` is a string, it's used directly.
+    *   If `errorData.detail` is another non-string type, it's stringified.
+    *   This prevents the display of `[object Object]` when validation errors occur, showing a more user-friendly message.
+
 **Next Steps (Planned for Future Sessions):**
 
 *   Refine state management for icon selection if `localStorage` proves insufficient (e.g., using a shared context or Zustand/Redux if complexity grows).
-*   Display the selected event icon on the events listing page (currently shows a placeholder calendar icon).
 
 **Notes:**
 
