@@ -53,11 +53,27 @@
         *   `handleIconClick`: Stores current `formData` in `localStorage` (key: `eventFormDraft-${eventId}`) and navigates to `/dashboard/events/select-icon?returnTo=/dashboard/events/${eventId}/edit`.
         *   `useEffect` & `fetchEventData`: Logic adjusted for rehydration from `localStorage` and `selectedIcon` query param, merging with fetched data.
 
+7.  **Refactored Events Listing Page (`frontend/src/app/dashboard/events/page.tsx`):**
+    *   **Card Matrix Layout:** Changed from a list view to a responsive grid of cards (`grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6`).
+    *   **Card Styling:** Each event is displayed as a card with `bg-white dark:bg-gray-900 shadow-lg rounded-lg`. The entire card is a `Link` to the event detail page.
+    *   **Three-Section Card Layout:**
+        *   **Left Section:** Displays a circular placeholder (calendar icon) with a vertical divider (`border-r`).
+        *   **Right Section (Top):** Contains event details (name, type, venue, date, status, description). Event name uses `truncate`.
+        *   **Right Section (Bottom):** Shows creation metadata (creator, creation date) and the 'Edit' button, separated by a horizontal divider (`border-t`).
+    *   **Interactivity:** Event title changes color on hover. 'Edit' button uses `e.stopPropagation()`.
+    *   **Consistency:** Page title (`h1`) and 'No events found' message styling updated to match other admin pages.
+    *   **TODOs:** Added comments for future privilege-based access control and dynamic event icons.
+
+8.  **Fixed Duplicate Navbar on Event Detail Page (`frontend/src/app/dashboard/events/[eventId]/page.tsx`):**
+    *   Removed the redundant `<nav>` element from the page.
+    *   Relocated the "Back to Events" link to the top of the `main` content area, above the event title.
+    *   Removed an unnecessary outer `div` with `min-h-screen` and background styling, deferring to the parent layout.
+
 **Next Steps (Planned for Future Sessions):**
 
 *   Refine state management for icon selection if `localStorage` proves insufficient (e.g., using a shared context or Zustand/Redux if complexity grows).
 *   Update backend: Add `icon` field to the event model, update API endpoints (`POST /events`, `PUT /events/{eventId}`, `GET /events/{eventId}`) to handle the new field.
-*   Display the selected event icon in other relevant places (e.g., event list, event detail page).
+*   Display the selected event icon in other relevant places (e.g., event list, event detail page - partially done with placeholder).
 
 **Notes:**
 
