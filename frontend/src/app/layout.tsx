@@ -7,7 +7,7 @@ const inter = Inter({ subsets: ["latin"] });
 
 export const metadata: Metadata = {
   title: "Fiji",
-  description: "Fiji Platform",
+  description: "Fiji",
 };
 
 export default function RootLayout({

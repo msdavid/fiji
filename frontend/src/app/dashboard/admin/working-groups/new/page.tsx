@@ -110,7 +110,7 @@ export default function NewWorkingGroupPage() {
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
           <div className="flex items-center justify-between h-16">
             <Link href="/dashboard" className="text-xl font-bold text-indigo-600 dark:text-indigo-400">
-              Fiji Platform
+              Fiji
             </Link>
             <Link href="/dashboard/admin/working-groups" className="text-sm font-medium text-gray-700 hover:text-gray-900 dark:text-gray-300 dark:hover:text-white">
               ← Back to Working Groups
