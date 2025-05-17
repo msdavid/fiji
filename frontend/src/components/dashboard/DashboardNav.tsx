@@ -3,26 +3,47 @@
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { signOut } from 'firebase/auth';
-import { auth } from '@/lib/firebaseConfig'; // Ensure this path is correct
+import { auth } from '@/lib/firebaseConfig';
 import { useAuth } from '@/context/AuthContext';
-import React from 'react'; // Import React for JSX elements in array and keys
+import React, { useState, useEffect, useRef } from 'react';
 
 export default function DashboardNav() {
   const router = useRouter();
-  const { user, userProfile, loading: authLoading, hasPrivilege } = useAuth(); // Added hasPrivilege
+  const { user, userProfile, loading: authLoading, hasPrivilege } = useAuth();
+  const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const dropdownRef = useRef<HTMLDivElement>(null); 
 
   const handleLogout = async () => {
     try {
       await signOut(auth);
+      setIsDropdownOpen(false); 
       router.push('/login');
-    } catch (error) {
+    } catch (error) { // Corrected syntax: removed underscore
       console.error('Logout Error:', error);
     }
   };
 
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
+        setIsDropdownOpen(false);
+      }
+    };
+
+    if (isDropdownOpen) {
+      document.addEventListener('mousedown', handleClickOutside);
+    } else {
+      document.removeEventListener('mousedown', handleClickOutside);
+    }
+
+    return () => {
+      document.removeEventListener('mousedown', handleClickOutside);
+    };
+  }, [isDropdownOpen]);
+
   const isAdmin = userProfile?.assignedRoleIds?.includes('sysadmin');
 
-  if (authLoading && !user) { // Show loading only if user data isn't available yet
+  if (authLoading && !user) {
     return (
         <nav className="bg-white dark:bg-gray-900 shadow-sm">
             <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8">
@@ -40,11 +61,11 @@ export default function DashboardNav() {
   }
 
   if (!user) {
-    // Should not happen if layout protects routes, but as a fallback.
     return null;
   }
 
-  const displayName = userProfile?.firstName ? userProfile.firstName : (user.email || "Profile");
+  const displayName = userProfile?.firstName ? userProfile.firstName : (user.email || "User");
+  const avatarInitial = userProfile?.firstName ? userProfile.firstName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : '');
 
   const linkClassName = "text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-150 ease-in-out";
 
@@ -52,34 +73,28 @@ export default function DashboardNav() {
 
   if (isAdmin) {
     navLinks.push(
-      <Link key="users" href="/dashboard/admin/users" className={linkClassName}>
+      <Link key="users" href="/dashboard/admin/users" className={linkClassName} onClick={() => setIsDropdownOpen(false)}>
         Users
       </Link>
     );
     navLinks.push(
-      <Link key="wg" href="/dashboard/admin/working-groups" className={linkClassName}>
+      <Link key="wg" href="/dashboard/admin/working-groups" className={linkClassName} onClick={() => setIsDropdownOpen(false)}>
         Working Groups
       </Link>
     );
   }
 
-  // Conditionally add Donations link
   if (hasPrivilege && hasPrivilege('donations', 'list')) {
     navLinks.push(
-      <Link key="donations" href="/dashboard/donations" className={linkClassName}>
+      <Link key="donations" href="/dashboard/donations" className={linkClassName} onClick={() => setIsDropdownOpen(false)}>
         Donations
       </Link>
     );
   }
 
   navLinks.push(
-    <Link key="events" href="/dashboard/events" className={linkClassName}>
+    <Link key="events" href="/dashboard/events" className={linkClassName} onClick={() => setIsDropdownOpen(false)}>
       Events
-    </Link>
-  );
-  navLinks.push(
-    <Link key="profile" href="/dashboard/profile" className={linkClassName}>
-      {displayName}
     </Link>
   );
 
@@ -94,12 +109,65 @@ export default function DashboardNav() {
           </div>
           <div className="flex items-center space-x-4"> 
             {navLinks}
-            <button
-              onClick={handleLogout}
-              className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
-            >
-              Logout
-            </button>
+            <div className="relative" ref={dropdownRef}>
+              <button
+                id="user-menu-button"
+                onClick={() => setIsDropdownOpen(!isDropdownOpen)}
+                className="flex items-center justify-center w-10 h-10 bg-indigo-100 dark:bg-indigo-800 rounded-full text-indigo-600 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500 transition-colors duration-150 ease-in-out"
+                aria-expanded={isDropdownOpen}
+                aria-haspopup="true"
+              >
+                {avatarInitial ? (
+                  <span className="text-lg font-medium">{avatarInitial}</span>
+                ) : (
+                  <span className="material-icons text-xl">person</span> 
+                )}
+              </button>
+
+              {isDropdownOpen && (
+                <div 
+                  className="origin-top-right absolute right-0 mt-2 w-56 rounded-md shadow-xl bg-white dark:bg-gray-800 ring-1 ring-gray-200 dark:ring-gray-700 focus:outline-none z-50"
+                  role="menu" 
+                  aria-orientation="vertical" 
+                  aria-labelledby="user-menu-button"
+                >
+                  <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700">
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Signed in as</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</p>
+                  </div>
+                  <div className="py-1" role="none">
+                    <Link 
+                      href="/dashboard/profile" 
+                      className="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white" 
+                      role="menuitem"
+                      onClick={() => setIsDropdownOpen(false)}
+                    >
+                      <span className="material-icons text-lg mr-2 text-gray-500 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">account_circle</span>
+                      Your Profile
+                    </Link>
+                    <Link 
+                      href="/dashboard/preferences" 
+                      className="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white" 
+                      role="menuitem"
+                      onClick={() => setIsDropdownOpen(false)}
+                    >
+                      <span className="material-icons text-lg mr-2 text-gray-500 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">settings</span>
+                      Preferences
+                    </Link>
+                  </div>
+                  <div className="py-1 border-t border-gray-200 dark:border-gray-700" role="none">
+                    <button 
+                      onClick={handleLogout}
+                      className="group flex items-center w-full text-left px-4 py-2 text-sm text-red-600 dark:text-red-400 hover:bg-red-50 dark:hover:bg-red-900/30 hover:text-red-700 dark:hover:text-red-300" 
+                      role="menuitem"
+                    >
+                      <span className="material-icons text-lg mr-2 group-hover:text-red-700 dark:group-hover:text-red-300">logout</span>
+                      Logout
+                    </button>
+                  </div>
+                </div>
+              )}
+            </div>
           </div>
         </div>
       </div>
