@@ -5,7 +5,7 @@
 **Developer:** Mauro
 **Agent:** Q
 
-**Sprint Objective:** Implement Event Icon Selection Feature (Phase 1 - UI and Basic Navigation)
+**Sprint Objective:** Implement Event Icon Selection Feature (Phase 1 - UI and Basic Navigation) & Refinements
 
 **Key Activities:**
 
@@ -21,49 +21,45 @@
     *   Modified `fetchEventData` in the edit page to retrieve and set the `icon` field, defaulting if not present.
     *   Updated `handleSubmit` functions in both create and edit pages to include the `icon` field in the payload sent to the backend.
 
-3.  **Refactored Event Form Layouts:**
+3.  **Refactored Event Form Layouts & Styling:**
     *   Modified `frontend/src/app/dashboard/events/new/page.tsx` and `frontend/src/app/dashboard/events/[eventId]/edit/page.tsx`.
-    *   Introduced a two-column layout (`md:flex md:space-x-6 items-start`) at the top of the forms:
-        *   **Left Column:** A circular, clickable `div` to display the event icon. Styled with `w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center ... cursor-pointer`.
-        *   Contains a `<span>` with class `material-icons` to render the icon. Font size set to `4rem`.
+    *   Introduced a two-column layout (`md:flex md:space-x-6 items-start`) at the top of the forms, wrapped in a card styled like the profile page (`bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8` on a `max-w-3xl` container).
+    *   **Left Column:** A circular, clickable `div` to display the event icon. Styled with `w-32 h-32 sm:w-40 sm:h-40 rounded-full ... flex items-center justify-center ... cursor-pointer`.
+        *   Contains a `<span>` with class `material-icons` to render the icon. Font size increased from `4rem` to `5rem`.
         *   Displays `formData.icon` or a fallback like 'add_photo_alternate'.
-        *   **Right Column:** Contains the "Event Name" input field.
-    *   The remaining form fields follow below this new two-column section, retaining their existing grid layout.
+        *   Sub-text "Click icon to change" centered horizontally under the icon.
+    *   **Vertical Separator:** Added `div` with `border-l` between icon and form content columns.
+    *   **Right Column:** Contains the "Event Name" input field and other top-level fields, with consistent spacing.
+    *   The remaining form fields follow below this initial two-column section.
 
 4.  **Added Material Icons Stylesheet:**
     *   Updated `frontend/src/app/layout.tsx` to include the Google Material Icons stylesheet link in the `<head>`:
         `<link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />`
 
-5.  **Created Placeholder Icon Selection Page:**
+5.  **Created Icon Selection Page & Functionality:**
     *   Created `frontend/src/app/dashboard/events/select-icon/page.tsx`.
-    *   This page currently includes:
-        *   A title "Select Event Icon".
-        *   A "Back to Event Form" button using `router.back()`.
-        *   Placeholder text indicating where the icon gallery will be.
-        *   A link to the Google Material Icons website for manual selection in the interim.
+    *   **Icon List:** Created `frontend/src/lib/materialIcons.ts` with a vastly expanded list of Material Icons (over 600 unique icons), categorized and flattened into `commonEventIcons`.
+    *   **Display:** The selection page displays icons from `commonEventIcons` in a responsive grid.
+    *   **Search:** Added a search input field to filter the displayed icons by name (case-insensitive).
+    *   **Navigation:**
+        *   Clicking an icon navigates back to the `returnTo` URL (passed as a query param) with the `selectedIcon` name appended.
+        *   A "Back to Event Form" button allows navigation back without selection.
 
-6.  **Implemented Icon Click Navigation and State Persistence:**
+6.  **Implemented Icon Click Navigation and State Persistence (Event Forms):**
     *   **Create Event Page (`.../new/page.tsx`):**
         *   `handleIconClick`: Stores current `formData` in `localStorage` (key: `eventFormDraft`) and navigates to `/dashboard/events/select-icon?returnTo=/dashboard/events/new`.
-        *   `useEffect`:
-            *   On mount/return, checks for `selectedIcon` query parameter.
-            *   If `selectedIcon` exists, retrieves `eventFormDraft` from `localStorage`, updates `formData` with the new icon and draft data, removes the draft from `localStorage`, and cleans the URL.
-            *   If no `selectedIcon` but `eventFormDraft` exists, rehydrates form (optional: clear draft).
+        *   `useEffect`: On return, retrieves `selectedIcon` from query params and draft data from `localStorage`, updates `formData`, removes draft, and cleans URL.
     *   **Edit Event Page (`.../[eventId]/edit/page.tsx`):**
         *   `handleIconClick`: Stores current `formData` in `localStorage` (key: `eventFormDraft-${eventId}`) and navigates to `/dashboard/events/select-icon?returnTo=/dashboard/events/${eventId}/edit`.
-        *   `useEffect` & `fetchEventData`:
-            *   Logic adjusted to handle rehydration from `localStorage` and `selectedIcon` query parameter, similar to the create page, ensuring fetched event data is merged correctly with any draft or newly selected icon.
-            *   `router.replace` used to clean URL after processing `selectedIcon`.
+        *   `useEffect` & `fetchEventData`: Logic adjusted for rehydration from `localStorage` and `selectedIcon` query param, merging with fetched data.
 
 **Next Steps (Planned for Future Sessions):**
 
-*   Fully implement the icon gallery on `/dashboard/events/select-icon/page.tsx`.
-*   Implement robust state management or query parameter passing for the selected icon from the selection page back to the event forms.
+*   Refine state management for icon selection if `localStorage` proves insufficient (e.g., using a shared context or Zustand/Redux if complexity grows).
 *   Update backend: Add `icon` field to the event model, update API endpoints (`POST /events`, `PUT /events/{eventId}`, `GET /events/{eventId}`) to handle the new field.
 *   Display the selected event icon in other relevant places (e.g., event list, event detail page).
 
 **Notes:**
 
-*   The current implementation uses `localStorage` for draft persistence during icon selection. This is a temporary solution and might be refined with a more robust state management approach if needed.
 *   Backend changes are critical for the `icon` field to be saved and displayed permanently.
-*   The `eslint-disable-next-line react-hooks/exhaustive-deps` comment was added in `useEffect` hooks where `router.replace` might cause re-triggers if `router` itself was in the dependency array without careful memoization of its instance.
+*   The `eslint-disable-next-line react-hooks/exhaustive-deps` comment was used in `useEffect` hooks where router methods might cause re-triggers if `router` itself was in the dependency array without careful memoization.
