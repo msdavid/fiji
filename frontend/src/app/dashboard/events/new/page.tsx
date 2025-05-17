@@ -12,11 +12,12 @@ interface EventFormData {
   description: string;
   dateTime: string; 
   endTime: string;   
-  location: string; 
+  location: string; // Corresponds to 'venue' in backend
   volunteersRequired: number;
   status: string; 
   organizerUserId: string | null; 
   icon: string; 
+  point_of_contact?: string; // New field
 }
 
 interface UserSearchResult {
@@ -33,11 +34,12 @@ const initialFormData: EventFormData = {
   description: '',
   dateTime: '', 
   endTime: '',   
-  location: '', 
+  location: '', // Corresponds to 'venue' in backend
   volunteersRequired: 1,
   status: 'draft',
   organizerUserId: null, 
   icon: 'event', 
+  point_of_contact: '', // New field
 };
 
 const formatDateTimeForInput = (date: Date): string => {
@@ -216,7 +218,12 @@ export default function CreateEventPage() {
         return;
     }
 
-    const payload = { ...formData }; 
+    // Map frontend 'location' to backend 'venue'
+    const { location, ...restOfFormData } = formData;
+    const payload = { 
+        ...restOfFormData,
+        venue: location // Map to backend field name
+    }; 
 
     try {
       const token = await user.getIdToken();
@@ -359,10 +366,16 @@ export default function CreateEventPage() {
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
             </div>
             <div>
-              <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
-              <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
+              <label htmlFor="point_of_contact" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Point of Contact</label>
+              <input type="text" name="point_of_contact" id="point_of_contact" value={formData.point_of_contact || ''} onChange={handleChange}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
             </div>
+          </div>
+          
+          <div>
+            <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
+            <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
 
           <div>

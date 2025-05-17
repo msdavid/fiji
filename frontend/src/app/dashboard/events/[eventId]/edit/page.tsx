@@ -17,6 +17,7 @@ interface EventFormData {
   status: string;
   organizerUserId: string | null; 
   icon: string; 
+  point_of_contact?: string; // New field
 
   // Fields that might be in formData from fetch but not for update
   id?: string;
@@ -123,6 +124,7 @@ export default function EditEventPage() {
         endTime: formattedEndTime, 
         organizerUserId: eventData.organizerUserId || null, 
         icon: iconToSet,
+        point_of_contact: eventData.point_of_contact || '', // Include new field
       };
 
       const storedDraft = localStorage.getItem(`eventFormDraft-${eventId}`);
@@ -193,7 +195,7 @@ export default function EditEventPage() {
             localStorage.removeItem(`eventFormDraft-${eventId}`);
             router.replace(`/dashboard/events/${eventId}/edit`, undefined); 
             setIsLoadingEvent(false); 
-        } else if (storedDraft && !isLoadingEvent && Object.keys(formData).length <= 1) { 
+        } else if (storedDraft && !isLoadingEvent && Object.keys(formData).length <= 2) { // Adjusted condition for point_of_contact
             try {
                 setFormData(JSON.parse(storedDraft));
             } catch (e) {
@@ -344,8 +346,8 @@ export default function EditEventPage() {
       if (formData.location !== undefined) updatePayload.venue = formData.location; // Map location to venue
       if (formData.volunteersRequired !== undefined) updatePayload.volunteersRequired = formData.volunteersRequired;
       if (formData.status !== undefined) updatePayload.status = formData.status;
-      // organizerUserId can be null to clear it, so include if present in formData
       if (formData.organizerUserId !== undefined) updatePayload.organizerUserId = formData.organizerUserId; 
+      if (formData.point_of_contact !== undefined) updatePayload.point_of_contact = formData.point_of_contact; // Include new field
       updatePayload.icon = formData.icon || 'event'; // Ensure icon is always sent, default if not set
 
       const response = await fetch(`${backendUrl}/events/${eventId}`, {
@@ -525,10 +527,16 @@ export default function EditEventPage() {
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
               </div>
               <div>
-                <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
-                <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired || 0} onChange={handleChange} min="0" required
+                <label htmlFor="point_of_contact" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Point of Contact</label>
+                <input type="text" name="point_of_contact" id="point_of_contact" value={formData.point_of_contact || ''} onChange={handleChange}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
               </div>
+            </div>
+            
+            <div>
+              <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
+              <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired || 0} onChange={handleChange} min="0" required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
             </div>
 
             <div>

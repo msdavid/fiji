@@ -15,7 +15,7 @@ interface Event {
   description?: string;
   dateTime: string; 
   endTime?: string;  
-  venue: string; 
+  venue?: string; // Made optional to align with backend, though usually present
   volunteersRequired?: number;
   status: string;
   createdByUserId: string;
@@ -27,7 +27,8 @@ interface Event {
   currentUserAssignmentStatus?: string;
   organizerUserId?: string; 
   organizerFirstName?: string; 
-  organizerLastName?: string;  
+  organizerLastName?: string;
+  point_of_contact?: string; // New field
 }
 interface EventDetail extends Event {}
 
@@ -249,13 +250,6 @@ export default function EventDetailPage() {
   const creatorName = event.creatorFirstName && event.creatorLastName ? `${event.creatorFirstName} ${event.creatorLastName}` : event.createdByUserId;
 
   return (
-    // Removed the outer div with min-h-screen and bg-gray-100/dark:bg-gray-800 as this should be handled by the layout
-    // <div className="min-h-screen bg-gray-100 dark:bg-gray-800"> 
-    // Removed the <nav> element
-    // <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6"> 
-    // ...
-    // </nav>
-
       <main className="max-w-4xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
         <div className="mb-6"> {/* Container for Back link */}
             <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
@@ -279,6 +273,7 @@ export default function EventDetailPage() {
               <p><strong>Status:</strong> <span className={`ml-2 px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${ event.status === 'open_for_signup' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' : event.status === 'draft' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100' : event.status === 'completed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100' : event.status === 'cancelled' ? 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100' : 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100' }`}>{event.status.replace(/_/g, ' ')}</span></p>
               <p><strong>Volunteers Required:</strong> {event.volunteersRequired ?? 'N/A'}</p>
               <p><strong>Organizer:</strong> {organizerName}</p>
+              {event.point_of_contact && <p><strong>Point of Contact:</strong> {event.point_of_contact}</p>}
               <p><strong>Created By:</strong> {creatorName}</p>
             </div>
 
@@ -353,6 +348,5 @@ export default function EventDetailPage() {
           </div>
         </div>
       </main>
-    // </div>
   );
 }
