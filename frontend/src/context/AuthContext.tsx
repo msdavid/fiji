@@ -16,6 +16,7 @@ interface UserProfile {
   skills?: string;
   qualifications?: string;
   preferences?: string;
+  profilePictureUrl?: string | null; // Added profile picture URL
 }
 
 interface AuthContextType {

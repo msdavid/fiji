@@ -13,6 +13,7 @@ class UserBase(BaseModel):
     skills: Optional[str] = Field(None, description="User's skills, as a single text block.") # Changed from List[str]
     qualifications: Optional[str] = Field(None, description="User's qualifications, as a single text block.") # Changed from List[str]
     preferences: Optional[str] = Field(None, description="User's preferences or notes.")
+    profilePictureUrl: Optional[str] = Field(None, description="URL of the user's profile picture.")
 
 
 class UserCreateData(BaseModel):
@@ -48,6 +49,7 @@ class UserUpdate(BaseModel):
     skills: Optional[str] = Field(None, description="User's skills, as a single text block. Send an empty string to clear.") # Changed from List[str]
     qualifications: Optional[str] = Field(None, description="User's qualifications, as a single text block. Send an empty string to clear.") # Changed from List[str]
     preferences: Optional[str] = Field(None, description="User's preferences or notes. Send an empty string to clear.")
+    profilePictureUrl: Optional[str] = Field(None, description="URL of the user's profile picture. Send an empty string to clear.")
     
     model_config = ConfigDict(extra='forbid')
 

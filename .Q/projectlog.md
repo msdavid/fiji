@@ -1,6 +1,23 @@
 # Project Log - Fiji
 
-## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Admin User Profile Card Layout -->
+## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Add Profile Picture Field & Display -->
+- **Q Agent:** Mauro
+- **Objective:** Add a profile picture URL field to user models and display it on profile pages.
+### Activity:
+- **Backend Model Update (`backend/models/user.py`):**
+  - Added an optional `profilePictureUrl: Optional[str]` field to `UserBase`, `UserResponse`, and `UserUpdate` Pydantic models.
+- **Frontend - Admin User Profile Page (`frontend/src/app/dashboard/admin/profile/[userId]/page.tsx`):**
+  - Updated the `UserProfileData` interface to include `profilePictureUrl`.
+  - Modified the "Basic Information" card to display an `<img>` tag for the profile picture if a URL exists, or a placeholder if not.
+- **Frontend - User's Own Profile Page (`frontend/src/app/dashboard/profile/page.tsx`):**
+  - Updated `UserDataFromBackend` and `EditableUserProfile` interfaces to include `profilePictureUrl`.
+  - Added an `<img>` element to display the profile picture in both view and edit modes (display-only in edit mode for now).
+  - Updated `formData` state to include `profilePictureUrl`.
+- **Frontend - AuthContext (`frontend/src/context/AuthContext.tsx`):**
+  - Added `profilePictureUrl?: string | null` to the `UserProfile` interface.
+
+---
+## Session (YYYY-MM-DD HH:MM) <!-- Previous entry: Admin User Profile Card Layout -->
 - **Q Agent:** Mauro
 - **Objective:** Enhance the visual appeal of the admin user profile page (`/dashboard/admin/profile/[userId]`) with a card-based layout.
 ### Activity:

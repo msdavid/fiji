@@ -15,6 +15,7 @@ interface UserDataFromBackend {
   skills?: string | string[]; 
   qualifications?: string | string[]; 
   preferences?: string;
+  profilePictureUrl?: string | null; // Added profile picture URL
   assignedRoleIds?: string[];
   status?: string;
   createdAt?: string; 
@@ -29,6 +30,7 @@ interface EditableUserProfile {
   skills?: string; 
   qualifications?: string; 
   preferences?: string; 
+  profilePictureUrl?: string | null; // Added profile picture URL
 }
 
 const ProfilePage = () => {
@@ -49,6 +51,7 @@ const ProfilePage = () => {
     skills: '', 
     qualifications: '', 
     preferences: '',
+    profilePictureUrl: '',
   });
 
   const skillsToString = (s: string | string[] | undefined): string => {
@@ -87,6 +90,7 @@ const ProfilePage = () => {
             skills: skillsToString(fetchedProfileData.skills),
             qualifications: skillsToString(fetchedProfileData.qualifications),
             preferences: fetchedProfileData.preferences || '',
+            profilePictureUrl: fetchedProfileData.profilePictureUrl || '',
         });
         setError(null);
       } catch (err: any) {
@@ -121,6 +125,7 @@ const ProfilePage = () => {
         firstName: formData.firstName,
         lastName: formData.lastName,
         phoneNumber: formData.phoneNumber,
+        // profilePictureUrl: formData.profilePictureUrl, // Upload logic is separate
       };
       
       if (typeof formData.preferences === 'string') {
@@ -132,6 +137,8 @@ const ProfilePage = () => {
       if (typeof formData.qualifications === 'string') {
         updatePayload.qualifications = formData.qualifications.trim();
       }
+      // Note: profilePictureUrl is not included in the PUT payload here.
+      // Handling file uploads and URL updates typically requires a separate endpoint or logic.
 
       const updatedProfileData = await apiClient<UserDataFromBackend>({
         method: 'PUT',
@@ -149,6 +156,7 @@ const ProfilePage = () => {
         skills: skillsToString(updatedProfileData.skills), 
         qualifications: skillsToString(updatedProfileData.qualifications), 
         preferences: updatedProfileData.preferences || '', 
+        profilePictureUrl: updatedProfileData.profilePictureUrl || '',
       });
       setIsEditing(false);
       setError(null);
@@ -226,6 +234,7 @@ const ProfilePage = () => {
                         skills: skillsToString(profile.skills),
                         qualifications: skillsToString(profile.qualifications),
                         preferences: profile.preferences || '',
+                        profilePictureUrl: profile.profilePictureUrl || '',
                     });
                 }}
                 className="mt-4 sm:mt-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800"
@@ -237,6 +246,20 @@ const ProfilePage = () => {
 
           {!isEditing ? (
             <div className="space-y-6">
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Profile Picture</label>
+                {profile.profilePictureUrl ? (
+                  <img 
+                    src={profile.profilePictureUrl} 
+                    alt="Your profile picture"
+                    className="mt-2 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600" 
+                  />
+                ) : (
+                  <div className="mt-2 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
+                    <span>No Picture</span>
+                  </div>
+                )}
+              </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">First Name</label>
                 <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.firstName}</p>
@@ -274,6 +297,23 @@ const ProfilePage = () => {
             </div>
           ) : (
             <form onSubmit={handleSubmit} className="space-y-6">
+              {/* Profile Picture Display in Edit Mode (Non-editable for now) */}
+              <div className="mb-6">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
+                {formData.profilePictureUrl ? (
+                  <img 
+                    src={formData.profilePictureUrl} 
+                    alt="Your profile picture"
+                    className="mt-2 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600" 
+                  />
+                ) : (
+                  <div className="mt-2 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
+                    <span>No Picture</span>
+                  </div>
+                )}
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Profile picture upload is not yet available.</p>
+              </div>
+
               <div>
                 <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label>
                 <input
@@ -367,6 +407,7 @@ const ProfilePage = () => {
                             skills: skillsToString(profile.skills),
                             qualifications: skillsToString(profile.qualifications),
                             preferences: profile.preferences || '',
+                            profilePictureUrl: profile.profilePictureUrl || '',
                         });
                     }
                     setError(null); 

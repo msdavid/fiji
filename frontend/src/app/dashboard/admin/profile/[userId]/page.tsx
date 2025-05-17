@@ -16,6 +16,7 @@ interface UserProfileData {
   skills?: string | null;
   qualifications?: string | null;
   preferences?: string | null;
+  profilePictureUrl?: string | null; // Added profile picture URL
   assignedRoleIds: string[];
   status: string;
   createdAt: string; // Assuming ISO string from backend
@@ -102,7 +103,7 @@ const AdminViewUserProfilePage = () => {
 
   // Helper component for displaying profile fields
   const ProfileField = ({ label, value }: { label: string; value: string | undefined | null | string[] }) => (
-    <div className="mb-4 last:mb-0"> {/* Remove bottom margin from the last field in a card */}
+    <div className="mb-4 last:mb-0">
       <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">{label}</label>
       {typeof value === 'string' && (value.includes('\n') || value.length > 60) ? (
         <pre className="mt-1 block w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
@@ -145,7 +146,7 @@ const AdminViewUserProfilePage = () => {
   }
   
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-3xl"> {/* Increased max-width for better card layout */}
+    <div className="container mx-auto p-4 sm:p-6 max-w-3xl">
       <div className="flex justify-between items-center mb-2">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-200">
           User Profile: {viewedUserProfile.firstName} {viewedUserProfile.lastName}
@@ -160,6 +161,23 @@ const AdminViewUserProfilePage = () => {
       {/* Card 1: Basic Information */}
       <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6 mb-6">
         <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mb-4">Basic Information</h2>
+        
+        {/* Profile Picture Display */}
+        <div className="mb-4">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
+          {viewedUserProfile.profilePictureUrl ? (
+            <img 
+              src={viewedUserProfile.profilePictureUrl} 
+              alt={`${viewedUserProfile.firstName} ${viewedUserProfile.lastName}'s profile picture`}
+              className="mt-1 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600" 
+            />
+          ) : (
+            <div className="mt-1 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
+              <span>No Picture</span>
+            </div>
+          )}
+        </div>
+
         <ProfileField label="Full Name" value={`${viewedUserProfile.firstName} ${viewedUserProfile.lastName}`} />
         <ProfileField label="Email" value={viewedUserProfile.email} />
         <ProfileField label="Phone Number" value={viewedUserProfile.phoneNumber} />
