@@ -1,6 +1,13 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List
-from datetime import datetime
+from typing import Optional, List, Dict
+from datetime import datetime, date
+
+class UserAvailability(BaseModel):
+    general: Optional[str] = Field(None, description="General availability description (e.g., 'Weekends', 'Mon-Fri evenings').")
+    specificDatesUnavailable: Optional[List[date]] = Field(default_factory=list, description="Specific dates the user is unavailable.")
+    specificDatesAvailable: Optional[List[date]] = Field(default_factory=list, description="Specific dates the user is available (overrides general unavailability).")
+
+    model_config = ConfigDict(from_attributes=True)
 
 class UserBase(BaseModel):
     email: EmailStr = Field(..., description="User's email address.")
@@ -9,12 +16,9 @@ class UserBase(BaseModel):
     phone: Optional[str] = Field(None, description="User's phone number.")
     skills: Optional[List[str]] = Field(default_factory=list, description="List of user's skills.")
     qualifications: Optional[List[str]] = Field(default_factory=list, description="List of user's qualifications.")
-    preferences: Optional[dict] = Field(default_factory=dict, description="User's preferences (e.g., communication, availability).")
+    preferences: Optional[Dict[str, any]] = Field(default_factory=dict, description="User's preferences (e.g., communication preferences).") # Changed from dict to Dict[str, any]
     profilePictureUrl: Optional[str] = Field(None, description="URL of the user's profile picture.")
-    # Availability fields to be added in Sprint 5
-    # availability_general: Optional[str] = Field(None, description="General availability description.")
-    # availability_specific_dates_unavailable: Optional[List[datetime]] = Field(default_factory=list)
-    # availability_specific_dates_available: Optional[List[datetime]] = Field(default_factory=list)
+    availability: Optional[UserAvailability] = Field(None, description="User's availability information.")
 
 
 class UserCreate(UserBase):
@@ -30,14 +34,14 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     skills: Optional[List[str]] = None
     qualifications: Optional[List[str]] = None
-    preferences: Optional[dict] = None
+    preferences: Optional[Dict[str, any]] = None # Changed from dict to Dict[str, any]
     profilePictureUrl: Optional[str] = None
+    availability: Optional[UserAvailability] = None # Added availability
     
     # Admin can update these fields as well
     assignedRoleIds: Optional[List[str]] = None
     status: Optional[str] = None # e.g., "active", "disabled", "pending_verification"
-    # Email is typically not updated directly via this model, managed by Firebase Auth.
-    # availability fields to be added in Sprint 5
+    
     model_config = ConfigDict(extra='forbid')
 
 
@@ -48,24 +52,28 @@ class UserInDBBase(UserBase):
     createdAt: datetime = Field(..., description="Timestamp of user creation.")
     updatedAt: datetime = Field(..., description="Timestamp of last update.")
     lastLoginAt: Optional[datetime] = Field(None, description="Timestamp of last login.")
+    # availability is inherited from UserBase
+    
     model_config = ConfigDict(from_attributes=True)
 
 class UserResponse(UserInDBBase):
     # Include human-readable role names
     assignedRoleNames: Optional[List[str]] = Field(default_factory=list, description="Names of assigned roles.")
     # from_attributes is inherited from UserInDBBase
+    # availability is inherited from UserInDBBase -> UserBase
     pass
 
-class UserListResponse(BaseModel): # For list views, might be a subset of UserResponse
+class UserListResponse(BaseModel): 
     id: str
     firstName: Optional[str] = None
     lastName: Optional[str] = None
     email: EmailStr
     status: str
-    assignedRoleIds: Optional[List[str]] = Field(default_factory=list, description="List of role IDs assigned to the user.") # Added this field
+    assignedRoleIds: Optional[List[str]] = Field(default_factory=list, description="List of role IDs assigned to the user.")
     assignedRoleNames: Optional[List[str]] = Field(default_factory=list, description="Names of assigned roles.")
     createdAt: datetime
     profilePictureUrl: Optional[str] = None
+    # Availability might be too detailed for a list view, can be added if needed.
     model_config = ConfigDict(from_attributes=True)
 
 

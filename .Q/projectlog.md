@@ -1,5 +1,67 @@
 # Project Log - Fiji
 
+## Session (2024-07-24 10:00) <!-- Replace with actual date and time -->
+- **Q Agent:** Q
+- **User:** Mauro
+- **Objective:** Complete backend tasks for Sprint 4 (Working Group and Assignment Management), address runtime errors, and refactor Pydantic models.
+
+### Activity:
+- **Sprint 4 Review & Backend Implementation:**
+    - Reviewed `.Q/sprints.md` and `docs/technical-specs.md` for Sprint 4 requirements.
+    - **Assignments Model (`backend/models/assignment.py`):**
+        - Confirmed Pydantic model for `assignments` collection was previously created.
+        - Refined model: added `assignmentDate` to `AssignmentBase`, updated `AssignmentResponse` structure, changed `orm_mode` to `from_attributes`.
+    - **Event Participation API Endpoints (`backend/routers/events.py`):**
+        - Confirmed that API endpoints for event signup, withdrawal, and admin management of assignments were already implemented.
+    - **Working Group Model (`backend/models/working_group.py`):**
+        - Created Pydantic model for `workingGroups` collection.
+        - Refined model: added `creatorFirstName`, `creatorLastName` to `WorkingGroupResponse`, changed `orm_mode` to `from_attributes`.
+    - **Working Group CRUD API Endpoints (`backend/routers/working_groups.py`):**
+        - Implemented `POST`, `GET /`, `GET /{group_id}`, `PUT /{group_id}`, `DELETE /{group_id}`.
+        - Ensured creator details are populated in responses.
+        - Implemented batch deletion of associated assignments when a working group is deleted.
+    - **Working Group Assignment API Endpoints (`backend/routers/working_groups.py`):**
+        - Implemented `POST /{group_id}/assignments` to assign users (using new `WorkingGroupAssignmentCreate` model).
+        - Implemented `GET /{group_id}/assignments` to list members (using new `UserAssignmentResponse` model with user details).
+        - Implemented `DELETE /{group_id}/assignments/{assignment_id}` to remove assignments.
+    - **RBAC:** Ensured all new working group and assignment endpoints are protected with appropriate `require_permission` checks.
+    - **Main Application (`backend/main.py`):**
+        - Confirmed `working_groups_router` was already included.
+
+- **Frontend Review (Sprint 4):**
+    - Reviewed `frontend/src/app/dashboard/admin/working-groups/[groupId]/page.tsx`.
+    - Confirmed UI for managing working group members (assign/remove) is implemented and calls the correct backend endpoints.
+
+- **Error Resolution & Refactoring:**
+    - **`NameError` in `working_groups.py`:**
+        - Identified missing `from pydantic import BaseModel, Field` import.
+        - Added the import to resolve the error.
+    - **Pydantic `orm_mode` Warning:**
+        - Updated Pydantic models in:
+            - `backend/models/assignment.py`
+            - `backend/models/user.py` (also added `ConfigDict(extra='forbid')` to `UserUpdate`)
+            - `backend/models/working_group.py`
+        - Changed `orm_mode = True` to `from_attributes = True` or `model_config = ConfigDict(from_attributes=True)` to align with Pydantic v2 and suppress warnings.
+        - Confirmed `event.py`, `invitation.py`, `role.py` already used Pydantic v2 style.
+    - **`TypeError` in `main.py` Lifespan Shutdown:**
+        - Enhanced `lifespan` manager in `backend/main.py` for more robust Firestore client handling:
+            - Initialized `app.state.db` to `None`.
+            - Added detailed logging for startup and shutdown phases.
+            - Implemented specific `try-except` blocks around `db.close()` to catch and log errors.
+        - Improved `/health` check endpoint to provide more detailed debug information about `app.state.db`.
+
+- **Commits:**
+    - `feat(backend): Implement Sprint 4 WG & Assignment Management`
+    - `fix(backend): Add missing Pydantic import in working_groups router`
+    - `refactor(backend): Update Pydantic models to use from_attributes`
+    - `fix(backend): Enhance lifespan manager and health check logging`
+
+### Sprint 4 Status:
+- All backend tasks for Sprint 4 are now considered complete.
+- Frontend tasks for Sprint 4 were previously addressed and reviewed.
+- Sprint 4 is complete.
+
+---
 ## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Refactor UI and Fix Errors -->
 - **Q Agent:** Mauro
 - **Objective:** Implement user search for assignments, fix UI errors (double navbars, object rendering), and address backend validation/data issues.
@@ -165,11 +227,4 @@
 - Modified `frontend/src/app/page.tsx` to implement a redirect from `/` to `/login`.
   - Replaced existing content with `next/navigation`'s `redirect` function.
 
-## Previous Sessions
 
-... (previous log entries remain unchanged) ...
-
----
-*Log entry for current session. Previous entries should be preserved.*
-*Date/Time will be replaced by the actual timestamp when the operation is performed.*
-*Need to read the existing log first to append correctly.*
