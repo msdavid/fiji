@@ -2,13 +2,14 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List, Optional
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
-from pydantic import BaseModel, Field # Added BaseModel, Field import
+from pydantic import BaseModel, Field
 
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
 from models.working_group import WorkingGroupCreate, WorkingGroupUpdate, WorkingGroupResponse
-from models.assignment import AssignmentCreate, AssignmentResponse, AssignmentUpdate # Ensure AssignmentResponse is used for listing members
-from models.user import UserResponse # For enriching assignment responses with user details
+from models.assignment import AssignmentCreate, AssignmentResponse, AssignmentUpdate # Using AssignmentResponse from models
+# Removed UserResponse import as it's not directly used here, user details are in AssignmentResponse
+# from models.user import UserResponse 
 
 router = APIRouter(
     prefix="/working-groups",
@@ -164,10 +165,10 @@ async def delete_working_group(group_id: str, db: firestore.Client = Depends(get
             .where(filter=FieldFilter("assignableId", "==", group_id)) \
             .where(filter=FieldFilter("assignableType", "==", "workingGroup"))
         
-        assignments_snapshot = assignments_query.stream() # stream() is async iterable
+        assignments_snapshot = assignments_query.stream()
         
         batch = db.batch()
-        async for assignment_doc in assignments_snapshot: # Iterate async
+        async for assignment_doc in assignments_snapshot:
             batch.delete(assignment_doc.reference)
         await batch.commit()
 
@@ -178,38 +179,34 @@ async def delete_working_group(group_id: str, db: firestore.Client = Depends(get
 
 # --- Working Group Assignment Endpoints ---
 
-class WorkingGroupAssignmentCreate(BaseModel): # Simplified for this context
+class WorkingGroupAssignmentCreate(BaseModel):
     userId: str = Field(..., description="ID of the user to assign.")
-    # status can be defaulted or set by admin
     status: Optional[str] = Field("active", description="Status of the assignment, e.g., 'active'.")
 
 
 @router.post(
     "/{group_id}/assignments",
-    response_model=AssignmentResponse,
+    response_model=AssignmentResponse, # Using global AssignmentResponse
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_permission("working_groups", "manage_assignments"))]
 )
 async def assign_user_to_working_group(
     group_id: str,
-    assignment_data: WorkingGroupAssignmentCreate, # Using the new simpler model
+    assignment_data: WorkingGroupAssignmentCreate,
     db: firestore.Client = Depends(get_db),
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
-    # Check if working group exists
     group_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
     group_doc = await group_ref.get()
     if not group_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Working group not found.")
 
-    # Check if user to assign exists
     user_to_assign_ref = db.collection(USERS_COLLECTION).document(assignment_data.userId)
     user_to_assign_doc = await user_to_assign_ref.get()
     if not user_to_assign_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User with ID '{assignment_data.userId}' not found.")
     user_to_assign_profile = user_to_assign_doc.to_dict()
 
-    # Check if user is already assigned to this working group
     existing_assignment_query = db.collection(ASSIGNMENTS_COLLECTION) \
         .where(filter=FieldFilter("userId", "==", assignment_data.userId)) \
         .where(filter=FieldFilter("assignableId", "==", group_id)) \
@@ -217,9 +214,10 @@ async def assign_user_to_working_group(
         .limit(1)
     
     existing_doc_snap = None
-    async for doc_snap in existing_assignment_query.stream():
+    async for doc_snap in existing_assignment_query.stream(): # Iterate async
         existing_doc_snap = doc_snap
-        break
+        break # Found one, no need to continue
+        
     if existing_doc_snap:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="User already assigned to this working group.")
 
@@ -227,12 +225,14 @@ async def assign_user_to_working_group(
         "userId": assignment_data.userId,
         "assignableId": group_id,
         "assignableType": "workingGroup",
-        "status": assignment_data.status, # Use status from request or default
+        "status": assignment_data.status,
         "assignedByUserId": current_rbac_user.uid,
-        "assignmentDate": firestore.SERVER_TIMESTAMP,
+        "assignmentDate": firestore.SERVER_TIMESTAMP, # Should be assignmentDate as per model
         "createdAt": firestore.SERVER_TIMESTAMP,
         "updatedAt": firestore.SERVER_TIMESTAMP,
     }
+    # Ensure all fields for AssignmentCreate are present or handled by AssignmentBase defaults
+    # performanceNotes and hoursContributed are Optional and default to None in AssignmentBase
 
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document()
     await assignment_ref.set(new_assignment_dict)
@@ -241,7 +241,6 @@ async def assign_user_to_working_group(
     response_data = created_assignment_doc.to_dict()
     response_data['id'] = created_assignment_doc.id
     
-    # Add user details to the response
     response_data['userFirstName'] = user_to_assign_profile.get('firstName')
     response_data['userLastName'] = user_to_assign_profile.get('lastName')
     response_data['userEmail'] = user_to_assign_profile.get('email')
@@ -249,19 +248,14 @@ async def assign_user_to_working_group(
     return AssignmentResponse(**response_data)
 
 
-class UserAssignmentResponse(AssignmentResponse): # Extends AssignmentResponse to include user details
-    userFirstName: Optional[str] = None
-    userLastName: Optional[str] = None
-    userEmail: Optional[str] = None
-
+# Removed local UserAssignmentResponse class as models.assignment.AssignmentResponse already includes user details.
 
 @router.get(
     "/{group_id}/assignments",
-    response_model=List[UserAssignmentResponse], # Use the extended model
+    response_model=List[AssignmentResponse], # Using global AssignmentResponse
     dependencies=[Depends(require_permission("working_groups", "manage_assignments"))] # Or a more general view permission
 )
 async def list_working_group_assignments(group_id: str, db: firestore.Client = Depends(get_db)):
-    # Check if working group exists
     group_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
     group_doc = await group_ref.get()
     if not group_doc.exists:
@@ -272,7 +266,7 @@ async def list_working_group_assignments(group_id: str, db: firestore.Client = D
         .where(filter=FieldFilter("assignableType", "==", "workingGroup"))
 
     assignments_list = []
-    user_cache = {} # Cache user details
+    user_cache = {}
 
     async for assign_doc in assignments_query.stream():
         assignment_data = assign_doc.to_dict()
@@ -289,7 +283,7 @@ async def list_working_group_assignments(group_id: str, db: firestore.Client = D
             assignment_data['userLastName'] = user_profile.get('lastName')
             assignment_data['userEmail'] = user_profile.get('email')
         
-        assignments_list.append(UserAssignmentResponse(**assignment_data))
+        assignments_list.append(AssignmentResponse(**assignment_data))
     return assignments_list
 
 
@@ -299,7 +293,7 @@ async def list_working_group_assignments(group_id: str, db: firestore.Client = D
     dependencies=[Depends(require_permission("working_groups", "manage_assignments"))]
 )
 async def remove_user_from_working_group(
-    group_id: str, # Used to verify context, though assignment_id is unique
+    group_id: str,
     assignment_id: str,
     db: firestore.Client = Depends(get_db)
 ):
@@ -308,7 +302,6 @@ async def remove_user_from_working_group(
     if not assignment_doc.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Assignment not found.")
 
-    # Optional: Verify the assignment belongs to the specified group and type
     assignment_data = assignment_doc.to_dict()
     if assignment_data.get("assignableId") != group_id or \
        assignment_data.get("assignableType") != "workingGroup":
