@@ -223,6 +223,9 @@ const AdminUserManagementPage = () => {
                     <Link href={`/dashboard/admin/profile/${userEntry.uid}`} className="ml-4 text-emerald-600 hover:text-emerald-900 dark:text-emerald-400 dark:hover:text-emerald-200">
                       View Profile
                     </Link>
+                    <Link href={`/dashboard/admin/users/${userEntry.uid}/edit`} className="ml-4 text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200">
+                      Edit
+                    </Link>
                   </td>
                 </tr>
               ))}

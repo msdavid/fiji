@@ -1,6 +1,16 @@
 # Project Log - Fiji
 
-## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Add Profile Picture Field & Display -->
+## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Add Edit Link to Admin Users Table -->
+- **Q Agent:** Mauro
+- **Objective:** Add an "Edit" link to the actions column in the admin users table.
+### Activity:
+- Modified `frontend/src/app/dashboard/admin/users/page.tsx`:
+  - Added a new `<Link>` component in the actions column for each user.
+  - This link is styled with `text-blue-600 hover:text-blue-900 dark:text-blue-400 dark:hover:text-blue-200` and points to `/dashboard/admin/users/[userId]/edit`.
+  - The creation of the actual edit page is a separate task.
+
+---
+## Session (YYYY-MM-DD HH:MM) <!-- Previous entry: Add Profile Picture Field & Display -->
 - **Q Agent:** Mauro
 - **Objective:** Add a profile picture URL field to user models and display it on profile pages.
 ### Activity:
