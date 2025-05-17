@@ -165,9 +165,9 @@ export default function EventsPage() {
 
   if (authLoading || isLoadingEvents || (!userProfile && user)) {
     return (
-      <div className="flex flex-col justify-center items-center h-full min-h-[300px]"> {/* Added min-h for better visibility */}
+      <div className="flex flex-col justify-center items-center h-full min-h-[300px]">
         <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">
-          sync {/* Using 'sync' for a common loading spinner appearance */}
+          sync
         </span>
         <p className="text-lg text-gray-700 dark:text-gray-300">Loading events...</p>
       </div>
@@ -190,36 +190,35 @@ export default function EventsPage() {
         )}
       </div>
 
-      <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 md:p-6">
-        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-          <div>
-            <label htmlFor="search-events" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Search Events
-            </label>
-            <input
-              type="text"
-              id="search-events"
-              placeholder="Search by name, description, or creator..."
-              value={searchTerm}
-              onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
-            />
-          </div>
-          <div>
-            <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-              Filter by Status
-            </label>
-            <select
-              id="status-filter"
-              value={statusFilter}
-              onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
-            >
-              {Object.entries(EVENT_STATUS_LABELS).map(([value, label]) => (
-                <option key={value} value={value}>{label}</option>
-              ))}
-            </select>
-          </div>
+      {/* Removed styled container div. The grid for inputs is now directly on the page background. */}
+      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div>
+          <label htmlFor="search-events" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Search Events
+          </label>
+          <input
+            type="text"
+            id="search-events"
+            placeholder="Search by name, description, or creator..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+          />
+        </div>
+        <div>
+          <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+            Filter by Status
+          </label>
+          <select
+            id="status-filter"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+          >
+            {Object.entries(EVENT_STATUS_LABELS).map(([value, label]) => (
+              <option key={value} value={value}>{label}</option>
+            ))}
+          </select>
         </div>
       </div>
 
@@ -230,7 +229,7 @@ export default function EventsPage() {
       )}
 
       {displayedEvents.length === 0 && !isLoadingEvents && !error && (
-        <div className="text-center py-10 bg-white dark:bg-gray-900 shadow-lg rounded-lg flex flex-col items-center justify-center min-h-[200px]"> {/* Added shadow-lg, flex for centering icon */}
+        <div className="text-center py-10 bg-white dark:bg-gray-900 shadow-lg rounded-lg flex flex-col items-center justify-center min-h-[200px]">
           <span className="material-icons text-6xl text-gray-400 dark:text-gray-500 mb-4">
             event_busy 
           </span>
