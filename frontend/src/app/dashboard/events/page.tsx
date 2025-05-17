@@ -37,8 +37,10 @@ export default function EventsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const isSysAdminUser = userProfile?.assignedRoleIds?.includes('sysadmin');
-  const canCreateEvents = isSysAdminUser;
-  const canEditEvents = isSysAdminUser;
+  // TODO: Replace with privilege-based check if available, e.g., hasPrivilege('events', 'create')
+  const canCreateEvents = isSysAdminUser; 
+  // TODO: Replace with privilege-based check if available, e.g., hasPrivilege('events', 'edit_any') or check ownership for 'edit_own'
+  const canEditEvents = isSysAdminUser; 
 
   const fetchEvents = useCallback(async () => {
     if (!user) return;
@@ -87,9 +89,8 @@ export default function EventsPage() {
 
   if (authLoading || isLoadingEvents || (!userProfile && user)) {
     return (
-      // This loading state is for the page content itself, distinct from layout loading
-      <div> {/* Removed max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 */}
-        <div className="text-center"> {/* Removed px-4 py-6 sm:px-0 */}
+      <div>
+        <div className="text-center">
           <p className="text-gray-700 dark:text-gray-300">Loading events...</p>
         </div>
       </div>
@@ -97,10 +98,10 @@ export default function EventsPage() {
   }
 
   return (
-    <main> {/* Removed max-w-7xl mx-auto py-6 sm:px-6 lg:px-8 */}
-      <div> {/* Removed px-4 py-6 sm:px-0 */}
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-2xl font-semibold text-gray-900 dark:text-white">
+    <main>
+      <div>
+        <div className="flex justify-between items-center mb-8"> {/* Increased mb from 6 to 8 for consistency */}
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white"> {/* Matched h1 style from working groups */}
             Events
           </h1>
           {canCreateEvents && (
@@ -119,30 +120,35 @@ export default function EventsPage() {
         )}
 
         {events.length === 0 && !isLoadingEvents && !error && (
-          <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 text-center">
-            <p className="text-gray-600 dark:text-gray-300">
-              No events found. {canCreateEvents ? "Try creating one!" : ""}
+          <div className="text-center py-10 bg-white dark:bg-gray-900 shadow rounded-lg"> {/* Matched style from working groups */}
+            <p className="text-gray-500 dark:text-gray-400">
+              No events found.
             </p>
+            {canCreateEvents && (
+                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
+                    You can <Link href="/dashboard/events/new" className="text-indigo-600 hover:underline dark:text-indigo-400">create one now</Link>.
+                </p>
+            )}
           </div>
         )}
 
         {events.length > 0 && (
-          <div className="space-y-4">
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
             {events.map((event) => (
-              <div key={event.id} className="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
-                <div className="flex justify-between items-start">
-                  <div>
-                    <h2 className="text-xl font-semibold text-indigo-600 dark:text-indigo-400 hover:underline">
-                      <Link href={`/dashboard/events/${event.id}`}>{event.eventName}</Link>
+              <Link key={event.id} href={`/dashboard/events/${event.id}`} className="block hover:shadow-xl transition-shadow duration-200 ease-in-out group">
+                <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col">
+                  <div className="p-6 flex-grow">
+                    <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">
+                      {event.eventName}
                     </h2>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                       {event.eventType || 'General Event'} - Venue: {event.venue || 'N/A'}
                     </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-1">
                       Date: {format(parseISO(event.dateTime), 'PPP p')}
                     </p>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">
-                      Status: <span className={`px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${
+                    <p className="text-sm text-gray-500 dark:text-gray-400 mb-3">
+                      Status: <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${
                         event.status === 'open_for_signup' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' :
                         event.status === 'draft' ? 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100' :
                         event.status === 'completed' ? 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100' :
@@ -150,17 +156,35 @@ export default function EventsPage() {
                         'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'
                       }`}>{event.status.replace(/_/g, ' ')}</span>
                     </p>
+                    {event.description && (
+                      <p className="text-sm text-gray-700 dark:text-gray-300 line-clamp-2" title={event.description}>
+                        {event.description}
+                      </p>
+                    )}
                   </div>
-                  {canEditEvents && (
-                    <div className="flex space-x-2">
-                      <Link href={`/dashboard/events/${event.id}/edit`}>
-                        <button className="text-sm py-1 px-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md">Edit</button>
-                      </Link>
+                  <div className="p-6 border-t border-gray-200 dark:border-gray-700 mt-auto">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          Created by: {event.creatorFirstName || ''} {event.creatorLastName || event.createdByUserId}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          Created on: {format(parseISO(event.createdAt), 'PP')}
+                        </p>
+                      </div>
+                      {canEditEvents && (
+                        <Link 
+                          href={`/dashboard/events/${event.id}/edit`} 
+                          onClick={(e) => e.stopPropagation()}
+                          className="text-sm py-1 px-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md"
+                        >
+                          Edit
+                        </Link>
+                      )}
                     </div>
-                  )}
+                  </div>
                 </div>
-                {event.description && <p className="mt-2 text-gray-700 dark:text-gray-300 text-sm">{event.description.substring(0,150)}{event.description.length > 150 ? '...' : ''}</p>}
-              </div>
+              </Link>
             ))}
           </div>
         )}

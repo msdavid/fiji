@@ -1,0 +1,16 @@
+Refactor: Update events page to use card matrix layout
+
+The events listing page (frontend/src/app/dashboard/events/page.tsx) has been
+refactored to display events in a responsive card matrix, similar to the
+working groups page.
+
+Key changes:
+- Replaced the list view with a `grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6` layout.
+- Each event is now a card with `bg-white dark:bg-gray-900 shadow-lg rounded-lg`.
+- The entire card is a `Link` to the event detail page.
+- Event title changes color on hover (`group-hover:text-indigo-600`).
+- Event description is truncated to 2 lines using `line-clamp-2`.
+- Card footer displays creator information and creation date.
+- 'Edit' button is positioned in the card footer and uses `e.stopPropagation()` to prevent navigating to the event detail page.
+- Page title style (`h1`) and 'No events found' message styling now match the working groups page for consistency.
+- Added TODO comments for future privilege-based access control for creating and editing events.
