@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { format, parseISO, isBefore, isAfter, isEqual } from 'date-fns'; // Added isBefore, isAfter, isEqual
+import { format, parseISO, isBefore, isAfter, isEqual } from 'date-fns';
 
 interface Event {
   id: string;
@@ -16,7 +16,7 @@ interface Event {
   endTime?: string;
   venue: string;
   volunteersRequired?: number;
-  status: string; // This will be the original status from backend
+  status: string; 
   createdByUserId: string;
   creatorFirstName?: string;
   creatorLastName?: string;
@@ -30,7 +30,6 @@ interface Event {
   icon?: string;
 }
 
-// Interface for the event object used in display, which might have a dynamically adjusted status
 interface DisplayEvent extends Event {
   displayStatus: string; 
 }
@@ -63,17 +62,16 @@ export default function EventsPage() {
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(EVENT_STATUSES.ALL);
-  const [currentTimeTick, setCurrentTimeTick] = useState(new Date()); // For periodic re-render
+  const [currentTimeTick, setCurrentTimeTick] = useState(new Date());
 
   const isSysAdminUser = userProfile?.assignedRoleIds?.includes('sysadmin');
   const canCreateEvents = isSysAdminUser; 
 
-  // Effect to update currentTimeTick every minute
   useEffect(() => {
     const timerId = setInterval(() => {
       setCurrentTimeTick(new Date());
-    }, 60000); // Update every 60 seconds
-    return () => clearInterval(timerId); // Cleanup interval on component unmount
+    }, 60000); 
+    return () => clearInterval(timerId);
   }, []);
 
   const fetchEvents = useCallback(async (currentStatusFilter: string) => {
@@ -126,7 +124,7 @@ export default function EventsPage() {
   }, [user, authLoading, router, userProfile, fetchUserProfile, fetchEvents, statusFilter]);
 
   const displayedEvents = useMemo(() => {
-    const now = currentTimeTick; // Use the state variable that updates every minute
+    const now = currentTimeTick; 
 
     const searchFilteredEvents = events.filter(event => {
       if (!searchTerm.trim()) return true;
@@ -145,7 +143,6 @@ export default function EventsPage() {
       let dynamicStatus = event.status;
       const originalStatus = event.status;
 
-      // Don't override if already completed or cancelled
       if (originalStatus !== EVENT_STATUSES.COMPLETED && originalStatus !== EVENT_STATUSES.CANCELLED) {
         try {
           const eventStart = parseISO(event.dateTime);
@@ -159,7 +156,6 @@ export default function EventsPage() {
           }
         } catch (e) {
           console.error("Error parsing event dates for dynamic status:", event.id, e);
-          // Keep original status if date parsing fails
         }
       }
       return { ...event, displayStatus: dynamicStatus };
@@ -169,31 +165,33 @@ export default function EventsPage() {
 
   if (authLoading || isLoadingEvents || (!userProfile && user)) {
     return (
-      <div>
-        <div className="text-center">
-          <p className="text-gray-700 dark:text-gray-300">Loading events...</p>
-        </div>
+      <div className="flex flex-col justify-center items-center h-full min-h-[300px]"> {/* Added min-h for better visibility */}
+        <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">
+          sync {/* Using 'sync' for a common loading spinner appearance */}
+        </span>
+        <p className="text-lg text-gray-700 dark:text-gray-300">Loading events...</p>
       </div>
     );
   }
 
   return (
-    <main>
-      <div>
-        <div className="flex justify-between items-center mb-6">
-          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-            Events
-          </h1>
-          {canCreateEvents && (
-            <Link href="/dashboard/events/new">
-              <button className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md">
-                Create New Event
-              </button>
-            </Link>
-          )}
-        </div>
+    <div> 
+      <div className="flex justify-between items-center mb-6">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
+          Events
+        </h1>
+        {canCreateEvents && (
+          <Link href="/dashboard/events/new">
+            <button className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm inline-flex items-center">
+              <span className="material-icons text-lg mr-2">add_circle_outline</span>
+              Create New Event
+            </button>
+          </Link>
+        )}
+      </div>
 
-        <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
+      <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg shadow-md p-4 md:p-6">
+        <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
             <label htmlFor="search-events" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Search Events
@@ -204,7 +202,7 @@ export default function EventsPage() {
               placeholder="Search by name, description, or creator..."
               value={searchTerm}
               onChange={(e) => setSearchTerm(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+              className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
             />
           </div>
           <div>
@@ -215,7 +213,7 @@ export default function EventsPage() {
               id="status-filter"
               value={statusFilter}
               onChange={(e) => setStatusFilter(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+              className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
             >
               {Object.entries(EVENT_STATUS_LABELS).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
@@ -223,45 +221,50 @@ export default function EventsPage() {
             </select>
           </div>
         </div>
+      </div>
 
-        {error && (
-          <div className="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
-            {error}
-          </div>
-        )}
+      {error && (
+        <div className="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
+          {error}
+        </div>
+      )}
 
-        {displayedEvents.length === 0 && !isLoadingEvents && !error && (
-          <div className="text-center py-10 bg-white dark:bg-gray-900 shadow rounded-lg">
-            <p className="text-gray-500 dark:text-gray-400">
-              {searchTerm || statusFilter !== EVENT_STATUSES.ALL ? 'No events match your criteria.' : 'No events found.'}
-            </p>
-            {canCreateEvents && !searchTerm && statusFilter === EVENT_STATUSES.ALL && (
-                <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">
-                    You can <Link href="/dashboard/events/new" className="text-indigo-600 hover:underline dark:text-indigo-400">create one now</Link>.
-                </p>
-            )}
-          </div>
-        )}
+      {displayedEvents.length === 0 && !isLoadingEvents && !error && (
+        <div className="text-center py-10 bg-white dark:bg-gray-900 shadow-lg rounded-lg flex flex-col items-center justify-center min-h-[200px]"> {/* Added shadow-lg, flex for centering icon */}
+          <span className="material-icons text-6xl text-gray-400 dark:text-gray-500 mb-4">
+            event_busy 
+          </span>
+          <p className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-2">
+            {searchTerm || statusFilter !== EVENT_STATUSES.ALL ? 'No events match your criteria.' : 'No events found.'}
+          </p>
+          {canCreateEvents && !searchTerm && statusFilter === EVENT_STATUSES.ALL && (
+              <p className="text-sm text-gray-500 dark:text-gray-400">
+                  You can <Link href="/dashboard/events/new" className="text-indigo-600 hover:underline dark:text-indigo-400 font-medium">create one now</Link>.
+              </p>
+          )}
+        </div>
+      )}
 
-        {displayedEvents.length > 0 && (
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-            {displayedEvents.map((event: DisplayEvent) => { // Use DisplayEvent type here
-              let statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'; // Default
-              if (event.displayStatus === EVENT_STATUSES.ONGOING) {
-                statusClass = 'status-ongoing-blinking'; 
-              } else if (event.displayStatus === EVENT_STATUSES.OPEN_FOR_SIGNUP) {
-                statusClass = 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100';
-              } else if (event.displayStatus === EVENT_STATUSES.DRAFT) {
-                statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100';
-              } else if (event.displayStatus === EVENT_STATUSES.COMPLETED) {
-                statusClass = 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100';
-              } else if (event.displayStatus === EVENT_STATUSES.CANCELLED) {
-                statusClass = 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100';
-              }
+      {displayedEvents.length > 0 && (
+        <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
+          {displayedEvents.map((event: DisplayEvent) => {
+            let statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'; 
+            if (event.displayStatus === EVENT_STATUSES.ONGOING) {
+              statusClass = 'status-ongoing-blinking'; 
+            } else if (event.displayStatus === EVENT_STATUSES.OPEN_FOR_SIGNUP) {
+              statusClass = 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100';
+            } else if (event.displayStatus === EVENT_STATUSES.DRAFT) {
+              statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100';
+            } else if (event.displayStatus === EVENT_STATUSES.COMPLETED) {
+              statusClass = 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100';
+            } else if (event.displayStatus === EVENT_STATUSES.CANCELLED) {
+              statusClass = 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100';
+            }
 
-              return (
-                <div key={event.id} className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col group hover:shadow-xl transition-shadow duration-200 ease-in-out">
-                  <Link href={`/dashboard/events/${event.id}`} className="flex flex-grow">
+            return (
+              <div key={event.id} className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col group hover:shadow-xl transition-shadow duration-200 ease-in-out">
+                <Link href={`/dashboard/events/${event.id}`} className="flex flex-col flex-grow">
+                  <div className="flex flex-row flex-grow">
                     <div className="flex-shrink-0 p-3 sm:p-4 flex items-start justify-center border-r border-gray-200 dark:border-gray-700">
                       <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
                         <span className="material-icons text-3xl sm:text-4xl text-indigo-500 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-500 transition-colors duration-150">
@@ -281,7 +284,7 @@ export default function EventsPage() {
                           Date: {format(parseISO(event.dateTime), 'PP p')}
                         </p>
                         <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-2 sm:mb-3">
-                          Status: <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}`}>
+                          Status: <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}`}>
                             {EVENT_STATUS_LABELS[event.displayStatus as keyof typeof EVENT_STATUS_LABELS] || event.displayStatus.replace(/_/g, ' ')}
                           </span>
                         </p>
@@ -291,26 +294,26 @@ export default function EventsPage() {
                           </p>
                         )}
                       </div>
-                      <div className="pt-3 sm:pt-4 mt-3 sm:mt-4 border-t border-gray-200 dark:border-gray-700">
-                        <div className="flex justify-between items-center">
-                          <div>
-                            <p className="text-xs text-gray-500 dark:text-gray-500">
-                              By: {event.creatorFirstName || ''} {event.creatorLastName || event.createdByUserId.substring(0,8)}
-                            </p>
-                            <p className="text-xs text-gray-500 dark:text-gray-500">
-                              On: {format(parseISO(event.createdAt), 'PP')}
-                            </p>
-                          </div>
-                        </div>
+                    </div>
+                  </div>
+                  <div className="p-4 sm:p-6 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-700">
+                    <div className="flex justify-between items-center">
+                      <div>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          By: {event.creatorFirstName || ''} {event.creatorLastName || event.createdByUserId.substring(0,8)}
+                        </p>
+                        <p className="text-xs text-gray-500 dark:text-gray-500">
+                          On: {format(parseISO(event.createdAt), 'PP')}
+                        </p>
                       </div>
                     </div>
-                  </Link>
-                </div>
-              );
-            })}
-          </div>
-        )}
-      </div>
-    </main>
+                  </div>
+                </Link>
+              </div>
+            );
+          })}
+        </div>
+      )}
+    </div>
   );
 }
