@@ -333,7 +333,19 @@ export default function EditEventPage() {
 
       if (!response.ok) {
         const errorData = await response.json();
-        throw new Error(errorData.detail || `Failed to update event (status: ${response.status})`);
+        let errorMessage = `Failed to update event (status: ${response.status})`;
+        if (errorData && errorData.detail) {
+          if (typeof errorData.detail === 'string') {
+            errorMessage = errorData.detail;
+          } else if (Array.isArray(errorData.detail) && errorData.detail.length > 0 && errorData.detail[0].msg) {
+            // Handle FastAPI validation errors (array of objects)
+            errorMessage = errorData.detail.map((err: any) => `${err.loc.join('.')} - ${err.msg}`).join('; ');
+          } else {
+            // Fallback for other non-string detail types
+            errorMessage = JSON.stringify(errorData.detail);
+          }
+        }
+        throw new Error(errorMessage);
       }
       
       setSuccessMessage('Event updated successfully!');
@@ -343,7 +355,7 @@ export default function EditEventPage() {
       }, 1500);
 
     } catch (err: any) {
-      setError(err.message);
+      setError(err.message); // err.message should now be a more readable string
     } finally {
       setSubmitting(false);
     }
