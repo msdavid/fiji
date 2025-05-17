@@ -65,6 +65,11 @@ interface EditableUserProfile {
   availability: UserAvailability; 
 }
 
+// Define base input classes here for consistency
+const baseInputStyles = "block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
+const disabledInputStyles = "block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed";
+
+
 const ProfilePage = () => {
   const authContext = useAuth(); 
   const { user, loading: authLoading, idToken } = authContext || {};
@@ -220,7 +225,6 @@ const ProfilePage = () => {
     setIsLoading(true);
     setError(null); 
     
-    // Frontend validation for time logic
     for (const rule of formData.availability.general_rules) {
         if (rule.from_time && rule.to_time && rule.to_time <= rule.from_time) {
             setError(`General Rule Error: 'To time' (${rule.to_time}) must be after 'From time' (${rule.from_time}) for ${rule.weekday}.`);
@@ -405,13 +409,13 @@ const ProfilePage = () => {
             <form onSubmit={handleSubmit} className="space-y-6">
               {error && <div className="p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
               
-              <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className="mt-1 input-class" required /></div>
-              <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className="mt-1 input-class" required /></div>
-              <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className="mt-1 input-class-disabled" /></div>
-              <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className="mt-1 input-class" /></div>
-              <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className="mt-1 input-class" /></div>
-              <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className="mt-1 input-class" /></div>
-              <div><label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences (JSON)</label><textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className="mt-1 input-class" /></div>
+              <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
+              <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
+              <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className={`mt-1 ${disabledInputStyles}`} /></div>
+              <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} /></div>
+              <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
+              <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
+              <div><label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences (JSON)</label><textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
               
               <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Edit Availability</h2>
@@ -423,17 +427,17 @@ const ProfilePage = () => {
                       <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                         <div>
                           <label htmlFor={`ga_weekday_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Weekday</label>
-                          <select name={`ga_weekday_${index}`} value={rule.weekday} onChange={(e) => handleGeneralRuleChange(index, 'weekday', e.target.value as Weekday)} className="input-class text-sm w-full">
+                          <select name={`ga_weekday_${index}`} value={rule.weekday} onChange={(e) => handleGeneralRuleChange(index, 'weekday', e.target.value as Weekday)} className={`${baseInputStyles} text-sm`}>
                             {weekdays.map(day => <option key={day} value={day}>{day}</option>)}
                           </select>
                         </div>
                         <div>
                           <label htmlFor={`ga_from_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">From Time</label>
-                          <input type="time" name={`ga_from_${index}`} value={rule.from_time} onChange={(e) => handleGeneralRuleChange(index, 'from_time', e.target.value)} className="input-class text-sm w-full" />
+                          <input type="time" name={`ga_from_${index}`} value={rule.from_time} onChange={(e) => handleGeneralRuleChange(index, 'from_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
                         </div>
                         <div>
                           <label htmlFor={`ga_to_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">To Time</label>
-                          <input type="time" name={`ga_to_${index}`} value={rule.to_time} onChange={(e) => handleGeneralRuleChange(index, 'to_time', e.target.value)} className="input-class text-sm w-full" />
+                          <input type="time" name={`ga_to_${index}`} value={rule.to_time} onChange={(e) => handleGeneralRuleChange(index, 'to_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
                         </div>
                       </div>
                       <button type="button" onClick={() => removeGeneralRule(rule.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
@@ -453,19 +457,19 @@ const ProfilePage = () => {
                        <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                          <div>
                            <label htmlFor={`sd_date_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Date</label>
-                           <input type="date" name={`sd_date_${index}`} value={slot.date} onChange={(e) => handleSpecificSlotChange(index, 'date', e.target.value)} className="input-class text-sm w-full" />
+                           <input type="date" name={`sd_date_${index}`} value={slot.date} onChange={(e) => handleSpecificSlotChange(index, 'date', e.target.value)} className={`${baseInputStyles} text-sm`} />
                          </div>
                          <div>
                            <label htmlFor={`sd_from_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">From (Optional)</label>
-                           <input type="time" name={`sd_from_${index}`} value={slot.from_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'from_time', e.target.value)} className="input-class text-sm w-full" />
+                           <input type="time" name={`sd_from_${index}`} value={slot.from_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'from_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
                          </div>
                          <div>
                            <label htmlFor={`sd_to_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">To (Optional)</label>
-                           <input type="time" name={`sd_to_${index}`} value={slot.to_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'to_time', e.target.value)} className="input-class text-sm w-full" />
+                           <input type="time" name={`sd_to_${index}`} value={slot.to_time || ''} onChange={(e) => handleSpecificSlotChange(index, 'to_time', e.target.value)} className={`${baseInputStyles} text-sm`} />
                          </div>
                          <div>
                             <label htmlFor={`sd_type_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Type</label>
-                            <select name={`sd_type_${index}`} value={slot.slot_type} onChange={(e) => handleSpecificSlotChange(index, 'slot_type', e.target.value as SlotType)} className="input-class text-sm w-full">
+                            <select name={`sd_type_${index}`} value={slot.slot_type} onChange={(e) => handleSpecificSlotChange(index, 'slot_type', e.target.value as SlotType)} className={`${baseInputStyles} text-sm`}>
                                 {slotTypes.map(type => <option key={type} value={type} className="capitalize">{type.charAt(0).toUpperCase() + type.slice(1)}</option>)}
                             </select>
                          </div>
@@ -494,9 +498,5 @@ const ProfilePage = () => {
     </div>
   );
 };
-
-// Basic styling for inputs (can be moved to globals.css or a utility)
-const inputClass = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
-const inputClassDisabled = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed";
 
 export default ProfilePage;
