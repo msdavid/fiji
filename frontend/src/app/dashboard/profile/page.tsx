@@ -5,13 +5,12 @@ import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
-import { format, parseISO, isValid, parse } from 'date-fns'; // For date formatting and parsing
+import { format, parseISO, isValid, parse } from 'date-fns';
 
-// Define UserAvailability interface matching Pydantic model (using string for dates from input)
 interface UserAvailability {
   general?: string;
-  specificDatesUnavailable?: string[]; // Store as YYYY-MM-DD strings
-  specificDatesAvailable?: string[];   // Store as YYYY-MM-DD strings
+  specificDatesUnavailable?: string[];
+  specificDatesAvailable?: string[];
 }
 
 interface UserDataFromBackend {
@@ -19,12 +18,12 @@ interface UserDataFromBackend {
   email: string;
   firstName: string;
   lastName: string;
-  phoneNumber?: string;
+  phone?: string | null; // Changed from phoneNumber
   skills?: string | string[]; 
   qualifications?: string | string[]; 
   preferences?: Record<string, any> | string; 
   profilePictureUrl?: string | null; 
-  availability?: UserAvailability; // Added
+  availability?: UserAvailability;
   assignedRoleIds?: string[];
   assignedRoleNames?: string[];
   status?: string;
@@ -36,14 +35,14 @@ interface EditableUserProfile {
   firstName: string;
   lastName:string;
   email: string; 
-  phoneNumber?: string;
+  phone?: string; // Changed from phoneNumber
   skills?: string; 
   qualifications?: string; 
   preferences?: string; 
   profilePictureUrl?: string | null; 
-  availabilityGeneral?: string; // For form input
-  availabilitySpecificDatesUnavailable?: string; // Comma-separated for textarea
-  availabilitySpecificDatesAvailable?: string; // Comma-separated for textarea
+  availabilityGeneral?: string;
+  availabilitySpecificDatesUnavailable?: string;
+  availabilitySpecificDatesAvailable?: string;
 }
 
 const ProfilePage = () => {
@@ -60,7 +59,7 @@ const ProfilePage = () => {
     firstName: '',
     lastName: '',
     email: '', 
-    phoneNumber: '',
+    phone: '', // Changed from phoneNumber
     skills: '', 
     qualifications: '', 
     preferences: '', 
@@ -84,10 +83,9 @@ const ProfilePage = () => {
     if (!dateString) return [];
     return dateString.split(',')
       .map(d => d.trim())
-      .filter(d => d && isValid(parse(d, 'yyyy-MM-dd', new Date()))) // Validate date format
-      .sort(); // Keep dates sorted
+      .filter(d => d && isValid(parse(d, 'yyyy-MM-dd', new Date()))) 
+      .sort(); 
   };
-
 
   const preferencesObjectToStringForTextarea = (prefs: Record<string, any> | string | undefined): string => {
     if (typeof prefs === 'object' && prefs !== null) {
@@ -95,7 +93,6 @@ const ProfilePage = () => {
     }
     return prefs || '';
   };
-
 
   useEffect(() => {
     if (authLoading) {
@@ -124,7 +121,7 @@ const ProfilePage = () => {
             firstName: fetchedProfileData.firstName || '',
             lastName: fetchedProfileData.lastName || '',
             email: fetchedProfileData.email || '', 
-            phoneNumber: fetchedProfileData.phoneNumber || '',
+            phone: fetchedProfileData.phone || '', // Changed from phoneNumber
             skills: arrayFieldToString(fetchedProfileData.skills),
             qualifications: arrayFieldToString(fetchedProfileData.qualifications),
             preferences: preferencesObjectToStringForTextarea(fetchedProfileData.preferences),
@@ -161,7 +158,7 @@ const ProfilePage = () => {
     }
     try {
       setIsLoading(true);
-      setError(null); // Clear previous errors
+      setError(null); 
       
       const updatePayload: Partial<EditableUserProfile> & { 
         skills?: string[], 
@@ -171,7 +168,7 @@ const ProfilePage = () => {
       } = {
         firstName: formData.firstName,
         lastName: formData.lastName,
-        phoneNumber: formData.phoneNumber,
+        phone: formData.phone, // Changed from phoneNumber
       };
       
       if (formData.preferences) {
@@ -199,12 +196,10 @@ const ProfilePage = () => {
       if (typeof formData.qualifications === 'string') {
         updatePayload.qualifications = formData.qualifications.split('\n').map(q => q.trim()).filter(q => q);
       }
-
-      // Prepare availability data
+      
       const unavailableDates = stringToDateArray(formData.availabilitySpecificDatesUnavailable);
       const availableDates = stringToDateArray(formData.availabilitySpecificDatesAvailable);
 
-      // Validate date arrays (ensure all are valid YYYY-MM-DD)
       if (formData.availabilitySpecificDatesUnavailable && unavailableDates.length !== formData.availabilitySpecificDatesUnavailable.split(',').map(d=>d.trim()).filter(d=>d).length) {
         setError("Invalid date format in 'Specific Dates Unavailable'. Please use YYYY-MM-DD, comma-separated.");
         setIsLoading(false);
@@ -217,7 +212,7 @@ const ProfilePage = () => {
       }
       
       updatePayload.availability = {
-        general: formData.availabilityGeneral || undefined, // Send undefined if empty to allow backend to handle
+        general: formData.availabilityGeneral || undefined, 
         specificDatesUnavailable: unavailableDates.length > 0 ? unavailableDates : undefined,
         specificDatesAvailable: availableDates.length > 0 ? availableDates : undefined,
       };
@@ -234,7 +229,7 @@ const ProfilePage = () => {
         firstName: updatedProfileData.firstName || '',
         lastName: updatedProfileData.lastName || '',
         email: updatedProfileData.email || '',
-        phoneNumber: updatedProfileData.phoneNumber || '',
+        phone: updatedProfileData.phone || '', // Changed from phoneNumber
         skills: arrayFieldToString(updatedProfileData.skills), 
         qualifications: arrayFieldToString(updatedProfileData.qualifications), 
         preferences: preferencesObjectToStringForTextarea(updatedProfileData.preferences), 
@@ -256,7 +251,7 @@ const ProfilePage = () => {
     }
   };
 
-  if (authLoading || (isLoading && !isEditing)) { // Show full page loading only if not editing
+  if (authLoading || (isLoading && !isEditing)) {
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900">
         <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">Loading profile...</div>
@@ -278,7 +273,7 @@ const ProfilePage = () => {
     );
   }
 
-  if (!profile && !isEditing) { // Show not found only if not editing
+  if (!profile && !isEditing) {
     return (
       <div className="flex flex-col justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-900 p-4">
         <div className="text-xl font-semibold text-gray-700 dark:text-gray-300">Profile data not found.</div>
@@ -291,7 +286,6 @@ const ProfilePage = () => {
   
   const displaySkillsText = profile ? arrayFieldToString(profile.skills) : '';
   const displayQualificationsText = profile ? arrayFieldToString(profile.qualifications) : '';
-
 
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-900 py-8 px-4 sm:px-6 lg:px-8">
@@ -307,15 +301,15 @@ const ProfilePage = () => {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
               Your Profile
             </h1>
-            {!isEditing && profile && ( // Ensure profile is loaded before showing edit button
+            {!isEditing && profile && (
               <button
                 onClick={() => {
                     setIsEditing(true);
-                    setFormData({ // Initialize form data from current profile state
+                    setFormData({ 
                         firstName: profile.firstName || '',
                         lastName: profile.lastName || '',
                         email: profile.email || '',
-                        phoneNumber: profile.phoneNumber || '',
+                        phone: profile.phone || '', // Changed from phoneNumber
                         skills: arrayFieldToString(profile.skills),
                         qualifications: arrayFieldToString(profile.qualifications),
                         preferences: preferencesObjectToStringForTextarea(profile.preferences),
@@ -333,13 +327,11 @@ const ProfilePage = () => {
             )}
           </div>
 
-          {isLoading && isEditing && <p>Loading edit form...</p> /* Show loading if fetching profile for edit form */}
+          {isLoading && isEditing && <p>Loading edit form...</p>}
           {!isLoading && !isEditing && !profile && <p>Could not load profile data to display.</p>}
           
           {!isEditing && profile ? (
-            // VIEW MODE
             <div className="space-y-6">
-              {/* ... other profile fields ... */}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Profile Picture</label>
                 {profile.profilePictureUrl ? (
@@ -368,7 +360,7 @@ const ProfilePage = () => {
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Phone Number</label>
-                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.phoneNumber || 'Not provided'}</p>
+                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">{profile.phone || 'Not provided'}</p> 
               </div>
               <div>
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Skills</label>
@@ -392,7 +384,6 @@ const ProfilePage = () => {
                   <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">Not specified</p>
                 )}
               </div>
-              {/* Availability Display */}
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">Availability</h2>
                 <div>
@@ -428,10 +419,8 @@ const ProfilePage = () => {
                   </div>
               )}
             </div>
-          ) : !isLoading && isEditing && profile ? ( // Ensure profile is loaded before rendering edit form
-            // EDITING FORM
+          ) : !isLoading && isEditing && profile ? ( 
             <form onSubmit={handleSubmit} className="space-y-6">
-              {/* ... other form fields ... */}
               {error && ( 
                 <div className="p-3 bg-red-50 dark:bg-red-800/30 border border-red-300 dark:border-red-600 rounded-md">
                     <p className="text-sm text-red-700 dark:text-red-300">{error}</p>
@@ -439,7 +428,7 @@ const ProfilePage = () => {
               )}
               <div className="mb-6">
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Profile Picture</label>
-                {formData.profilePictureUrl ? ( /* ... existing img/placeholder ... */ <img src={formData.profilePictureUrl} alt="Your profile picture" className="mt-2 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600" />) 
+                {formData.profilePictureUrl ? ( <img src={formData.profilePictureUrl} alt="Your profile picture" className="mt-2 w-32 h-32 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600" />) 
                 : (<div className="mt-2 w-32 h-32 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600"><span>No Picture</span></div>)}
                 <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">Profile picture upload is not yet available.</p>
               </div>
@@ -457,8 +446,15 @@ const ProfilePage = () => {
                 <input type="email" name="email" id="email" value={formData.email} readOnly className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed" />
               </div>
               <div>
-                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number</label>
-                <input type="tel" name="phoneNumber" id="phoneNumber" value={formData.phoneNumber || ''} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
+                <label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone Number</label> 
+                <input
+                  type="tel"
+                  name="phone" // Changed from phoneNumber
+                  id="phone"   // Changed from phoneNumber
+                  value={formData.phone || ''} // Changed from phoneNumber
+                  onChange={handleInputChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
+                />
               </div>
               <div>
                 <label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label>
@@ -473,49 +469,24 @@ const ProfilePage = () => {
                 <textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} placeholder='e.g., {"communication": "email", "theme": "dark"}' className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
               </div>
 
-              {/* Availability Edit Fields */}
               <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">Edit Availability</h2>
                 <div>
                   <label htmlFor="availabilityGeneral" className="block text-sm font-medium text-gray-700 dark:text-gray-300">General Availability</label>
-                  <textarea
-                    name="availabilityGeneral"
-                    id="availabilityGeneral"
-                    value={formData.availabilityGeneral || ''}
-                    onChange={handleInputChange}
-                    rows={3}
-                    placeholder="e.g., Weekends, Monday evenings after 6 PM"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
-                  />
+                  <textarea name="availabilityGeneral" id="availabilityGeneral" value={formData.availabilityGeneral || ''} onChange={handleInputChange} rows={3} placeholder="e.g., Weekends, Monday evenings after 6 PM" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
                 </div>
                 <div className="mt-4">
                   <label htmlFor="availabilitySpecificDatesUnavailable" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Specific Dates Unavailable (YYYY-MM-DD, comma-separated)</label>
-                  <textarea
-                    name="availabilitySpecificDatesUnavailable"
-                    id="availabilitySpecificDatesUnavailable"
-                    value={formData.availabilitySpecificDatesUnavailable || ''}
-                    onChange={handleInputChange}
-                    rows={2}
-                    placeholder="e.g., 2024-08-15, 2024-09-01"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
-                  />
+                  <textarea name="availabilitySpecificDatesUnavailable" id="availabilitySpecificDatesUnavailable" value={formData.availabilitySpecificDatesUnavailable || ''} onChange={handleInputChange} rows={2} placeholder="e.g., 2024-08-15, 2024-09-01" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
                 </div>
                 <div className="mt-4">
                   <label htmlFor="availabilitySpecificDatesAvailable" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Specific Dates Available (YYYY-MM-DD, comma-separated)</label>
-                  <textarea
-                    name="availabilitySpecificDatesAvailable"
-                    id="availabilitySpecificDatesAvailable"
-                    value={formData.availabilitySpecificDatesAvailable || ''}
-                    onChange={handleInputChange}
-                    rows={2}
-                    placeholder="e.g., 2024-07-20, 2024-07-21"
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700"
-                  />
+                  <textarea name="availabilitySpecificDatesAvailable" id="availabilitySpecificDatesAvailable" value={formData.availabilitySpecificDatesAvailable || ''} onChange={handleInputChange} rows={2} placeholder="e.g., 2024-07-20, 2024-07-21" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 focus:border-indigo-500 dark:focus:border-indigo-400 sm:text-sm text-gray-900 dark:text-gray-100 bg-white dark:bg-gray-700" />
                 </div>
               </div>
 
               <div className="flex items-center justify-end space-x-3 pt-4">
-                <button type="button" onClick={() => { setIsEditing(false); if (profile) { setFormData({ firstName: profile.firstName || '', lastName: profile.lastName || '', email: profile.email || '', phoneNumber: profile.phoneNumber || '', skills: arrayFieldToString(profile.skills), qualifications: arrayFieldToString(profile.qualifications), preferences: preferencesObjectToStringForTextarea(profile.preferences), profilePictureUrl: profile.profilePictureUrl || '', availabilityGeneral: profile.availability?.general || '', availabilitySpecificDatesUnavailable: dateArrayToString(profile.availability?.specificDatesUnavailable), availabilitySpecificDatesAvailable: dateArrayToString(profile.availability?.specificDatesAvailable), });} setError(null); }} className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium border border-gray-300 dark:border-gray-500 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
+                <button type="button" onClick={() => { setIsEditing(false); if (profile) { setFormData({ firstName: profile.firstName || '', lastName: profile.lastName || '', email: profile.email || '', phone: profile.phone || '', skills: arrayFieldToString(profile.skills), qualifications: arrayFieldToString(profile.qualifications), preferences: preferencesObjectToStringForTextarea(profile.preferences), profilePictureUrl: profile.profilePictureUrl || '', availabilityGeneral: profile.availability?.general || '', availabilitySpecificDatesUnavailable: dateArrayToString(profile.availability?.specificDatesUnavailable), availabilitySpecificDatesAvailable: dateArrayToString(profile.availability?.specificDatesAvailable), });} setError(null); }} className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium border border-gray-300 dark:border-gray-500 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800">
                   Cancel
                 </button>
                 <button type="submit" disabled={isLoading} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:focus:ring-offset-gray-800 disabled:opacity-50">
@@ -524,7 +495,7 @@ const ProfilePage = () => {
               </div>
             </form>
           ) : (
-             (!isLoading && !profile && isEditing) && <p>Could not load profile data to edit.</p> // Show if trying to edit but profile failed to load
+             (!isLoading && !profile && isEditing) && <p>Could not load profile data to edit.</p>
           )}
         </div>
       </div>
