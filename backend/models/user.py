@@ -1,11 +1,12 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict
-from typing import Optional, List, Dict, Any # Import Any
-from datetime import datetime, date
+from typing import Optional, List, Dict, Any 
+from datetime import datetime, date # date is still used by frontend for parsing, but backend will store str
 
 class UserAvailability(BaseModel):
     general: Optional[str] = Field(None, description="General availability description (e.g., 'Weekends', 'Mon-Fri evenings').")
-    specificDatesUnavailable: Optional[List[date]] = Field(default_factory=list, description="Specific dates the user is unavailable.")
-    specificDatesAvailable: Optional[List[date]] = Field(default_factory=list, description="Specific dates the user is available (overrides general unavailability).")
+    # Store dates as ISO 8601 date strings (YYYY-MM-DD)
+    specificDatesUnavailable: Optional[List[str]] = Field(default_factory=list, description="Specific dates (YYYY-MM-DD) the user is unavailable.")
+    specificDatesAvailable: Optional[List[str]] = Field(default_factory=list, description="Specific dates (YYYY-MM-DD) the user is available.")
 
     model_config = ConfigDict(from_attributes=True)
 
@@ -19,8 +20,7 @@ class UserBase(BaseModel):
     preferences: Optional[Dict[str, Any]] = Field(default_factory=dict, description="User's preferences (e.g., communication preferences).")
     profilePictureUrl: Optional[str] = Field(None, description="URL of the user's profile picture.")
     availability: Optional[UserAvailability] = Field(None, description="User's availability information.")
-    # Allow arbitrary types for UserBase if preferences: Dict[str, Any] causes issues
-    # model_config = ConfigDict(arbitrary_types_allowed=True)
+    # model_config = ConfigDict(arbitrary_types_allowed=True) # If needed for preferences
 
 
 class UserCreate(UserBase):
@@ -34,14 +34,13 @@ class UserUpdate(BaseModel):
     qualifications: Optional[List[str]] = None
     preferences: Optional[Dict[str, Any]] = None 
     profilePictureUrl: Optional[str] = None
-    availability: Optional[UserAvailability] = None
+    availability: Optional[UserAvailability] = None # This will now expect strings for dates
     
     assignedRoleIds: Optional[List[str]] = None
     status: Optional[str] = None
     
     model_config = ConfigDict(extra='forbid')
-    # Allow arbitrary types for UserUpdate if preferences: Dict[str, Any] causes issues
-    # model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True)
+    # model_config = ConfigDict(extra='forbid', arbitrary_types_allowed=True) # If needed for preferences
 
 
 class UserInDBBase(UserBase):
@@ -52,7 +51,7 @@ class UserInDBBase(UserBase):
     updatedAt: datetime = Field(..., description="Timestamp of last update.")
     lastLoginAt: Optional[datetime] = Field(None, description="Timestamp of last login.")
     
-    model_config = ConfigDict(from_attributes=True) # arbitrary_types_allowed might be inherited if set on UserBase
+    model_config = ConfigDict(from_attributes=True)
 
 class UserResponse(UserInDBBase):
     assignedRoleNames: Optional[List[str]] = Field(default_factory=list, description="Names of assigned roles.")
