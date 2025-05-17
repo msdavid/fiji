@@ -27,7 +27,7 @@ interface Event {
   organizerUserId?: string;
   organizerFirstName?: string;
   organizerLastName?: string;
-  // TODO: Add an icon field, e.g., iconUrl?: string; or iconKey?: string;
+  icon?: string; // Added icon field
 }
 
 export default function EventsPage() {
@@ -141,18 +141,17 @@ export default function EventsPage() {
                   {/* Left Section: Icon */}
                   <div className="flex-shrink-0 p-4 sm:p-6 flex items-center justify-center border-r border-gray-200 dark:border-gray-700">
                     <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
-                      {/* TODO: Replace with actual event icon */}
-                      <svg xmlns="http://www.w3.org/2000/svg" className="h-6 w-6 sm:h-8 sm:w-8 text-gray-500 dark:text-gray-400" fill="none" viewBox="0 0 24 24" stroke="currentColor" strokeWidth="2">
-                        <path strokeLinecap="round" strokeLinejoin="round" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
-                      </svg>
+                      <span className="material-icons text-3xl sm:text-4xl text-gray-500 dark:text-gray-400 group-hover:text-indigo-500 dark:group-hover:text-indigo-300 transition-colors duration-150">
+                        {event.icon || 'event'} {/* Display fetched icon or default */}
+                      </span>
                     </div>
                   </div>
 
                   {/* Right Section: Details Column */}
-                  <div className="flex flex-col flex-grow p-4 sm:p-6 overflow-hidden"> {/* Added overflow-hidden for safety with line-clamp */}
+                  <div className="flex flex-col flex-grow p-4 sm:p-6 overflow-hidden">
                     {/* Right-Top: Event Details */}
                     <div className="flex-grow">
-                      <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200 mb-1 sm:mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate" title={event.eventName}>
+                      <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200 mb-1 sm:mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate transition-colors duration-150" title={event.eventName}>
                         {event.eventName}
                       </h2>
                       <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
@@ -192,8 +191,7 @@ export default function EventsPage() {
                           <Link 
                             href={`/dashboard/events/${event.id}/edit`} 
                             onClick={(e) => {
-                              e.stopPropagation(); // Prevent Link card navigation
-                              // router.push(`/dashboard/events/${event.id}/edit`); // Alternative if Link inside Link is problematic
+                              e.stopPropagation(); 
                             }}
                             className="text-xs sm:text-sm py-1 px-2 sm:px-3 bg-yellow-500 hover:bg-yellow-600 text-white rounded-md whitespace-nowrap"
                           >

@@ -1,10 +1,10 @@
-Feat(events): Enable backend storage for event icons
+Feat(events): Display dynamic icons on event listing page
 
-- Updated Pydantic models in `backend/models/event.py` to include an
-  optional `icon` field in `EventBase` and `EventUpdate`.
-- This allows the `icon` string (e.g., Material Icon name) selected
-  on the frontend to be saved to Firestore when creating or updating
-  an event.
-- No changes were needed in `backend/routers/events.py` as Pydantic's
-  `model_dump()` automatically handles the inclusion of the new field.
-- Updated `.Q/projectlog.md` to reflect these backend changes.
+- Updated `frontend/src/app/dashboard/events/page.tsx` to display
+  the event-specific icon fetched from the backend.
+- The `Event` interface was updated to include `icon?: string;`.
+- The event card's left section now renders a Material Icon using
+  `<span className="material-icons">...</span>`.
+- It displays `event.icon` if available, otherwise defaults to 'event'.
+- Added `group-hover` styling to change icon color on card hover.
+- Updated `.Q/projectlog.md` to reflect this frontend enhancement.
