@@ -2,6 +2,43 @@
 
 ## Session DATE_TIME_PLACEHOLDER
 
+**Goal:** Beautify the "Create New Working Group" page (`frontend/src/app/dashboard/admin/working-groups/new/page.tsx`).
+
+**Activities:**
+
+1.  **Standardized Page Layout (Previous Step):**
+    *   Removed custom navigation and page background, preparing for `DashboardLayout`.
+    *   Added a styled "Back to Working Groups" link with an icon.
+
+2.  **Refined Form Styling:**
+    *   Ensured input fields (`input`, `textarea`, `select`) use `p-3` padding for consistency with the styling guide's "General Input" style.
+    *   Styled the "Cancel" button as a secondary/outline button with a `cancel` icon.
+    *   Styled the "Create Working Group" button as a primary button with an `add_circle_outline` icon.
+    *   Implemented a loading state for the submit button, showing "Creating..." and an animated `sync` icon.
+
+3.  **Enhanced Loading and Access Denied States:**
+    *   **Loading State:** Replaced simple "Loading..." text with the standard animated Material Icon (`sync`) and styled text: `Loading page...`.
+    *   **Access Denied State:** Improved styling to match other access denied messages, including a `lock` Material Icon and an `arrow_back` icon on the "Back to Working Groups" button.
+
+4.  **Error Message Styling:**
+    *   Styled the form error message (`{error && ...}`) using the standard alert box: `my-4 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg flex items-center` with an `error_outline` icon.
+
+5.  **Code Cleanup and Final Review:**
+    *   Reviewed all changes for consistency with the styling guide and overall visual appeal.
+
+**Files Modified:**
+
+*   `frontend/src/app/dashboard/admin/working-groups/new/page.tsx`
+
+**Next Steps:**
+
+*   Commit the changes.
+
+---
+(Previous log entries remain below)
+
+## Session DATE_TIME_PLACEHOLDER
+
 **Goal:** Relocate the "Delete Working Group" button to the end of the card on the View Working Group (Detail) page.
 
 **Activities:**
@@ -13,47 +50,6 @@
     *   The "Danger Zone" section includes a title (`h3.text-xl.font-semibold`) and a small descriptive paragraph below the button.
     *   The `deleteError` display was also moved to appear just before the "Danger Zone" section if an error occurs during deletion.
     *   Removed the conditional top margin/border logic from the "Manage Members" section as the "Danger Zone" will always follow it if `canDelete` is true, or nothing will follow if `canDelete` is false and `canManageAssignments` is true. The "Manage Members" section will always have a top border if it's not the first section in the card after the main details.
-
-**Files Modified:**
-
-*   `frontend/src/app/dashboard/admin/working-groups/[groupId]/page.tsx`
-
-**Next Steps:**
-
-*   Commit the changes.
-
----
-(Previous log entries remain below)
-
-## Session DATE_TIME_PLACEHOLDER
-
-**Goal:** Add a "Delete Working Group" button and functionality to the View Working Group (Detail) page.
-
-**Activities:**
-
-1.  **Permission Check:**
-    *   Added `canDelete` state variable based on user profile privileges (`working_groups`, `delete` or `sysadmin`).
-
-2.  **State Variables:**
-    *   Added `isDeleting` (boolean) to track deletion progress.
-    *   Added `deleteError` (string | null) to store errors from the delete operation.
-
-3.  **`handleDeleteWorkingGroup` Function:**
-    *   Created an asynchronous function to handle the deletion logic.
-    *   Includes a confirmation dialog (`confirm(...)`) before proceeding.
-    *   Sets `isDeleting` to `true` and clears `deleteError`.
-    *   Makes a `DELETE` request to `/working-groups/{groupId}` with the Firebase auth token.
-    *   On success (204 or 200), navigates to `/dashboard/admin/working-groups`.
-    *   On failure, sets `deleteError` with the error message from the backend.
-    *   Resets `isDeleting` to `false` in a `finally` block.
-
-4.  **UI Integration:**
-    *   Added a "Delete Working Group" button within the main info card, below the `DetailItem` components and before the "Manage Members" section.
-    *   The button is conditionally rendered based on the `canDelete` permission.
-    *   Styled the button as a destructive action button: `py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md shadow-sm inline-flex items-center disabled:opacity-50`, with a `delete_forever` icon.
-    *   The button's text changes to "Deleting..." and is disabled when `isDeleting` is true.
-    *   Added a section to display `deleteError` messages if they occur, styled as a red alert box.
-    *   Adjusted the top margin/border for the "Manage Members" section to ensure proper spacing whether the delete button section is present or not.
 
 **Files Modified:**
 

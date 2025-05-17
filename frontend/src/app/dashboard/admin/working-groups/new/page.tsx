@@ -32,8 +32,6 @@ export default function NewWorkingGroupPage() {
     }
     if (userProfile && !canCreateWorkingGroups) {
         setError("You don't have permission to create working groups.");
-        // Consider redirecting or showing a more prominent message if access is denied after loading.
-        // For now, the main return block handles rendering the access denied message.
     }
   }, [user, authLoading, userProfile, fetchUserProfile, router, canCreateWorkingGroups]);
 
@@ -83,20 +81,29 @@ export default function NewWorkingGroupPage() {
     }
   };
 
-  // Loading state will be enhanced in a later step
-  if (authLoading || !userProfile && user) { 
-    return <div className="flex items-center justify-center min-h-screen"><p>Loading...</p></div>;
+  if (authLoading || (!userProfile && user)) { 
+    return (
+      <div className="flex flex-col justify-center items-center h-full min-h-[300px]">
+        <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">
+          sync
+        </span>
+        <p className="text-lg text-gray-700 dark:text-gray-300">Loading page...</p>
+      </div>
+    );
   }
 
-  // Access Denied state will be enhanced in a later step
   if (!canCreateWorkingGroups) {
     return (
-        // Assuming this div would be within DashboardLayout's main content area
         <div className="max-w-2xl mx-auto py-8"> 
-            <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 text-center">
+            <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 sm:p-8 text-center">
+                <span className="material-icons text-5xl text-red-500 dark:text-red-400 mx-auto mb-3">lock</span>
                 <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400 mb-4">Access Denied</h1>
-                <p className="text-gray-700 dark:text-gray-300">You do not have permission to create new working groups.</p>
-                <Link href="/dashboard/admin/working-groups" className="mt-6 inline-block px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700">
+                <p className="text-gray-700 dark:text-gray-300 mb-6">You do not have permission to create new working groups.</p>
+                <Link 
+                  href="/dashboard/admin/working-groups" 
+                  className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                >
+                    <span className="material-icons text-lg mr-2">arrow_back</span>
                     Back to Working Groups
                 </Link>
             </div>
@@ -104,7 +111,6 @@ export default function NewWorkingGroupPage() {
     );
   }
 
-  // This outermost div assumes it's rendered within DashboardLayout, which provides page bg and padding.
   return (
     <div> 
       <div className="mb-6">
@@ -114,12 +120,12 @@ export default function NewWorkingGroupPage() {
         </Link>
       </div>
 
-      <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8"> {/* This is the main form card */}
+      <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-900 dark:text-white mb-6">Create New Working Group</h1>
         
         <form onSubmit={handleSubmit} className="space-y-6">
           <div>
-            <label htmlFor="groupName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="groupName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Group Name <span className="text-red-500">*</span>
             </label>
             <input
@@ -134,7 +140,7 @@ export default function NewWorkingGroupPage() {
           </div>
 
           <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Description
             </label>
             <textarea
@@ -148,7 +154,7 @@ export default function NewWorkingGroupPage() {
           </div>
 
           <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">
+            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Status
             </label>
             <select
@@ -156,34 +162,46 @@ export default function NewWorkingGroupPage() {
               name="status"
               value={status}
               onChange={(e) => setStatus(e.target.value as 'active' | 'archived')}
-              className="mt-1 block w-full pl-3 pr-10 py-2.5 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-800 dark:text-white" // Adjusted py-2 to py-2.5 to match input padding better
+              className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm rounded-md dark:bg-gray-800 dark:text-white"
             >
               <option value="active">Active</option>
               <option value="archived">Archived</option>
             </select>
           </div>
 
-          {/* Error message styling will be enhanced in a later step */}
-          {error && (
-            <p className="text-sm text-red-600 dark:text-red-400">{error}</p>
+          {error && ( 
+            <div className="my-4 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg flex items-center" role="alert">
+              <span className="material-icons text-lg mr-2">error_outline</span>
+              {error}
+            </div>
           )}
 
-          {/* Button styling will be enhanced in a later step */}
-          <div className="flex justify-end space-x-3 pt-2"> {/* Added pt-2 for spacing */}
-            <Link href="/dashboard/admin/working-groups">
+          <div className="flex justify-end space-x-3 pt-2">
+            <Link href="/dashboard/admin/working-groups" passHref>
               <button
                   type="button"
-                  className="px-4 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+                  className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
               >
+                  <span className="material-icons text-lg mr-2">cancel</span>
                   Cancel
               </button>
             </Link>
             <button
               type="submit"
               disabled={isSubmitting}
-              className="px-4 py-2 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
+              className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center"
             >
-              {isSubmitting ? 'Creating...' : 'Create Working Group'}
+              {isSubmitting ? (
+                <>
+                  <span className="material-icons animate-spin text-lg mr-2">sync</span>
+                  Creating...
+                </>
+              ) : (
+                <>
+                  <span className="material-icons text-lg mr-2">add_circle_outline</span>
+                  Create Working Group
+                </>
+              )}
             </button>
           </div>
         </form>
