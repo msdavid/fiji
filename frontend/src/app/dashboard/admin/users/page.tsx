@@ -88,7 +88,7 @@ export default function AdminUserManagementPage() {
 
   if (authLoading || (!adminUserProfile && user)) {
     return (
-      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
+      <div className="text-center"> {/* Removed max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 */}
         <p>Loading user data...</p>
       </div>
     );
@@ -96,7 +96,8 @@ export default function AdminUserManagementPage() {
 
   if (!canViewUsers && adminUserProfile) {
     return (
-        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+        // This max-w-2xl is likely intentional for a centered access denied message. Keeping it.
+        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
             <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 text-center">
                 <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400 mb-4">Access Denied</h1>
                 <p className="text-gray-700 dark:text-gray-300">You do not have permission to view this page.</p>
@@ -110,7 +111,7 @@ export default function AdminUserManagementPage() {
 
   if (error) {
     return (
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
+      <main className="text-center"> {/* Removed max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 */}
         <p className="text-red-500">Error: {error}</p>
         <button onClick={fetchUsers} className="mt-4 px-4 py-2 bg-indigo-600 text-white rounded hover:bg-indigo-700">
           Retry
@@ -120,7 +121,7 @@ export default function AdminUserManagementPage() {
   }
   
   return (
-    <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <main> {/* Removed max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 */}
       <header className="mb-8">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">User Management</h1>
       </header>

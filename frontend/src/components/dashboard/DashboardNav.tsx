@@ -25,7 +25,7 @@ export default function DashboardNav() {
   if (authLoading && !user) { // Show loading only if user data isn't available yet
     return (
         <nav className="bg-white dark:bg-gray-900 shadow-sm">
-            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+            <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8"> {/* Changed from max-w-7xl */}
                 <div className="flex items-center justify-between h-16">
                     <div className="flex items-center">
                         <Link href="/dashboard" className="flex-shrink-0 text-xl font-bold text-indigo-600 dark:text-indigo-400">
@@ -98,7 +98,7 @@ export default function DashboardNav() {
 
   return (
     <nav className="bg-white dark:bg-gray-900 shadow-sm">
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+      <div className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8"> {/* Changed from max-w-7xl */}
         <div className="flex items-center justify-between h-16">
           <div className="flex items-center">
             <Link href="/dashboard" className="flex-shrink-0 text-xl font-bold text-indigo-600 dark:text-indigo-400">

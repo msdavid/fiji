@@ -73,7 +73,7 @@ export default function WorkingGroupsListPage() {
 
   if (authLoading || isLoading) {
     return (
-      <div className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
+      <div className="text-center"> {/* Removed max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 */}
         <p>Loading working groups...</p>
       </div>
     );
@@ -81,6 +81,7 @@ export default function WorkingGroupsListPage() {
 
   if (!canViewWorkingGroups && userProfile) {
     return (
+        // This max-w-2xl is likely intentional for a centered access denied message. Keeping it.
         <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
             <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 text-center">
                 <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400 mb-4">Access Denied</h1>
@@ -95,7 +96,7 @@ export default function WorkingGroupsListPage() {
   
   if (error) {
     return (
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
+      <main className="text-center"> {/* Removed max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 */}
         <p className="text-red-500">Error: {error}</p>
         <Link href="/dashboard" className="text-indigo-600 hover:underline">Go to Dashboard</Link>
       </main>
@@ -103,7 +104,7 @@ export default function WorkingGroupsListPage() {
   }
 
   return (
-    <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+    <main> {/* Removed max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8 */}
       <header className="mb-8 flex justify-between items-center">
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Working Groups</h1>
         {canCreateWorkingGroups && (

@@ -313,7 +313,9 @@ export default function CreateEventPage() {
             {isSearchingOrganizers && <p className="text-xs text-gray-500 dark:text-gray-400">Searching...</p>}
             {organizerSearchResults.length > 0 && (
               <ul className="absolute z-10 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
-                {organizerSearchResults.map(org => (
+                {organizerSearchResults
+                  .filter(org => org && org.uid) 
+                  .map(org => (
                   <li key={org.uid} 
                       onClick={() => handleSelectOrganizer(org)}
                       className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
