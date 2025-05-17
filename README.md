@@ -1,5 +1,7 @@
 # Project Fiji
 
+> **Quick Start:** If you have already set up your environment, jump to the [Running the Application Locally](#running-the-application-locally) section.
+
 Project Fiji is a web application designed to manage volunteer activities, events, working groups, and donations. It aims to streamline administrative tasks, facilitate communication, and improve overall operational efficiency.
 
 This system provides tools for volunteer registration, profile management, event and activity coordination, working group assignments, donation tracking, and reporting.
