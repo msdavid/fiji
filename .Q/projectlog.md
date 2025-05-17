@@ -2,6 +2,31 @@
 
 ## Session DATE_TIME_PLACEHOLDER
 
+**Goal:** Relocate the "Delete Working Group" button to the end of the card on the View Working Group (Detail) page.
+
+**Activities:**
+
+1.  **Reviewed `[groupId]/page.tsx`:** Analyzed the JSX structure.
+2.  **Modified `[groupId]/page.tsx`:**
+    *   Moved the "Actions" section (renamed to "Danger Zone") containing the "Delete Working Group" button to be the last element within the main content card (`div.bg-white.dark:bg-gray-900`).
+    *   This places it after the "Manage Members" section.
+    *   The "Danger Zone" section includes a title (`h3.text-xl.font-semibold`) and a small descriptive paragraph below the button.
+    *   The `deleteError` display was also moved to appear just before the "Danger Zone" section if an error occurs during deletion.
+    *   Removed the conditional top margin/border logic from the "Manage Members" section as the "Danger Zone" will always follow it if `canDelete` is true, or nothing will follow if `canDelete` is false and `canManageAssignments` is true. The "Manage Members" section will always have a top border if it's not the first section in the card after the main details.
+
+**Files Modified:**
+
+*   `frontend/src/app/dashboard/admin/working-groups/[groupId]/page.tsx`
+
+**Next Steps:**
+
+*   Commit the changes.
+
+---
+(Previous log entries remain below)
+
+## Session DATE_TIME_PLACEHOLDER
+
 **Goal:** Add a "Delete Working Group" button and functionality to the View Working Group (Detail) page.
 
 **Activities:**
@@ -29,52 +54,6 @@
     *   The button's text changes to "Deleting..." and is disabled when `isDeleting` is true.
     *   Added a section to display `deleteError` messages if they occur, styled as a red alert box.
     *   Adjusted the top margin/border for the "Manage Members" section to ensure proper spacing whether the delete button section is present or not.
-
-**Files Modified:**
-
-*   `frontend/src/app/dashboard/admin/working-groups/[groupId]/page.tsx`
-
-**Next Steps:**
-
-*   Commit the changes.
-
----
-(Previous log entries remain below)
-
-## Session DATE_TIME_PLACEHOLDER
-
-**Goal:** Beautify the View Working Group (Detail) page (`frontend/src/app/dashboard/admin/working-groups/[groupId]/page.tsx`).
-
-**Activities:**
-
-1.  **Standardized Page Layout:**
-    *   Removed custom padding and max-width from the `<main>` tag, assuming future integration with `DashboardLayout`.
-    *   Ensured the "Back to Working Groups" link uses `arrow_back_ios` icon for consistency.
-
-2.  **Enhanced Main Information Display (Top Card):**
-    *   Added a `workspaces` Material Icon next to the working group name.
-    *   Adjusted status badge padding to `px-2.5 py-1`.
-    *   Restructured "Description", "Created By", "Created On", and "Last Updated" details using a local `DetailItem` helper component (mimicking styling guide) for better visual organization with icons.
-
-3.  **Improved "Manage Members" Section:**
-    *   **Assign User Form:**
-        *   Styled the form container with `bg-gray-50 dark:bg-gray-800/50 p-4 rounded-lg shadow-sm`.
-        *   Styled the "Assign User" button as a primary green "Success" button with a `person_add` icon.
-    *   **Current Members List:**
-        *   Styled the "Remove" button as a "Small/Action (Destructive Red)" button with a `person_remove` icon.
-        *   Improved display of user email/ID and assignment date.
-        *   Added a loading indicator for when members are being fetched.
-
-4.  **Refined Loading, Error, and Access Denied States:**
-    *   **Loading State:** Implemented the standard animated `sync` icon and styled text.
-    *   **Error States:**
-        *   Main working group fetch error and "Not Found" states are now full-page messages with icons (`error_outline`, `search_off`) and styled containers.
-        *   Assignment-related errors (`assignmentsError`) are displayed within the "Manage Members" section, using an alert box style if appropriate.
-    *   **Access Denied State:** Enhanced with a `lock` icon for the title and an `arrow_back` icon for the button.
-
-5.  **Code Cleanup and Final Review:**
-    *   Added a local `DetailItem` helper component for structured detail display.
-    *   Reviewed all changes for consistency with the styling guide and overall visual improvement.
 
 **Files Modified:**
 

@@ -65,8 +65,8 @@ export default function WorkingGroupDetailPage() {
   const [error, setError] = useState<string | null>(null); 
   const [deleteError, setDeleteError] = useState<string | null>(null);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null); 
-  const [actionInProgress, setActionInProgress] = useState(false); // For assignments
-  const [isDeleting, setIsDeleting] = useState(false); // For deletion
+  const [actionInProgress, setActionInProgress] = useState(false); 
+  const [isDeleting, setIsDeleting] = useState(false); 
   
   const [selectedUserToAssign, setSelectedUserToAssign] = useState<UserSearchResult | null>(null);
 
@@ -297,30 +297,8 @@ export default function WorkingGroupDetailPage() {
             />
           </div>
           
-          {deleteError && 
-            <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert">
-              <span className="material-icons text-lg mr-2">error_outline</span>
-              {deleteError}
-            </div>
-          }
-
-          {canDelete && (
-            <div className="mt-6 mb-6 pt-4 border-t border-gray-200 dark:border-gray-700">
-                 <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">Actions</h3>
-                <button
-                    onClick={handleDeleteWorkingGroup}
-                    disabled={isDeleting}
-                    className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md shadow-sm inline-flex items-center disabled:opacity-50"
-                >
-                    <span className="material-icons text-lg mr-2">delete_forever</span>
-                    {isDeleting ? 'Deleting...' : 'Delete Working Group'}
-                </button>
-            </div>
-          )}
-
-
           {canManageAssignments && (
-            <div className={`pt-6 ${canDelete ? '' : 'mt-8 border-t'} border-gray-200 dark:border-gray-700`}> {/* Add mt-8 and border-t only if delete button is not shown */}
+            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Manage Members</h2>
               <form onSubmit={handleAssignUser} className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg shadow-sm">
                 <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Assign New Member</h3>
@@ -386,6 +364,28 @@ export default function WorkingGroupDetailPage() {
                   {assignmentsError}
                 </div>
               }
+            </div>
+          )}
+
+          {deleteError && 
+            <div className="mt-6 pt-4 border-t border-gray-200 dark:border-gray-700 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert">
+              <span className="material-icons text-lg mr-2">error_outline</span>
+              {deleteError}
+            </div>
+          }
+
+          {canDelete && (
+            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+                 <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Danger Zone</h3>
+                <button
+                    onClick={handleDeleteWorkingGroup}
+                    disabled={isDeleting}
+                    className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md shadow-sm inline-flex items-center disabled:opacity-50"
+                >
+                    <span className="material-icons text-lg mr-2">delete_forever</span>
+                    {isDeleting ? 'Deleting...' : 'Delete This Working Group'}
+                </button>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400">This action is permanent and cannot be undone.</p>
             </div>
           )}
         </div>
