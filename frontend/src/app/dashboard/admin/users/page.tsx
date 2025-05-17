@@ -167,7 +167,7 @@ const AdminUserManagementPage = () => {
       )}
 
       {users.length > 0 && (
-        <div className="overflow-x-auto bg-white dark:bg-gray-800 shadow-md rounded-lg">
+        <div className="overflow-x-auto bg-gray-50 dark:bg-gray-700 shadow-md rounded-lg">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
             <thead className="bg-gray-50 dark:bg-gray-700">
               <tr>

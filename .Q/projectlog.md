@@ -1,9 +1,16 @@
 # Project Log - Fiji
 
-## Session (YYYY-MM-DD HH:MM)
+## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Table Styling -->
+- **Q Agent:** Mauro
+- **Objective:** Improve visual contrast of the users table in the admin dashboard.
+### Activity:
+- Modified `frontend/src/app/dashboard/admin/users/page.tsx`.
+  - Changed the background class of the `div` wrapping the table from `bg-white dark:bg-gray-800` to `bg-gray-50 dark:bg-gray-700`. This enhances visual separation of the table from the page background.
+
+---
+## Session (YYYY-MM-DD HH:MM) <!-- Previous entry: Root Path Redirect -->
 - **Q Agent:** Mauro
 - **Objective:** Modify frontend root path to redirect to login page.
-
 ### Activity:
 - Modified `frontend/src/app/page.tsx` to implement a redirect from `/` to `/login`.
   - Replaced existing content with `next/navigation`'s `redirect` function.
