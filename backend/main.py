@@ -14,7 +14,8 @@ from routers import users as users_router
 from routers import events as events_router
 from routers import working_groups as working_groups_router
 from routers import donations as donations_router
-from routers import assignments as assignments_router # Import the new assignments router
+from routers import assignments as assignments_router
+from routers import reports as reports_router # Import the new reports router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -106,7 +107,8 @@ app.include_router(users_router.router)
 app.include_router(events_router.router)
 app.include_router(working_groups_router.router)
 app.include_router(donations_router.router)
-app.include_router(assignments_router.router) # Add the assignments router
+app.include_router(assignments_router.router)
+app.include_router(reports_router.router) # Add the reports router
 
 
 @app.get("/")
