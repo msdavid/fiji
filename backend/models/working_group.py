@@ -4,28 +4,32 @@ from datetime import datetime
 
 class WorkingGroupBase(BaseModel):
     groupName: str = Field(..., description="Name of the working group.")
-    description: Optional[str] = Field(None, description="Detailed description of the working group.")
-    status: Literal["active", "archived"] = Field(default="active", description="Status of the working group.")
-    # createdByUserId will be set by the router based on the authenticated user
+    description: Optional[str] = Field(None, description="Optional description of the working group.")
+    status: Literal["active", "archived"] = Field("active", description="Status of the working group.")
 
 class WorkingGroupCreate(WorkingGroupBase):
-    # createdAt and updatedAt will be set by the router using firestore.SERVER_TIMESTAMP
     pass
 
 class WorkingGroupUpdate(BaseModel):
     groupName: Optional[str] = None
     description: Optional[str] = None
     status: Optional[Literal["active", "archived"]] = None
-    # updatedAt will be set by the router using firestore.SERVER_TIMESTAMP
+    updatedAt: datetime = Field(default_factory=datetime.utcnow)
 
-class WorkingGroupInDBBase(WorkingGroupBase):
-    id: str = Field(..., description="Document ID of the working group.")
+class WorkingGroupResponse(WorkingGroupBase):
+    id: str = Field(..., description="Unique ID of the working group.")
     createdByUserId: str = Field(..., description="ID of the user who created the working group.")
-    createdAt: datetime = Field(..., description="Timestamp of when the working group was created.")
-    updatedAt: datetime = Field(..., description="Timestamp of when the working group was last updated.")
+    createdAt: datetime
+    updatedAt: datetime
+    # Optional fields to include creator's details, can be populated in the router
+    creatorFirstName: Optional[str] = None
+    creatorLastName: Optional[str] = None
 
-class WorkingGroupResponse(WorkingGroupInDBBase):
-    # Optional fields for creator's details if needed in the future
-    creatorFirstName: Optional[str] = Field(None, description="First name of the creator.")
-    creatorLastName: Optional[str] = Field(None, description="Last name of the creator.")
+    class Config:
+        orm_mode = True
+        json_encoders = {
+            datetime: lambda v: v.isoformat() if v else None
+        }
+
+class WorkingGroupInDB(WorkingGroupResponse):
     pass
