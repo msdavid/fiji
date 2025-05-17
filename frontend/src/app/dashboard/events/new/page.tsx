@@ -223,8 +223,6 @@ export default function CreateEventPage() {
   if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
 
   return (
-    // Removed the outer div and local nav, as DashboardLayout provides them.
-    // The main content will be wrapped by DashboardLayout's <main> tag.
     <> 
       <div className="mb-6">
         <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
@@ -256,11 +254,26 @@ export default function CreateEventPage() {
           <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
         </div>
-        <div>
-          <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
-          <input type="text" name="eventType" id="eventType" value={formData.eventType} onChange={handleChange} 
+
+        <div className="md:grid md:grid-cols-2 md:gap-6">
+          <div>
+            <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
+            <input type="text" name="eventType" id="eventType" value={formData.eventType} onChange={handleChange} 
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+          </div>
+          <div>
+            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+            <select name="status" id="status" value={formData.status} onChange={handleChange} required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
+              <option value="draft">Draft</option>
+              <option value="open_for_signup">Open for Signup</option>
+              <option value="ongoing">Ongoing</option>
+              <option value="completed">Completed</option>
+              <option value="cancelled">Cancelled</option>
+            </select>
+          </div>
         </div>
+
         <div>
           <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Purpose</label>
           <textarea name="purpose" id="purpose" value={formData.purpose} onChange={handleChange} rows={3}
@@ -271,25 +284,31 @@ export default function CreateEventPage() {
           <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={4}
                     className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
         </div>
-        <div>
-          <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
-          <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
+
+        <div className="md:grid md:grid-cols-2 md:gap-6">
+          <div>
+            <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
+            <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+          </div>
+          <div>
+            <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
+            <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime} onChange={handleChange} required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+          </div>
         </div>
-        <div>
-          <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
-          <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime} onChange={handleChange} required
+
+        <div className="md:grid md:grid-cols-2 md:gap-6">
+          <div>
+            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
+            <input type="text" name="location" id="location" value={formData.location} onChange={handleChange}
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-        </div>
-        <div>
-          <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
-          <input type="text" name="location" id="location" value={formData.location} onChange={handleChange}
+          </div>
+          <div>
+            <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
+            <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-        </div>
-        <div>
-          <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
-          <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+          </div>
         </div>
 
         <div>
@@ -335,18 +354,6 @@ export default function CreateEventPage() {
           </div>
         </div>
         
-        <div>
-          <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-          <select name="status" id="status" value={formData.status} onChange={handleChange} required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
-            <option value="draft">Draft</option>
-            <option value="open_for_signup">Open for Signup</option>
-            <option value="ongoing">Ongoing</option>
-            <option value="completed">Completed</option>
-            <option value="cancelled">Cancelled</option>
-          </select>
-        </div>
-
         <div className="flex justify-end space-x-3">
           <Link href="/dashboard/events">
               <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">

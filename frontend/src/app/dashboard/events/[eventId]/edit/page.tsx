@@ -19,7 +19,7 @@ interface EventFormData {
 }
 
 interface UserSearchResult {
-  id: string; // Changed from uid to id
+  id: string; 
   firstName: string;
   lastName: string;
   email: string;
@@ -101,8 +101,6 @@ export default function EditEventPage() {
       if (eventData.organizerUserId && eventData.organizerFirstName && eventData.organizerLastName) {
         setSelectedOrganizerName(`${eventData.organizerFirstName} ${eventData.organizerLastName} (${eventData.organizerEmail || 'email missing'})`);
       } else if (eventData.organizerUserId) {
-        // Fallback: if name/email not directly on eventData, try to fetch organizer details
-        // For now, just show UID. A separate fetch might be needed if full details are required here and not provided by /events/{id}
         try {
             const orgResponse = await fetch(`${backendUrl}/users/${eventData.organizerUserId}`, {
                  headers: { 'Authorization': `Bearer ${token}` },
@@ -191,7 +189,7 @@ export default function EditEventPage() {
   };
 
   const handleSelectOrganizer = (organizer: UserSearchResult) => {
-    setFormData(prev => ({ ...prev, organizerUserId: organizer.id })); // Changed from organizer.uid
+    setFormData(prev => ({ ...prev, organizerUserId: organizer.id })); 
     setSelectedOrganizerName(`${organizer.firstName} ${organizer.lastName} (${organizer.email})`);
     setOrganizerSearchQuery(''); 
     setOrganizerSearchResults([]); 
@@ -280,7 +278,6 @@ export default function EditEventPage() {
       if (location !== undefined) updatePayload.location = location;
       if (volunteersRequired !== undefined) updatePayload.volunteersRequired = volunteersRequired;
       if (status !== undefined) updatePayload.status = status;
-      // Ensure organizerUserId is explicitly set to null if cleared, or the ID if selected
       updatePayload.organizerUserId = organizerUserId;
 
 
@@ -376,11 +373,26 @@ export default function EditEventPage() {
             <input type="text" name="eventName" id="eventName" value={formData.eventName || ''} onChange={handleChange} required 
                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
-          <div>
-            <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
-            <input type="text" name="eventType" id="eventType" value={formData.eventType || ''} onChange={handleChange} 
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+
+          <div className="md:grid md:grid-cols-2 md:gap-6">
+            <div>
+              <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
+              <input type="text" name="eventType" id="eventType" value={formData.eventType || ''} onChange={handleChange} 
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+              <select name="status" id="status" value={formData.status || 'draft'} onChange={handleChange} required
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
+                <option value="draft">Draft</option>
+                <option value="open_for_signup">Open for Signup</option>
+                <option value="ongoing">Ongoing</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
           </div>
+
           <div>
             <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Purpose</label>
             <textarea name="purpose" id="purpose" value={formData.purpose || ''} onChange={handleChange} rows={3}
@@ -391,25 +403,31 @@ export default function EditEventPage() {
             <textarea name="description" id="description" value={formData.description || ''} onChange={handleChange} rows={4}
                       className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
           </div>
-          <div>
-            <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
-            <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime || ''} onChange={handleChange} required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+
+          <div className="md:grid md:grid-cols-2 md:gap-6">
+            <div>
+              <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
+              <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime || ''} onChange={handleChange} required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
+              <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime || ''} onChange={handleChange} required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
           </div>
-          <div>
-            <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
-            <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime || ''} onChange={handleChange} required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
-            <input type="text" name="location" id="location" value={formData.location || ''} onChange={handleChange}
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
-            <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired || 0} onChange={handleChange} min="0" required
-                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+
+          <div className="md:grid md:grid-cols-2 md:gap-6">
+            <div>
+              <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
+              <input type="text" name="location" id="location" value={formData.location || ''} onChange={handleChange}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
+            <div>
+              <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
+              <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired || 0} onChange={handleChange} min="0" required
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+            </div>
           </div>
 
           <div>
@@ -447,9 +465,9 @@ export default function EditEventPage() {
                   {organizerSearchResults.length > 0 && !isSearchingOrganizers && (
                   <ul className="absolute top-full z-20 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
                       {organizerSearchResults
-                        .filter(org => org && org.id) // Added filter
+                        .filter(org => org && org.id) 
                         .map(org => (
-                        <li key={org.id} // Changed from org.uid
+                        <li key={org.id} 
                             onClick={() => handleSelectOrganizer(org)}
                             className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
                             {org.firstName} {org.lastName} ({org.email})
@@ -461,18 +479,6 @@ export default function EditEventPage() {
               )}
           </div>
           
-          <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-            <select name="status" id="status" value={formData.status || 'draft'} onChange={handleChange} required
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
-              <option value="draft">Draft</option>
-              <option value="open_for_signup">Open for Signup</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-
           <div className="flex justify-between items-center pt-4 border-t dark:border-gray-700">
               <div>
                   {canDeleteEvent && (
