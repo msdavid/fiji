@@ -63,14 +63,18 @@ export default function WorkingGroupDetailPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null); 
+  const [deleteError, setDeleteError] = useState<string | null>(null);
   const [assignmentsError, setAssignmentsError] = useState<string | null>(null); 
-  const [actionInProgress, setActionInProgress] = useState(false);
+  const [actionInProgress, setActionInProgress] = useState(false); // For assignments
+  const [isDeleting, setIsDeleting] = useState(false); // For deletion
   
   const [selectedUserToAssign, setSelectedUserToAssign] = useState<UserSearchResult | null>(null);
 
 
   const canView = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'view') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'manage_assignments') : userProfile.assignedRoleIds?.includes('sysadmin'));
+  const canDelete = userProfile && (hasPrivilege ? hasPrivilege('working_groups', 'delete') : userProfile.assignedRoleIds?.includes('sysadmin'));
+
 
   const fetchWorkingGroupDetails = useCallback(async () => {
     if (!user || !groupId || !canView) {
@@ -78,7 +82,7 @@ export default function WorkingGroupDetailPage() {
         setIsLoading(false);
         return;
     }
-    setIsLoading(true); setError(null);
+    setIsLoading(true); setError(null); setDeleteError(null);
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
@@ -157,7 +161,37 @@ export default function WorkingGroupDetailPage() {
     finally { setActionInProgress(false); }
   };
 
-  if (authLoading || (isLoading && !workingGroup)) { // Show loading if auth is loading OR main content is loading
+  const handleDeleteWorkingGroup = async () => {
+    if (!user || !groupId || !canDelete || !workingGroup) {
+        setDeleteError("Cannot delete: Insufficient permissions or group data missing.");
+        return;
+    }
+    if (!confirm(`Are you sure you want to delete the working group "${workingGroup.groupName}"? This action cannot be undone.`)) return;
+
+    setIsDeleting(true);
+    setDeleteError(null);
+    try {
+        const token = await user.getIdToken();
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        const response = await fetch(`${backendUrl}/working-groups/${groupId}`, {
+            method: 'DELETE',
+            headers: { 'Authorization': `Bearer ${token}` },
+        });
+        if (!response.ok && response.status !== 204) {
+            const errorData = await response.json().catch(() => ({ detail: 'Failed to delete working group' }));
+            throw new Error(errorData.detail || 'Failed to delete working group');
+        }
+        router.push('/dashboard/admin/working-groups');
+    } catch (err: any) {
+        setDeleteError(err.message);
+        console.error("Delete working group error:", err);
+    } finally {
+        setIsDeleting(false);
+    }
+  };
+
+
+  if (authLoading || (isLoading && !workingGroup)) {
     return (
       <div className="flex flex-col justify-center items-center h-full min-h-[300px]">
         <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">
@@ -168,7 +202,7 @@ export default function WorkingGroupDetailPage() {
     );
   }
   
-  if (!canView && userProfile) { // This check should ideally happen after userProfile is confirmed
+  if (!canView && userProfile) {
     return (
         <div className="max-w-2xl mx-auto py-8"> 
             <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 sm:p-8 text-center">
@@ -184,7 +218,7 @@ export default function WorkingGroupDetailPage() {
     );
   }
 
-  if (error && !workingGroup) { // Main error fetching working group
+  if (error && !workingGroup) {
     return (
         <div className="max-w-2xl mx-auto py-8">
             <div className="bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 shadow-lg rounded-lg p-6 sm:p-8 text-center">
@@ -200,7 +234,7 @@ export default function WorkingGroupDetailPage() {
     );
   }
   
-  if (!workingGroup) { // Not found state
+  if (!workingGroup) {
     return (
         <div className="max-w-2xl mx-auto py-8">
             <div className="bg-white dark:bg-gray-900 shadow-lg rounded-lg p-6 sm:p-8 text-center">
@@ -216,7 +250,6 @@ export default function WorkingGroupDetailPage() {
     );
   }
 
-
   return (
     <main> 
         <div className="mb-6">
@@ -227,10 +260,14 @@ export default function WorkingGroupDetailPage() {
         </div>
 
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8">
-          <div className="flex items-center mb-4">
-            <span className="material-icons text-3xl text-indigo-600 dark:text-indigo-400 mr-3">workspaces</span>
-            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{workingGroup.groupName}</h1>
+          <div className="flex items-center justify-between mb-4">
+            <div className="flex items-center">
+                <span className="material-icons text-3xl text-indigo-600 dark:text-indigo-400 mr-3">workspaces</span>
+                <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{workingGroup.groupName}</h1>
+            </div>
+            {/* TODO: Add Edit button here if permissions allow */}
           </div>
+
           <div className="mb-6">
             <span className={`text-xs font-semibold px-2.5 py-1 rounded-full inline-block ${ workingGroup.status === 'active' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' : 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100'}`}>
               {workingGroup.status.charAt(0).toUpperCase() + workingGroup.status.slice(1)}
@@ -260,10 +297,30 @@ export default function WorkingGroupDetailPage() {
             />
           </div>
           
-          {/* Main error for WG fetch is handled by the full page error state now */}
+          {deleteError && 
+            <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert">
+              <span className="material-icons text-lg mr-2">error_outline</span>
+              {deleteError}
+            </div>
+          }
+
+          {canDelete && (
+            <div className="mt-6 mb-6 pt-4 border-t border-gray-200 dark:border-gray-700">
+                 <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mb-2">Actions</h3>
+                <button
+                    onClick={handleDeleteWorkingGroup}
+                    disabled={isDeleting}
+                    className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md shadow-sm inline-flex items-center disabled:opacity-50"
+                >
+                    <span className="material-icons text-lg mr-2">delete_forever</span>
+                    {isDeleting ? 'Deleting...' : 'Delete Working Group'}
+                </button>
+            </div>
+          )}
+
 
           {canManageAssignments && (
-            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+            <div className={`pt-6 ${canDelete ? '' : 'mt-8 border-t'} border-gray-200 dark:border-gray-700`}> {/* Add mt-8 and border-t only if delete button is not shown */}
               <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Manage Members</h2>
               <form onSubmit={handleAssignUser} className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg shadow-sm">
                 <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-3">Assign New Member</h3>
@@ -323,7 +380,6 @@ export default function WorkingGroupDetailPage() {
               ) : (
                 <p className="text-gray-500 dark:text-gray-400">No users currently assigned to this working group.</p>
               )}
-              {/* Display assignment error here only if it's relevant and no members are shown, or it's a general error for the list */}
               {assignmentsError && assignments.length === 0 && !actionInProgress &&
                 <div className="mt-3 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert">
                   <span className="material-icons text-lg mr-2">error_outline</span>
