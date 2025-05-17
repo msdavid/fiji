@@ -386,7 +386,7 @@ export default function EditEventPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto"> {/* Adjusted max-width */}
+    <div className="max-w-3xl mx-auto"> 
       <div className="mb-6">
         <Link href={`/dashboard/events/${eventId}`} className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
             ← Back to Event Details
@@ -425,7 +425,7 @@ export default function EditEventPage() {
                     {formData.icon || 'add_photo_alternate'}
                   </span>
                 </div>
-                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center md:text-left">Click icon to change</p>
+                <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center md:text-left w-32 sm:w-40">Click icon to change</p>
               </div>
 
               <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 h-auto"></div>

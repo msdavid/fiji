@@ -257,7 +257,7 @@ export default function CreateEventPage() {
   }
 
   return (
-    <div className="max-w-3xl mx-auto"> {/* Adjusted max-width to 3xl for consistency with profile page */}
+    <div className="max-w-3xl mx-auto"> 
       <div className="mb-6">
         <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
             ← Back to Events
@@ -282,11 +282,9 @@ export default function CreateEventPage() {
             </div>
       )}
 
-      {/* Main card structure */}
       <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8">
         <form onSubmit={handleSubmit} className="space-y-6">
           <div className="md:flex md:space-x-6 items-start">
-            {/* Left Column: Icon Display */}
             <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center md:items-start">
               <div 
                 onClick={handleIconClick}
@@ -297,22 +295,19 @@ export default function CreateEventPage() {
                   {formData.icon || 'add_photo_alternate'}
                 </span>
               </div>
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center md:text-left">Click icon to change</p>
+              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center md:text-left w-32 sm:w-40">Click icon to change</p>
             </div>
 
-            {/* Vertical Separator */}
-            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 h-auto"></div> {/* Adjusted for visibility */}
+            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 h-auto"></div> 
 
 
-            {/* Right Column: Form Fields */}
-            <div className="flex-grow space-y-6"> {/* Added space-y-6 here for consistent spacing */}
+            <div className="flex-grow space-y-6"> 
               <div>
                 <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Name</label>
                 <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
                         className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
               </div>
             
-              {/* Event Type and Status - now part of the right column's flow */}
               <div className="md:grid md:grid-cols-2 md:gap-6">
                 <div>
                   <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
@@ -334,7 +329,6 @@ export default function CreateEventPage() {
             </div>
           </div>
 
-          {/* Remaining form fields - now outside the initial two-column flex, but within the form's space-y-6 */}
           <div>
             <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Purpose</label>
             <textarea name="purpose" id="purpose" value={formData.purpose} onChange={handleChange} rows={3}
@@ -415,7 +409,7 @@ export default function CreateEventPage() {
             </div>
           </div>
           
-          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700"> {/* Added border-t for separation */}
+          <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700"> 
             <Link href="/dashboard/events">
                 <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
                     Cancel
