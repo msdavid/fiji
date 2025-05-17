@@ -19,7 +19,7 @@ interface EventFormData {
 }
 
 interface UserSearchResult {
-  id: string; // Changed from uid to id
+  id: string; 
   firstName: string;
   lastName: string;
   email: string;
@@ -123,14 +123,14 @@ export default function CreateEventPage() {
         throw new Error('Failed to search users');
       }
       const results: UserSearchResult[] = await response.json();
-      setOrganizerSearchResults(results); // Set results first
+      setOrganizerSearchResults(results); 
       return results;
     } catch (err) {
       console.error("User search error:", err);
       setOrganizerSearchResults([]);
       return [];
     } finally {
-      setIsSearchingOrganizers(false); // Then set searching to false
+      setIsSearchingOrganizers(false); 
     }
   };
 
@@ -145,12 +145,12 @@ export default function CreateEventPage() {
       debouncedUserSearch(query);
     } else {
       setOrganizerSearchResults([]);
-      setIsSearchingOrganizers(false); // Ensure searching is false if query is too short
+      setIsSearchingOrganizers(false); 
     }
   };
 
   const handleSelectOrganizer = (organizer: UserSearchResult) => {
-    setFormData(prev => ({ ...prev, organizerUserId: organizer.id })); // Changed from organizer.uid
+    setFormData(prev => ({ ...prev, organizerUserId: organizer.id })); 
     setSelectedOrganizerName(`${organizer.firstName} ${organizer.lastName} (${organizer.email})`);
     setOrganizerSearchQuery(''); 
     setOrganizerSearchResults([]); 
@@ -299,15 +299,19 @@ export default function CreateEventPage() {
                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
           </div>
 
-          {/* Organizer Search Field - Updated Structure */}
           <div>
             <label 
               htmlFor="organizerSearch" 
               className="block text-sm font-medium text-gray-700 dark:text-gray-300"
             >
-              Event Organizer {selectedOrganizerName ? `(Selected: ${selectedOrganizerName})` : '(Optional)'}
+              Event Organizer{' '}
+              {selectedOrganizerName ? (
+                <span className="text-green-600 dark:text-green-400 font-semibold">(Selected: {selectedOrganizerName})</span>
+              ) : (
+                <span className="text-gray-500 dark:text-gray-400">(Optional)</span>
+              )}
             </label>
-            <div className="relative mt-1"> {/* Added mt-1 for spacing from label */}
+            <div className="relative mt-1"> 
               <input
                 type="text"
                 id="organizerSearch"
@@ -325,9 +329,9 @@ export default function CreateEventPage() {
               {organizerSearchResults.length > 0 && !isSearchingOrganizers && (
                 <ul className="absolute top-full z-20 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
                   {organizerSearchResults
-                    .filter(org => org && org.id)  // Changed from org.uid
+                    .filter(org => org && org.id)  
                     .map(org => (
-                    <li key={org.id} // Changed from org.uid
+                    <li key={org.id} 
                         onClick={() => handleSelectOrganizer(org)}
                         className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
                       {org.firstName} {org.lastName} ({org.email})
