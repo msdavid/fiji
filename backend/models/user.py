@@ -1,10 +1,9 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
-from typing import Optional, List, Dict, Any, Literal
+from typing import Optional, List, Dict, Any, Literal # Any might still be used if other dicts exist
 from datetime import datetime, date, time 
 import re 
 
 TIME_REGEX = r"^([01]\d|2[0-3]):([0-5]\d)$"
-# Regex for YYYY-MM-DD date format
 DATE_REGEX = r"^\d{4}-(0[1-9]|1[0-2])-(0[1-9]|[12]\d|3[01])$"
 
 class GeneralAvailabilityRule(BaseModel):
@@ -28,7 +27,7 @@ class GeneralAvailabilityRule(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
 class SpecificDateSlot(BaseModel):
-    date: str = Field(..., pattern=DATE_REGEX, description="Date in YYYY-MM-DD format.") # Changed to str with pattern
+    date: str = Field(..., pattern=DATE_REGEX, description="Date in YYYY-MM-DD format.")
     from_time: Optional[str] = Field(None, pattern=TIME_REGEX, description="Start time in HH:MM format (optional).")
     to_time: Optional[str] = Field(None, pattern=TIME_REGEX, description="End time in HH:MM format (optional).")
     slot_type: Literal["available", "unavailable"] = Field(..., description="Whether the slot is for availability or unavailability.")
@@ -63,7 +62,7 @@ class UserBase(BaseModel):
     phone: Optional[str] = Field(None, description="User's phone number.")
     skills: Optional[List[str]] = Field(default_factory=list, description="List of user's skills.")
     qualifications: Optional[List[str]] = Field(default_factory=list, description="List of user's qualifications.")
-    preferences: Optional[Dict[str, Any]] = Field(default_factory=dict, description="User's preferences (e.g., communication preferences).")
+    preferences: Optional[str] = Field(None, description="User's preferences as a string (e.g., free text, or JSON string).") # Changed to Optional[str]
     profilePictureUrl: Optional[str] = Field(None, description="URL of the user's profile picture.")
     availability: Optional[UserAvailability] = Field(default_factory=UserAvailability, description="User's structured availability information.")
     
@@ -76,7 +75,7 @@ class UserUpdate(BaseModel):
     phone: Optional[str] = None
     skills: Optional[List[str]] = None
     qualifications: Optional[List[str]] = None
-    preferences: Optional[Dict[str, Any]] = None 
+    preferences: Optional[str] = None # Changed to Optional[str]
     profilePictureUrl: Optional[str] = None
     availability: Optional[UserAvailability] = None 
     

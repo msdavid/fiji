@@ -7,20 +7,20 @@ import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/lib/apiClient';
 import { format, parseISO } from 'date-fns'; 
 
-// --- Availability Interfaces (copied from profile/page.tsx for consistency) ---
+// --- Availability Interfaces ---
 type Weekday = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
 type SlotType = 'available' | 'unavailable';
 
 interface GeneralAvailabilityRule {
   weekday: Weekday;
-  from_time: string; // HH:MM
-  to_time: string;   // HH:MM
+  from_time: string; 
+  to_time: string;   
 }
 
 interface SpecificDateSlot {
-  date: string; // YYYY-MM-DD
-  from_time?: string; // HH:MM
-  to_time?: string;   // HH:MM
+  date: string; 
+  from_time?: string; 
+  to_time?: string;   
   slot_type: SlotType;
 }
 
@@ -36,13 +36,12 @@ interface UserProfileData {
   email: string;
   firstName: string;
   lastName: string;
-  phoneNumber?: string | null; // Changed to phone to match backend
-  phone?: string | null; // Added to ensure compatibility if backend sends phone
+  phone?: string | null; 
   skills?: string[] | null; 
   qualifications?: string[] | null; 
-  preferences?: Record<string, any> | string | null; 
+  preferences?: string | null; // Changed to string | null
   profilePictureUrl?: string | null;
-  availability?: UserAvailability; // Updated to new structure
+  availability?: UserAvailability; 
   assignedRoleIds: string[];
   assignedRoleNames?: string[]; 
   status: string;
@@ -132,7 +131,8 @@ const AdminViewUserProfilePage = () => {
       displayValue = value || 'N/A';
     }
     
-    const usePre = isPreformatted || (typeof value === 'string' && (value.includes('\n') || value.length > 60));
+    const usePre = isPreformatted || (typeof value === 'string' && (value.includes('\n') || value.length > 60 || label === "Preferences"));
+
 
     return (
       <div className="mb-4 last:mb-0">
@@ -178,7 +178,7 @@ const AdminViewUserProfilePage = () => {
   
   const displaySkills = viewedUserProfile.skills && Array.isArray(viewedUserProfile.skills) ? viewedUserProfile.skills.join(', ') : 'N/A';
   const displayQualifications = viewedUserProfile.qualifications && Array.isArray(viewedUserProfile.qualifications) ? viewedUserProfile.qualifications.join(', ') : 'N/A';
-  const userPhone = viewedUserProfile.phone || viewedUserProfile.phoneNumber; // Handle both possible field names
+  const userPhone = viewedUserProfile.phone;
 
   return (
     <div className="container mx-auto p-4 sm:p-6 max-w-3xl">
@@ -217,17 +217,9 @@ const AdminViewUserProfilePage = () => {
         {viewedUserProfile.skills && viewedUserProfile.skills.length > 0 && <ProfileField label="Skills" value={displaySkills} />}
         {viewedUserProfile.qualifications && viewedUserProfile.qualifications.length > 0 && <ProfileField label="Qualifications" value={displayQualifications} />}
         
-        {typeof viewedUserProfile.preferences === 'object' && viewedUserProfile.preferences && Object.keys(viewedUserProfile.preferences).length > 0 && (
-          <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences</label>
-            <pre className="mt-1 block w-full px-3 py-2 bg-gray-50 dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap break-words">
-              {JSON.stringify(viewedUserProfile.preferences, null, 2)}
-            </pre>
-          </div>
-        )}
-        {typeof viewedUserProfile.preferences === 'string' && viewedUserProfile.preferences && (
-           <ProfileField label="Preferences (Legacy)" value={viewedUserProfile.preferences} isPreformatted={true} />
-        )}
+        {/* Preferences Display - now as simple string */}
+        <ProfileField label="Preferences" value={viewedUserProfile.preferences} isPreformatted={true} />
+
 
         <div className="mt-4 pt-4 border-t border-gray-200 dark:border-gray-700">
           <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-3">Availability</h3>

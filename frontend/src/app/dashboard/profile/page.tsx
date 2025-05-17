@@ -7,25 +7,24 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
 import { format, parseISO, isValid, parse as parseDateFns } from 'date-fns';
 
-// --- New Availability Interfaces ---
+// --- Availability Interfaces ---
 type Weekday = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
 const weekdays: Weekday[] = ["Monday", "Tuesday", "Wednesday", "Thursday", "Friday", "Saturday", "Sunday"];
 type SlotType = 'available' | 'unavailable';
 const slotTypes: SlotType[] = ['available', 'unavailable'];
 
-
 interface GeneralAvailabilityRule {
   id?: string; 
   weekday: Weekday;
-  from_time: string; // HH:MM
-  to_time: string;   // HH:MM
+  from_time: string; 
+  to_time: string;   
 }
 
 interface SpecificDateSlot {
   id?: string; 
-  date: string; // YYYY-MM-DD
-  from_time?: string; // HH:MM
-  to_time?: string;   // HH:MM
+  date: string; 
+  from_time?: string; 
+  to_time?: string;   
   slot_type: SlotType;
 }
 
@@ -33,7 +32,7 @@ interface UserAvailability {
   general_rules: GeneralAvailabilityRule[];
   specific_slots: SpecificDateSlot[];
 }
-// --- End New Availability Interfaces ---
+// --- End Availability Interfaces ---
 
 interface UserDataFromBackend {
   uid: string;
@@ -43,7 +42,7 @@ interface UserDataFromBackend {
   phone?: string | null;
   skills?: string | string[]; 
   qualifications?: string | string[]; 
-  preferences?: Record<string, any> | string; 
+  preferences?: string | null; // Changed to string | null
   profilePictureUrl?: string | null; 
   availability?: UserAvailability; 
   assignedRoleIds?: string[];
@@ -60,15 +59,13 @@ interface EditableUserProfile {
   phone?: string;
   skills?: string; 
   qualifications?: string; 
-  preferences?: string; 
+  preferences?: string; // Already string, which is good
   profilePictureUrl?: string | null; 
   availability: UserAvailability; 
 }
 
-// Define base input classes here for consistency
 const baseInputStyles = "block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
 const disabledInputStyles = "block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed";
-
 
 const ProfilePage = () => {
   const authContext = useAuth(); 
@@ -101,12 +98,7 @@ const ProfilePage = () => {
       return fieldValue || '';
   };
   
-  const preferencesObjectToStringForTextarea = (prefs: Record<string, any> | string | undefined): string => {
-    if (typeof prefs === 'object' && prefs !== null) {
-      return JSON.stringify(prefs, null, 2); 
-    }
-    return prefs || '';
-  };
+  // No longer need preferencesObjectToStringForTextarea, as it's just a string
 
   const initializeFormData = useCallback((profileData: UserDataFromBackend) => {
     setFormData({
@@ -116,7 +108,7 @@ const ProfilePage = () => {
       phone: profileData.phone || '',
       skills: arrayFieldToString(profileData.skills),
       qualifications: arrayFieldToString(profileData.qualifications),
-      preferences: preferencesObjectToStringForTextarea(profileData.preferences),
+      preferences: profileData.preferences || '', // Directly use the string
       profilePictureUrl: profileData.profilePictureUrl || '',
       availability: { 
         general_rules: profileData.availability?.general_rules?.map(r => ({...r, id: r.id || Math.random().toString(36).substr(2, 9)})) || [],
@@ -255,34 +247,22 @@ const ProfilePage = () => {
         })),
     };
 
-    const updatePayload: Omit<EditableUserProfile, 'availability'> & { 
+    // Construct payload, preferences is now just a string
+    const updatePayload: Omit<EditableUserProfile, 'availability' | 'preferences'> & { 
       skills?: string[], 
       qualifications?: string[], 
-      preferences?: Record<string, any>,
+      preferences?: string, // Changed to string
       availability: UserAvailability 
     } = {
       firstName: formData.firstName,
       lastName: formData.lastName,
       phone: formData.phone,
+      preferences: formData.preferences || undefined, // Send as string or undefined
       availability: availabilityPayload, 
     };
     
-    if (formData.preferences) {
-      try {
-        const parsedPreferences = JSON.parse(formData.preferences);
-        if (typeof parsedPreferences === 'object' && parsedPreferences !== null) {
-          updatePayload.preferences = parsedPreferences;
-        } else {
-          setError("Preferences must be a valid JSON object.");
-          setIsLoading(false); return;
-        }
-      } catch (parseError) {
-        setError("Preferences field contains invalid JSON.");
-        setIsLoading(false); return;
-      }
-    } else {
-      updatePayload.preferences = {}; 
-    }
+    // Remove JSON parsing for preferences
+    // updatePayload.preferences is already formData.preferences (string)
 
     if (typeof formData.skills === 'string') {
       updatePayload.skills = formData.skills.split('\n').map(s => s.trim()).filter(s => s);
@@ -365,8 +345,7 @@ const ProfilePage = () => {
               <div><label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Qualifications</label><p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{arrayFieldToString(currentProfileData.qualifications) || 'N/A'}</p></div>
               <div>
                 <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">Preferences</label>
-                {typeof currentProfileData.preferences === 'object' && currentProfileData.preferences && Object.keys(currentProfileData.preferences).length > 0 ? 
-                  <pre className="mt-1 text-lg bg-gray-50 dark:bg-gray-700 p-2 rounded whitespace-pre-wrap">{JSON.stringify(currentProfileData.preferences, null, 2)}</pre> : <p className="mt-1 text-lg text-gray-800 dark:text-gray-200">N/A</p>}
+                <p className="mt-1 text-lg text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{currentProfileData.preferences || 'N/A'}</p>
               </div>
 
               <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
@@ -415,7 +394,10 @@ const ProfilePage = () => {
               <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} /></div>
               <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
               <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
-              <div><label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences (JSON)</label><textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
+              <div>
+                <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences</label>
+                <textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} placeholder="Enter any preferences as free text (e.g., communication, interests)"/>
+              </div>
               
               <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Edit Availability</h2>
