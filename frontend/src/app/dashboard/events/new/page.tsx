@@ -223,150 +223,142 @@ export default function CreateEventPage() {
   if (loading) return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
 
   return (
-    <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
-      <nav className="bg-white dark:bg-gray-900 shadow-sm mb-6">
-        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <Link href="/dashboard" className="flex-shrink-0 text-xl font-bold text-indigo-600 dark:text-indigo-400">
-                Fiji Platform
-            </Link>
-            <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-                ← Back to Events
-            </Link>
+    // Removed the outer div and local nav, as DashboardLayout provides them.
+    // The main content will be wrapped by DashboardLayout's <main> tag.
+    <> 
+      <div className="mb-6">
+        <Link href="/dashboard/events" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+            ← Back to Events
+        </Link>
+      </div>
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Create New Event</h1>
+      
+      {successMessage && (
+        <div className="mb-4 p-4 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800" role="alert">
+          {successMessage}
+        </div>
+      )}
+      {error && (
+        <div className="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
+          {error}
+        </div>
+      )}
+
+      {(!user || (userProfile && !userProfile.assignedRoleIds?.includes('sysadmin')) && !loading) && !error && (
+            <div className="mb-4 p-4 text-sm text-yellow-700 bg-yellow-100 rounded-lg dark:bg-yellow-200 dark:text-yellow-800" role="alert">
+              You might not have the necessary permissions to create an event. Please contact an administrator if you believe this is an error.
+            </div>
+      )}
+
+      <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-900 p-8 rounded-lg shadow">
+        <div>
+          <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Name</label>
+          <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+        </div>
+        <div>
+          <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
+          <input type="text" name="eventType" id="eventType" value={formData.eventType} onChange={handleChange} 
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+        </div>
+        <div>
+          <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Purpose</label>
+          <textarea name="purpose" id="purpose" value={formData.purpose} onChange={handleChange} rows={3}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
+        </div>
+        <div>
+          <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
+          <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={4}
+                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
+        </div>
+        <div>
+          <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
+          <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+        </div>
+        <div>
+          <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
+          <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime} onChange={handleChange} required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+        </div>
+        <div>
+          <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
+          <input type="text" name="location" id="location" value={formData.location} onChange={handleChange}
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+        </div>
+        <div>
+          <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
+          <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+        </div>
+
+        <div>
+          <label 
+            htmlFor="organizerSearch" 
+            className="block text-sm font-medium text-gray-700 dark:text-gray-300"
+          >
+            Event Organizer{' '}
+            {selectedOrganizerName ? (
+              <span className="text-green-600 dark:text-green-400 font-semibold">(Selected: {selectedOrganizerName})</span>
+            ) : (
+              <span className="text-gray-500 dark:text-gray-400">(Optional)</span>
+            )}
+          </label>
+          <div className="relative mt-1"> 
+            <input
+              type="text"
+              id="organizerSearch"
+              name="organizerSearch"
+              value={organizerSearchQuery}
+              onChange={handleOrganizerSearchChange}
+              placeholder="Search by name or email..."
+              className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+            />
+            {isSearchingOrganizers && (
+              <div className="absolute top-full w-full mt-1">
+                <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">Searching...</p>
+              </div>
+            )}
+            {organizerSearchResults.length > 0 && !isSearchingOrganizers && (
+              <ul className="absolute top-full z-20 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
+                {organizerSearchResults
+                  .filter(org => org && org.id)  
+                  .map(org => (
+                  <li key={org.id} 
+                      onClick={() => handleSelectOrganizer(org)}
+                      className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
+                    {org.firstName} {org.lastName} ({org.email})
+                  </li>
+                ))}
+              </ul>
+            )}
           </div>
         </div>
-      </nav>
-
-      <main className="max-w-3xl mx-auto py-6 px-4 sm:px-6 lg:px-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Create New Event</h1>
         
-        {successMessage && (
-          <div className="mb-4 p-4 text-sm text-green-700 bg-green-100 rounded-lg dark:bg-green-200 dark:text-green-800" role="alert">
-            {successMessage}
-          </div>
-        )}
-        {error && (
-          <div className="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
-            {error}
-          </div>
-        )}
+        <div>
+          <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+          <select name="status" id="status" value={formData.status} onChange={handleChange} required
+                  className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
+            <option value="draft">Draft</option>
+            <option value="open_for_signup">Open for Signup</option>
+            <option value="ongoing">Ongoing</option>
+            <option value="completed">Completed</option>
+            <option value="cancelled">Cancelled</option>
+          </select>
+        </div>
 
-        {(!user || (userProfile && !userProfile.assignedRoleIds?.includes('sysadmin')) && !loading) && !error && (
-             <div className="mb-4 p-4 text-sm text-yellow-700 bg-yellow-100 rounded-lg dark:bg-yellow-200 dark:text-yellow-800" role="alert">
-                You might not have the necessary permissions to create an event. Please contact an administrator if you believe this is an error.
-             </div>
-        )}
-
-        <form onSubmit={handleSubmit} className="space-y-6 bg-white dark:bg-gray-900 p-8 rounded-lg shadow">
-          <div>
-            <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Name</label>
-            <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
-                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Event Type</label>
-            <input type="text" name="eventType" id="eventType" value={formData.eventType} onChange={handleChange} 
-                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Purpose</label>
-            <textarea name="purpose" id="purpose" value={formData.purpose} onChange={handleChange} rows={3}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
-          </div>
-          <div>
-            <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Description</label>
-            <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={4}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
-          </div>
-          <div>
-            <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Start Date & Time</label>
-            <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
-                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300">End Date & Time</label>
-            <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime} onChange={handleChange} required
-                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Venue</label>
-            <input type="text" name="location" id="location" value={formData.location} onChange={handleChange}
-                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-          <div>
-            <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Volunteers Required</label>
-            <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
-                   className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-          </div>
-
-          <div>
-            <label 
-              htmlFor="organizerSearch" 
-              className="block text-sm font-medium text-gray-700 dark:text-gray-300"
-            >
-              Event Organizer{' '}
-              {selectedOrganizerName ? (
-                <span className="text-green-600 dark:text-green-400 font-semibold">(Selected: {selectedOrganizerName})</span>
-              ) : (
-                <span className="text-gray-500 dark:text-gray-400">(Optional)</span>
-              )}
-            </label>
-            <div className="relative mt-1"> 
-              <input
-                type="text"
-                id="organizerSearch"
-                name="organizerSearch"
-                value={organizerSearchQuery}
-                onChange={handleOrganizerSearchChange}
-                placeholder="Search by name or email..."
-                className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
-              />
-              {isSearchingOrganizers && (
-                <div className="absolute top-full w-full mt-1">
-                  <p className="px-3 py-2 text-xs text-gray-500 dark:text-gray-400 bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg">Searching...</p>
-                </div>
-              )}
-              {organizerSearchResults.length > 0 && !isSearchingOrganizers && (
-                <ul className="absolute top-full z-20 w-full bg-white dark:bg-gray-700 border border-gray-300 dark:border-gray-600 rounded-md mt-1 max-h-60 overflow-auto shadow-lg">
-                  {organizerSearchResults
-                    .filter(org => org && org.id)  
-                    .map(org => (
-                    <li key={org.id} 
-                        onClick={() => handleSelectOrganizer(org)}
-                        className="px-3 py-2 hover:bg-indigo-500 hover:text-white dark:hover:bg-indigo-600 cursor-pointer text-sm text-gray-900 dark:text-gray-200">
-                      {org.firstName} {org.lastName} ({org.email})
-                    </li>
-                  ))}
-                </ul>
-              )}
-            </div>
-          </div>
-          
-          <div>
-            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
-            <select name="status" id="status" value={formData.status} onChange={handleChange} required
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
-              <option value="draft">Draft</option>
-              <option value="open_for_signup">Open for Signup</option>
-              <option value="ongoing">Ongoing</option>
-              <option value="completed">Completed</option>
-              <option value="cancelled">Cancelled</option>
-            </select>
-          </div>
-
-          <div className="flex justify-end space-x-3">
-            <Link href="/dashboard/events">
-                <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
-                    Cancel
-                </button>
-            </Link>
-            <button type="submit" disabled={submitting || (!userProfile?.assignedRoleIds?.includes('sysadmin') && !loading)}
-                    className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
-              {submitting ? 'Submitting...' : 'Create Event'}
-            </button>
-          </div>
-        </form>
-      </main>
-    </div>
+        <div className="flex justify-end space-x-3">
+          <Link href="/dashboard/events">
+              <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500">
+                  Cancel
+              </button>
+          </Link>
+          <button type="submit" disabled={submitting || (!userProfile?.assignedRoleIds?.includes('sysadmin') && !loading)}
+                  className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50">
+            {submitting ? 'Submitting...' : 'Create Event'}
+          </button>
+        </div>
+      </form>
+    </>
   );
 }
