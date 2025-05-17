@@ -88,6 +88,12 @@
     *   If `errorData.detail` is another non-string type, it's stringified.
     *   This prevents the display of `[object Object]` when validation errors occur, showing a more user-friendly message.
 
+12. **Fixed "Extra Inputs Not Permitted" Error on Event Edit (`frontend/src/app/dashboard/events/[eventId]/edit/page.tsx`):**
+    *   Modified the `handleSubmit` function to explicitly pick only fields allowed by the backend `EventUpdate` model for the update payload.
+    *   Ensured correct mapping of frontend `formData.location` to backend `venue` in the payload.
+    *   Updated `fetchEventData` to map backend `venue` to frontend `location` when populating the form.
+    *   Expanded the `EventFormData` interface to include fields fetched for display but not sent on update, for clarity.
+
 **Next Steps (Planned for Future Sessions):**
 
 *   Refine state management for icon selection if `localStorage` proves insufficient (e.g., using a shared context or Zustand/Redux if complexity grows).
