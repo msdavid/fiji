@@ -1,6 +1,17 @@
 # Project Log - Fiji
 
-## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Table Aesthetic Enhancement -->
+## Session (YYYY-MM-DD HH:MM) <!-- Newest entry: Add User Search -->
+- **Q Agent:** Mauro
+- **Objective:** Add a search box to the admin users page for filtering.
+### Activity:
+- Modified `frontend/src/app/dashboard/admin/users/page.tsx`:
+  - Added a `searchTerm` state variable.
+  - Implemented an `<input type="text">` field for users to enter search queries.
+  - Added logic to filter the `users` array based on `searchTerm`. The search is case-insensitive and checks against the user's first name, last name, and email.
+  - Updated conditional rendering to display messages for "No users found" (initial state) and "No users found matching [searchTerm]" (after filtering).
+
+---
+## Session (YYYY-MM-DD HH:MM) <!-- Previous entry: Table Aesthetic Enhancement -->
 - **Q Agent:** Mauro
 - **Objective:** Enhance the visual aesthetics and hierarchy of the users table in the admin dashboard.
 ### Activity:

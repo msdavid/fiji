@@ -43,6 +43,7 @@ const AdminUserManagementPage = () => {
 
   const [isModalOpen, setIsModalOpen] = useState(false);
   const [selectedUserForRoles, setSelectedUserForRoles] = useState<User | null>(null);
+  const [searchTerm, setSearchTerm] = useState('');
 
   useEffect(() => {
     // Wait for auth context to finish loading
@@ -114,12 +115,20 @@ const AdminUserManagementPage = () => {
   // Determine if the current admin user can manage roles (e.g., has 'sysadmin' role)
   const canManageUserRoles = userProfile?.assignedRoleIds?.includes('sysadmin');
 
+  const filteredUsers = users.filter(user => {
+    if (!searchTerm.trim()) return true;
+    const term = searchTerm.toLowerCase().trim();
+    const fullName = `${user.firstName} ${user.lastName}`.toLowerCase();
+    return (
+      fullName.includes(term) ||
+      user.email.toLowerCase().includes(term)
+    );
+  });
 
   if (authLoading || (isLoading && users.length === 0 && !error)) {
     return <div className="flex justify-center items-center h-screen"><p className="text-lg">Loading users...</p></div>;
   }
 
-  // If there was an auth error or access is denied, show a clear message
   if (authError || !canAccessPage) {
     return (
       <div className="container mx-auto p-6 max-w-4xl text-center">
@@ -132,8 +141,7 @@ const AdminUserManagementPage = () => {
     );
   }
 
-  // If there's a page-specific error after successful auth (e.g., failed to fetch users)
-  if (error && users.length === 0) {
+  if (error && users.length === 0) { // This error is page-specific, e.g., failed to fetch users
      return (
       <div className="container mx-auto p-6 max-w-4xl text-center">
         <h1 className="text-3xl font-bold mb-6 text-gray-800 dark:text-gray-200">Users</h1>
@@ -147,26 +155,43 @@ const AdminUserManagementPage = () => {
 
   return (
     <div className="container mx-auto p-4 sm:p-6">
-      <div className="flex justify-between items-center mb-2"> {/* Reduced mb for tighter spacing with new link */}
+      <div className="flex justify-between items-center mb-2">
         <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-200">Users</h1>
       </div>
-      <div className="mb-6"> {/* New div for the link */}
+      <div className="mb-6">
         <Link href="/dashboard" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
           ← Back to Dashboard
         </Link>
       </div>
 
+      <div className="mb-4">
+        <input
+          type="text"
+          placeholder="Search by name or email..."
+          className="w-full p-2 border border-gray-300 rounded-md dark:bg-gray-800 dark:border-gray-600 dark:text-gray-200 focus:ring-indigo-500 focus:border-indigo-500"
+          value={searchTerm}
+          onChange={(e) => setSearchTerm(e.target.value)}
+        />
+      </div>
+
       {/* Display non-critical errors that occur after initial load, e.g. role update error */}
       {error && <p className="text-red-500 mb-4 bg-red-100 dark:bg-red-900 border border-red-400 dark:border-red-700 p-3 rounded">{error}</p>}
 
-      {users.length === 0 && !isLoading && ( // Check !isLoading here
+      {isLoading ? (
+        <div className="text-center py-10">
+          <p className="text-gray-600 dark:text-gray-400 text-lg">Loading users...</p>
+        </div>
+      ) : users.length === 0 ? (
         <div className="text-center py-10">
           <p className="text-gray-600 dark:text-gray-400 text-lg">No users found.</p>
-          {/* You might want a button to invite users if applicable */}
         </div>
-      )}
-
-      {users.length > 0 && (
+      ) : filteredUsers.length === 0 ? (
+        <div className="text-center py-10">
+          <p className="text-gray-600 dark:text-gray-400 text-lg">
+            No users found matching "{searchTerm}".
+          </p>
+        </div>
+      ) : (
         <div className="overflow-x-auto bg-white dark:bg-gray-700 shadow-md rounded-lg">
           <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-500">
             <thead className="bg-gray-50 dark:bg-gray-600">
@@ -179,7 +204,7 @@ const AdminUserManagementPage = () => {
               </tr>
             </thead>
             <tbody className="bg-white dark:bg-gray-700 divide-y divide-gray-200 dark:divide-gray-500">
-              {users.map((userEntry) => (
+              {filteredUsers.map((userEntry) => (
                 <tr key={userEntry.uid}>
                   <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-gray-100">{userEntry.firstName} {userEntry.lastName}</td>
                   <td className="px-4 sm:px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-300">{userEntry.email}</td>
@@ -191,7 +216,7 @@ const AdminUserManagementPage = () => {
                     <button
                       onClick={() => handleOpenModal(userEntry)}
                       className="text-indigo-600 hover:text-indigo-900 dark:text-indigo-400 dark:hover:text-indigo-200 disabled:opacity-50 disabled:cursor-not-allowed"
-                      disabled={!canManageUserRoles} // Disable if current admin cannot manage roles
+                      disabled={!canManageUserRoles}
                     >
                       Manage Roles
                     </button>
@@ -206,14 +231,12 @@ const AdminUserManagementPage = () => {
         </div>
       )}
 
-      {selectedUserForRoles && idToken && ( // Ensure idToken is passed to modal if needed by its operations
+      {selectedUserForRoles && idToken && (
         <RoleManagementModal
           user={selectedUserForRoles}
           isOpen={isModalOpen}
           onClose={handleCloseModal}
           onRolesUpdated={handleRolesUpdated}
-          // Pass idToken if RoleManagementModal makes its own API calls
-          // currentAdminIdToken={idToken}
         />
       )}
     </div>
