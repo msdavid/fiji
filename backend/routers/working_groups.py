@@ -2,6 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status
 from typing import List, Optional
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
+from pydantic import BaseModel, Field # Added BaseModel, Field import
 
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
