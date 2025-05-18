@@ -15,7 +15,8 @@ from routers import events as events_router
 from routers import working_groups as working_groups_router
 from routers import donations as donations_router
 from routers import assignments as assignments_router
-from routers import reports as reports_router # Import the new reports router
+from routers import reports as reports_router 
+from routers.auth import router as auth_router # Added import for auth_router
 
 # Load environment variables from .env file
 load_dotenv()
@@ -44,7 +45,6 @@ async def lifespan(app_instance: FastAPI):
                 else:
                     raise ValueError(f"Firebase ADC failed and GOOGLE_APPLICATION_CREDENTIALS not set. Error: {e_adc}")
         else:
-            # Ensure mypy knows project_id will be a string here if firebase_admin._apps is not empty
             current_app_project_id = firebase_admin.get_app().project_id if firebase_admin.get_app() else "Unknown"
             print(f"Firebase Admin SDK already initialized for project: {current_app_project_id}")
 
@@ -53,24 +53,20 @@ async def lifespan(app_instance: FastAPI):
 
     except ValueError as e:
         print(f"Error during Firebase/Firestore initialization (ValueError): {e}")
-        # app_instance.state.db remains None due to initialization at the start
     except Exception as e:
         print(f"An unexpected error occurred during Firebase/Firestore initialization: {e}")
-        # app_instance.state.db remains None
 
-    yield # Application runs
+    yield 
 
-    # Shutdown
     print("FastAPI application shutting down...")
     if app_instance.state.db is not None:
         print(f"Attempting to close Firestore client of type: {type(app_instance.state.db)}")
         try:
-            await app_instance.state.db.close() # Close async client
+            await app_instance.state.db.close() 
             print("Async Firestore client closed successfully.")
         except AttributeError as ae:
             print(f"Error closing Firestore client: 'close' attribute missing. Type was {type(app_instance.state.db)}. Error: {ae}")
         except TypeError as te:
-            # This might catch the specific error if `await db.close()` is effectively `await None`
             print(f"Error closing Firestore client: TypeError (possibly awaiting a non-async close method that returned None, or db object is None). Error: {te}")
             print(f"Current app_instance.state.db value: {app_instance.state.db}")
         except Exception as e:
@@ -79,7 +75,6 @@ async def lifespan(app_instance: FastAPI):
         print("Firestore client (app.state.db) was None or not initialized, skipping close.")
 
 
-# --- FastAPI Application ---
 app = FastAPI(
     title="Fiji Backend API",
     description="API for managing volunteers, events, and organizational data for Project Fiji.",
@@ -87,7 +82,6 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-# --- CORS Middleware Configuration ---
 origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3002")
 origins = [origin.strip() for origin in origins_env.split(',')]
 
@@ -100,6 +94,7 @@ app.add_middleware(
 )
 
 # Include routers
+app.include_router(auth_router) # Added auth_router
 app.include_router(roles_router.router)
 app.include_router(invitations_admin_router)
 app.include_router(invitations_public_router)
@@ -108,7 +103,7 @@ app.include_router(events_router.router)
 app.include_router(working_groups_router.router)
 app.include_router(donations_router.router)
 app.include_router(assignments_router.router)
-app.include_router(reports_router.router) # Add the reports router
+app.include_router(reports_router.router) 
 
 
 @app.get("/")

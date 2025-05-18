@@ -2,26 +2,25 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { createUserWithEmailAndPassword } from 'firebase/auth'; // Will be removed if backend handles Firebase Auth creation
-import { auth } from '@/lib/firebaseConfig'; // Will be removed if backend handles Firebase Auth creation
+// createUserWithEmailAndPassword and auth will be removed as backend handles Firebase Auth creation
+// import { createUserWithEmailAndPassword } from 'firebase/auth';
+// import { auth } from '@/lib/firebaseConfig'; 
 import { apiClient } from '@/lib/apiClient'; 
 import Link from 'next/link';
 
 interface TokenValidationResponse {
-  isValid: boolean; // Matches backend InvitationValidateResponse
-  message: string;  // Matches backend InvitationValidateResponse
+  isValid: boolean; 
+  message: string;  
   email?: string;
   assignedRoleIds?: string[]; 
 }
 
-// Payload for the new registration endpoint
 interface RegistrationPayload {
     email: string;
-    password?: string; // Password will be sent to backend
+    password?: string; 
     firstName: string;
     lastName: string;
-    invitationToken: string; // Send the token for backend re-validation and processing
-    // assignedRoleIds are known by backend via token, no need to resend from client usually
+    invitationToken: string; 
 }
 
 
@@ -80,25 +79,30 @@ function RegistrationFormComponent() {
 
     const validateToken = async () => {
       try {
-        const response = await apiClient.get<TokenValidationResponse>(`/invitations/validate?token=${initialToken}`);
+        const responseData = await apiClient<TokenValidationResponse>({ // Corrected usage
+          path: `/invitations/validate?token=${initialToken}`,
+          method: 'GET', 
+        });
         
-        if (response.data.isValid) {
+        if (responseData.isValid) { // Use responseData directly
           setTokenStatus('valid');
-          if (response.data.email) {
-            setEmail(response.data.email); 
+          if (responseData.email) {
+            setEmail(responseData.email); 
           }
-          if (response.data.assignedRoleIds) {
-            setPreassignedRoleIds(response.data.assignedRoleIds);
+          if (responseData.assignedRoleIds) {
+            setPreassignedRoleIds(responseData.assignedRoleIds);
           }
-          setTokenValidationMessage(response.data.message || 'Token is valid. Please complete your registration.');
+          setTokenValidationMessage(responseData.message || 'Token is valid. Please complete your registration.');
         } else {
           setTokenStatus('invalid');
-          setTokenValidationMessage(response.data.message || 'This invitation token is not valid or has expired.');
+          setTokenValidationMessage(responseData.message || 'This invitation token is not valid or has expired.');
         }
       } catch (err: any) {
         setTokenStatus('invalid');
-        if (err.response && err.response.data && err.response.data.detail) {
-          setTokenValidationMessage(`Error validating token: ${err.response.data.detail}`);
+        // apiClient now throws an error object that might have 'data' or 'message'
+        const detail = err.data?.detail || err.message;
+        if (detail) {
+          setTokenValidationMessage(`Error validating token: ${detail}`);
         } else {
           setTokenValidationMessage('Error validating token. Please try again or contact support.');
         }
@@ -143,26 +147,21 @@ function RegistrationFormComponent() {
     };
 
     try {
-      // The backend /auth/register-with-invitation will handle:
-      // 1. Re-validating the token.
-      // 2. Creating the user in Firebase Auth.
-      // 3. Creating the user profile in Firestore (with preassignedRoleIds from token).
-      // 4. Updating the invitation status.
-      // It should return user info or a success message.
-      // For simplicity, let's assume it returns some user data or just success.
-      await apiClient.post(`/auth/register-with-invitation`, registrationPayload);
+      await apiClient({ // Corrected usage
+        path: `/auth/register-with-invitation`, 
+        method: 'POST',
+        data: registrationPayload 
+      });
 
       setSuccessMessage('Registration successful! You can now log in.');
-      // Clear form or redirect
       setTimeout(() => {
         router.push('/login');
       }, 3000);
 
     } catch (err: any) {
-      if (err.response && err.response.data && err.response.data.detail) {
-         setError(`Registration failed: ${err.response.data.detail}`);
-      } else if (err.message) {
-         setError(`Registration failed: ${err.message}`);
+      const detail = err.data?.detail || err.message;
+      if (detail) {
+         setError(`Registration failed: ${detail}`);
       } else {
         setError('Registration failed. An unexpected error occurred.');
       }
@@ -204,7 +203,7 @@ function RegistrationFormComponent() {
         {showForm && (
           <form className="bg-white dark:bg-gray-800 py-8 px-4 shadow sm:rounded-lg sm:px-10 space-y-6" onSubmit={handleRegister}>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              {tokenValidationMessage} {/* Shows "Token is valid..." message */}
+              {tokenValidationMessage} 
             </p>
             <div>
               <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name <span className="text-red-500">*</span></label>
@@ -218,7 +217,7 @@ function RegistrationFormComponent() {
             </div>
             <div>
               <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email address</label>
-              <input id="email" name="email" type="email" autoComplete="email" required value={email} readOnly  // Email is pre-filled and read-only
+              <input id="email" name="email" type="email" autoComplete="email" required value={email} readOnly  
                 className="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-gray-100 dark:bg-gray-700/50 cursor-not-allowed focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" placeholder="Email address" />
             </div>
             <div>
@@ -252,7 +251,7 @@ function RegistrationFormComponent() {
             </div>
           </form>
         )}
-        {tokenStatus !== 'loading' && tokenStatus !== 'valid' && ( // Show login link if token is invalid/not_found and not loading
+        {tokenStatus !== 'loading' && tokenStatus !== 'valid' && ( 
           <p className="mt-4 text-center text-sm text-gray-600 dark:text-gray-400">
             Or{' '}
             <Link href="/login" className="font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
