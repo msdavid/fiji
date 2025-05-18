@@ -6,7 +6,8 @@ import { NextPage } from 'next';
 import Head from 'next/head';
 import VolunteerActivitySection from '@/components/reports/VolunteerActivitySection';
 import EventPerformanceSection from '@/components/reports/EventPerformanceSection';
-import DonationInsightsSection from '@/components/reports/DonationInsightsSection'; // Import the new component
+import DonationInsightsSection from '@/components/reports/DonationInsightsSection';
+import UsersReportSection from '@/components/reports/UsersReportSection'; // Import the new component
 
 // --- Data Interfaces ---
 interface AdminSummaryStats {
@@ -49,7 +50,7 @@ interface DonationTypeSummary {
 interface MonetaryDonationTrendEntry {
   period: string;
   totalAmount: number;
-  count: number; // Corrected from int to number for TypeScript
+  count: number; 
 }
 
 interface ReportDonationEntry {
@@ -69,6 +70,21 @@ interface DonationInsightsReport {
   totalDonationsCountOverall: number;
 }
 
+// New Interfaces for Users Report
+interface UserReportEntry {
+  id: string;
+  displayName?: string | null;
+  email?: string | null;
+  assignedRoleNames: string[];
+  status?: string | null;
+  createdAt?: string | null; // Dates from backend are often ISO strings
+}
+
+interface UsersReport {
+  data: UserReportEntry[];
+  totalUsers: number;
+}
+
 
 const ReportsPage: NextPage = () => {
   const { idToken, hasPrivilege, loading: authLoading } = useAuth();
@@ -77,11 +93,13 @@ const ReportsPage: NextPage = () => {
   const [volunteerActivityReport, setVolunteerActivityReport] = useState<VolunteerActivityReport | null>(null);
   const [eventPerformanceReport, setEventPerformanceReport] = useState<EventPerformanceReport | null>(null);
   const [donationInsightsReport, setDonationInsightsReport] = useState<DonationInsightsReport | null>(null);
+  const [usersReport, setUsersReport] = useState<UsersReport | null>(null); // State for users report
 
   const [loadingSummary, setLoadingSummary] = useState<boolean>(true);
   const [loadingVolunteerActivity, setLoadingVolunteerActivity] = useState<boolean>(true);
   const [loadingEventPerformance, setLoadingEventPerformance] = useState<boolean>(true);
   const [loadingDonationInsights, setLoadingDonationInsights] = useState<boolean>(true);
+  const [loadingUsersReport, setLoadingUsersReport] = useState<boolean>(true); // Loading state for users report
   
   const [currentError, setCurrentError] = useState<string | null>(null);
 
@@ -90,18 +108,28 @@ const ReportsPage: NextPage = () => {
 
   useEffect(() => {
     setCurrentError(null);
-    if (!idToken || !canViewReports) {
-      if (!authLoading && !canViewReports) {
-        setCurrentError("You do not have permission to view these reports.");
+    const allLoadersFalse = () => {
         setLoadingSummary(false);
         setLoadingVolunteerActivity(false);
         setLoadingEventPerformance(false);
         setLoadingDonationInsights(false);
-      } else if (authLoading) {
+        setLoadingUsersReport(false);
+    };
+
+    const allLoadersTrue = () => {
         setLoadingSummary(true);
         setLoadingVolunteerActivity(true);
         setLoadingEventPerformance(true);
         setLoadingDonationInsights(true);
+        setLoadingUsersReport(true);
+    };
+
+    if (!idToken || !canViewReports) {
+      if (!authLoading && !canViewReports) {
+        setCurrentError("You do not have permission to view these reports.");
+        allLoadersFalse();
+      } else if (authLoading) {
+        allLoadersTrue();
       }
       return;
     }
@@ -130,17 +158,15 @@ const ReportsPage: NextPage = () => {
         fetchApiData("/api/reports/volunteer-activity?period=all_time", setVolunteerActivityReport, setLoadingVolunteerActivity, "Volunteer Activity");
         fetchApiData("/api/reports/event-performance?date_range=all", setEventPerformanceReport, setLoadingEventPerformance, "Event Performance");
         fetchApiData("/api/reports/donation-insights?period=all_time", setDonationInsightsReport, setLoadingDonationInsights, "Donation Insights");
+        fetchApiData("/api/reports/users-list", setUsersReport, setLoadingUsersReport, "Users List"); // Fetch users list
     } else if (!authLoading) {
         setCurrentError("You do not have permission to view these reports.");
-        setLoadingSummary(false);
-        setLoadingVolunteerActivity(false);
-        setLoadingEventPerformance(false);
-        setLoadingDonationInsights(false);
+        allLoadersFalse();
     }
 
   }, [idToken, backendUrl, canViewReports, authLoading]);
 
-  const overallLoading = authLoading || loadingSummary || loadingVolunteerActivity || loadingEventPerformance || loadingDonationInsights;
+  const overallLoading = authLoading || loadingSummary || loadingVolunteerActivity || loadingEventPerformance || loadingDonationInsights || loadingUsersReport;
 
   if (overallLoading && !currentError && !(!canViewReports && !authLoading) ) {
     return (
@@ -184,7 +210,7 @@ const ReportsPage: NextPage = () => {
       <Head>
         <title>Reports Dashboard - Fiji</title>
       </Head>
-      <main className="max-w-6xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> {/* Increased max-width for more content */}
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
           Reports Dashboard
         </h1>
@@ -195,7 +221,7 @@ const ReportsPage: NextPage = () => {
             Overall Summary
           </h2>
           {(loadingSummary || loadingDonationInsights) && !(summaryStats && donationInsightsReport) && <p className="text-gray-600 dark:text-gray-400">Loading summary...</p>}
-          {(summaryStats || donationInsightsReport) && ( // Check if either is available to render the grid
+          {(summaryStats || donationInsightsReport) && ( 
             <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
               {summaryStats && (
                 <>
@@ -240,6 +266,17 @@ const ReportsPage: NextPage = () => {
           )}
         </section>
 
+        {/* Users Report Section */}
+        <section className="mb-12 p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl">
+          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
+            Users Overview
+          </h2>
+          <UsersReportSection 
+            report={usersReport} 
+            isLoading={loadingUsersReport}
+          />
+        </section>
+
         {/* Volunteer Activity Section */}
         <section className="mb-12 p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl">
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
@@ -263,7 +300,7 @@ const ReportsPage: NextPage = () => {
         </section>
 
         {/* Donation Insights Section */}
-        <section className="p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl">
+        <section className="p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl"> {/* Removed mb-12 for last section */}
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
             Donation Insights
           </h2>

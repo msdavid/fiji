@@ -1,88 +1,43 @@
-# Project Fiji - Project Log
+# Project Log - Fiji
 
-## Session 1 (YYYY-MM-DD)
-- Initialized project.
-- Created .Q/projectlog.md
+## Session (YYYY-MM-DD HH:MM)
+**Goal**: Debug runtime error in `DonationInsightsSection.tsx`.
 
-## Sprint 0: Project Setup & Core Backend Foundations
-*   Established monorepo, basic FastAPI app, Dockerization, initial CI/CD for backend.
-*   Core data models for users and roles created.
-*   Firebase Authentication setup and initial user invitation/creation logic implemented.
-*   Testing framework for backend established.
-*   Key files created: `backend/main.py`, `backend/Dockerfile`, `cloudbuild.yaml`, `backend/models/user.py`, `backend/models/role.py`, `backend/routers/users.py`, `backend/routers/roles.py`, `backend/dependencies/auth.py`, `backend/tests/test_main.py`.
+**Summary**:
+A runtime error "Error: dateString is undefined" was reported in `frontend/src/components/reports/DonationInsightsSection.tsx` at line 120, where `parseISO(dateValue)` was called. This indicated `dateValue` (obtained from `info.getValue()`) was undefined.
 
-## Sprint 1: Core Frontend Setup & User Authentication Flow
-*   Established frontend project structure, basic Next.js app, Dockerization, and initial CI/CD for frontend.
-*   Implemented Firebase SDK, login, registration, and basic dashboard layout.
-*   Connected frontend authentication to backend.
-*   Key files created: `frontend/src/app/login/page.tsx`, `frontend/src/app/register/page.tsx`, `frontend/src/app/dashboard/page.tsx`, `frontend/src/context/AuthContext.tsx`, `frontend/Dockerfile`.
+**Activities**:
+1.  **File Path Correction**: Initially attempted to read `src/components/reports/DonationInsightsSection.tsx`, which failed. Corrected path to `frontend/src/components/reports/DonationInsightsSection.tsx`.
+2.  **Code Analysis**: Reviewed the provided code for `DonationInsightsSection.tsx`. The error occurred in the `cell` renderer for the `dateReceived` column definition.
+3.  **Bug Fix**: Modified the `cell` renderer for `dateReceived` to:
+    *   Get `dateValue` from `info.getValue()`.
+    *   Check if `dateValue` is a string and not empty before attempting `parseISO`.
+    *   If `dateValue` is invalid or not a string, display 'N/A'.
+    *   This prevents `parseISO` from being called with an undefined value.
+4.  **File Update**: Wrote the corrected code back to `frontend/src/components/reports/DonationInsightsSection.tsx`.
+5.  **Commit**: Staged all changes and committed them.
+    *   **Commit ID**: `984f9d8`
+    *   **Commit Message Used**: "Fix: Handle undefined dateValue in DonationInsightsSection. The 'dateReceived' field in ReportDonationEntry could sometimes be undefined, leading to a runtime error when parseISO was called with an undefined value. This commit modifies the cell renderer for the 'dateReceived' column in frontend/src/components/reports/DonationInsightsSection.tsx. It now checks if dateValue is a valid string before attempting to parse it. If dateValue is not a string or is empty, it defaults to displaying 'N/A', preventing the error and improving robustness."
+    *   **Actual Changes in Commit**:
+        *   **Backend (`backend/routers/reports.py`, `backend/uv.lock`)**:
+            *   Major refactoring of reporting endpoints, now prefixed with `/api/reports`.
+            *   New endpoints: `/admin-summary`, `/volunteer-activity`, `/event-performance`, `/donation-insights`.
+            *   New Pydantic models for structured report responses.
+            *   Updated permissions for report endpoints (requiring 'admin' role, 'view_summary' privilege).
+            *   Enhanced data fetching, filtering (by period/date range), and error handling for reports.
+            *   Updated `cryptography` (44.0.3 -> 45.0.2) and `pluggy` (1.5.0 -> 1.6.0).
+        *   **Frontend (`frontend/package.json`, `frontend/package-lock.json`, new files)**:
+            *   Added new dependencies: `@tanstack/react-table`, `chart.js`, `react-chartjs-2`.
+            *   Created new main reports page: `frontend/src/app/dashboard/reports/page.tsx`. This page fetches data from the new backend report endpoints and displays summary cards and sections for different reports.
+            *   Created new report section components:
+                *   `frontend/src/components/reports/DonationInsightsSection.tsx`: Displays donation breakdown (pie chart), monetary trends (line chart), and recent donations (table with CSV export). Includes the bug fix for `dateReceived`.
+                *   `frontend/src/components/reports/EventPerformanceSection.tsx`: Displays event participation (bar chart) and detailed table (with CSV export).
+                *   `frontend/src/components/reports/VolunteerActivitySection.tsx`: Displays top volunteers (bar chart) and activity details (table with CSV export).
+            *   Implemented loading states, error handling, and permission checks on the reports page.
+    *   **Note on Commit Message**: The commit message accurately described the specific bug fix but did not encompass the full scope of the extensive feature additions (new reporting dashboard and backend infrastructure) included in the same commit.
 
-## Sprint 2: User Profile Management & RBAC Implementation
-*   Implemented user profile viewing/editing on frontend.
-*   Enhanced backend RBAC with `require_privilege` dependency.
-*   Secured backend endpoints using RBAC.
-*   Key files modified/created: `backend/dependencies/rbac.py`, `backend/routers/users.py` (profile endpoints), `frontend/src/app/dashboard/profile/page.tsx`.
+**Next Steps**:
+- Monitor application for any further issues related to date handling or the new reporting features.
+- Consider amending the commit message of `984f9d8` if a more descriptive history is desired, or ensure future large commits have comprehensive messages.
 
-## Sprint 3: Event Management - Core CRUD & Basic Listing
-*   Implemented core CRUD for events in backend.
-*   Developed basic frontend pages for listing events and viewing event details.
-*   Key files created: `backend/models/event.py`, `backend/routers/events.py`, `frontend/src/app/dashboard/events/page.tsx`, `frontend/src/app/dashboard/events/[eventId]/page.tsx`.
-
-## Sprint 4: Event Participation - Signup & Assignment
-*   Enabled users to sign up for events from the frontend.
-*   Allowed authorized users to assign/unassign volunteers to events via backend APIs.
-*   Created `assignments` collection in Firestore.
-*   Key files created/modified: `backend/models/assignment.py`, backend router updates for assignments, frontend UI changes for event signup.
-
-## Sprint 5: Working Group Management - Core CRUD
-*   Implemented core CRUD operations for working groups in the backend.
-*   Developed basic frontend admin pages for managing working groups.
-*   Key files created: `backend/models/working_group.py`, `backend/routers/working_groups.py`, `frontend/src/app/dashboard/admin/working-groups/page.tsx` and related dynamic route pages.
-
-## Sprint 6: Working Group Participation & Availability
-*   Implemented backend APIs for managing working group members and user availability.
-*   Enhanced frontend user profile to manage availability and display working group memberships.
-*   Key files: `backend/models/assignment.py`, `backend/routers/assignments.py`, `backend/main.py`, `frontend/src/app/dashboard/profile/page.tsx`.
-
-## Sprint 7: Donation Tracking & Basic Reporting APIs
-*   Implemented backend CRUD for donations and initial API endpoints for volunteer hours and event participation reports.
-*   Key files: `backend/models/donation.py`, `backend/routers/donations.py`, `backend/models/report.py`, `backend/routers/reports.py`, `backend/main.py`.
-
-## Sprint 8: Dashboard Enhancements & CI/CD Finalization
-*   **Goal:** Refine the user dashboard with personalized information. Finalize CI/CD pipelines.
-*   **Current Focus: Dashboard Enhancements & Auth Refinements**
-    *   **Backend Updates & Fixes:**
-        *   Added `assignableStartDate` to `AssignmentResponse` model (`backend/models/assignment.py`).
-        *   Updated `/assignments` router to populate `assignableStartDate` for events.
-        *   Corrected RBAC method calls in `assignments.py` from `has_privilege` to `has_permission`.
-        *   Corrected `FieldPath` imports in `events.py` and `reports.py`.
-        *   Enhanced `delete_event` endpoint in `events.py` to also delete associated assignments.
-        *   Created `backend/utils/cleanup_orphan_assignments.py` script.
-        *   Updated `backend/README.md` for the cleanup script.
-        *   Updated `UserResponse` model (`backend/models/user.py`) to include `privileges: Dict[str, List[str]]` and `isSysadmin: bool`.
-        *   Updated user router endpoints (`/users/me`, `/users/{user_id}`) in `backend/routers/users.py` to populate these new fields in `UserResponse`.
-        *   Updated `/reports/volunteer-hours/summary` endpoint in `backend/routers/reports.py` to accept an optional `userId` filter.
-    *   **Frontend Dashboard & Auth (`frontend/src/app/dashboard/page.tsx`, `frontend/src/context/AuthContext.tsx`, `frontend/src/components/dashboard/DashboardNav.tsx`):**
-        *   Enhanced `DashboardPage` with personalized greeting, roles, upcoming events (with date filtering using `assignableStartDate`), active working groups, a "Quick Links" section, and a "My Contributions" card displaying total volunteer hours.
-        *   Updated `DashboardNav` with new conditional links (Reports, Invitations, Roles), improved active link styling using `usePathname`, and basic mobile navigation structure.
-        *   Corrected query parameter `userId` to `user_id` in `/assignments` API calls from `DashboardPage` to fix authorization error for normal users.
-        *   Updated `AuthContext`'s `UserProfile` interface to include `privileges` and `isSysadmin`.
-        *   Enhanced `hasPrivilege` function in `AuthContext` to use the detailed `userProfile.privileges` map and `isSysadmin` flag for accurate, granular permission checking.
-*   **Files Modified/Created in Sprint 8 (so far):**
-    *   `backend/models/assignment.py`
-    *   `backend/models/user.py`
-    *   `backend/routers/assignments.py`
-    *   `backend/routers/events.py`
-    *   `backend/routers/reports.py`
-    *   `backend/routers/users.py`
-    *   `backend/utils/cleanup_orphan_assignments.py` (new file)
-    *   `backend/README.md`
-    *   `frontend/src/app/dashboard/page.tsx`
-    *   `frontend/src/components/dashboard/DashboardNav.tsx`
-    *   `frontend/src/context/AuthContext.tsx`
-    *   `.Q/projectlog.md`
-*   **Next Steps for Dashboard Enhancements:**
-    *   Consider adding more stats or refining Quick Links based on the now more accurate `hasPrivilege`.
-*   **Next Steps for CI/CD Finalization:**
-    *   Update `cloudbuild.yaml`.
-*   **Status:** In progress. Dashboard enhancements significantly advanced. Auth system's privilege checking improved.
+---

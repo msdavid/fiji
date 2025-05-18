@@ -4,6 +4,7 @@ from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import datetime
 from collections import defaultdict
+import asyncio # Added for asyncio.gather
 
 # Corrected imports
 from dependencies.database import get_db
@@ -59,6 +60,20 @@ class DonationInsightsReport(BaseModel):
     recentDonations: List[DonationResponse] # Changed type hint from Donation to DonationResponse
     totalMonetaryAmountOverall: float
     totalDonationsCountOverall: int
+
+# New Models for Users Report
+class UserReportEntry(BaseModel):
+    id: str
+    displayName: Optional[str] = None
+    email: Optional[str] = None
+    assignedRoleNames: List[str] = []
+    status: Optional[str] = None # e.g., active, inactive
+    createdAt: Optional[datetime.datetime] = None
+
+class UsersReport(BaseModel):
+    data: List[UserReportEntry]
+    totalUsers: int
+
 
 @router.get(
     "/admin-summary", 
@@ -218,28 +233,18 @@ async def get_donation_insights_report(
             donation_data = donation_doc.to_dict()
             donation_data["id"] = donation_doc.id 
             
-            # Ensure required fields for DonationResponse are present or defaulted if possible
-            # The DonationResponse model expects recordedByUserId, createdAt, updatedAt
-            # These might not be directly on the donation_data if it's from an older schema
-            # or if they are added by another process. For reporting, we might need to adjust.
-            # For now, we assume the data largely conforms or Pydantic will raise errors.
-            # A robust solution might involve a separate Pydantic model for report output if schema differs.
-
-            # Minimal defaults for fields expected by DonationResponse but possibly missing in raw doc
             donation_data.setdefault("recordedByUserId", "unknown")
             donation_data.setdefault("recordedByUserFirstName", None)
             donation_data.setdefault("recordedByUserLastName", None)
-            donation_data.setdefault("createdAt", now) # Approximate if missing
-            donation_data.setdefault("updatedAt", now) # Approximate if missing
+            donation_data.setdefault("createdAt", now) 
+            donation_data.setdefault("updatedAt", now) 
             
-            # Ensure donationDate is a string as expected by DonationBase/Response
             if isinstance(donation_data.get("donationDate"), datetime.date):
                  donation_data["donationDate"] = donation_data["donationDate"].isoformat()
             elif not isinstance(donation_data.get("donationDate"), str):
-                 donation_data["donationDate"] = now.strftime("%Y-%m-%d") # Fallback if not date or string
+                 donation_data["donationDate"] = now.strftime("%Y-%m-%d") 
 
             try:
-                # Validate against DonationResponse
                 donation_model = DonationResponse(**donation_data)
                 if len(recent_donations_list) < 50: 
                     recent_donations_list.append(donation_model)
@@ -247,16 +252,14 @@ async def get_donation_insights_report(
                 print(f"Skipping donation due to validation error for DonationResponse: {val_err}, data: {donation_data}")
                 continue
 
-            # Use donation_model for further processing as it's validated
-            donation_type = donation_model.donationType # donationType is already a string literal
+            donation_type = donation_model.donationType 
             type_summary[donation_type]["count"] += 1
 
-            if donation_type == "monetary" and donation_model.amount is not None: # Use 'monetary' (lowercase) as per Literal
+            if donation_type == "monetary" and donation_model.amount is not None: 
                 amount = donation_model.amount
                 type_summary[donation_type]["totalAmount"] += amount
                 total_monetary_overall += amount
                 
-                # For monthly trend, parse donationDate string to datetime object
                 try:
                     donation_datetime_obj = datetime.datetime.strptime(donation_model.donationDate, "%Y-%m-%d")
                     month_year_key = donation_datetime_obj.strftime("%Y-%m")
@@ -277,7 +280,84 @@ async def get_donation_insights_report(
             totalDonationsCountOverall=total_donations_count
         )
     except Exception as e:
-        # Log the full traceback for unexpected errors
         import traceback
         print(f"Unexpected error in get_donation_insights_report: {traceback.format_exc()}")
         raise HTTPException(status_code=500, detail=f"An error occurred: {str(e)}")
+
+@router.get(
+    "/users-list",
+    response_model=UsersReport,
+    dependencies=[Depends(require_permission("admin", "view_summary"))]
+)
+async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
+    try:
+        users_data = []
+        all_role_ids = set()
+        
+        # First pass: Get all users and their role IDs
+        user_docs_with_roles = []
+        users_snapshot = db.collection("users").order_by("createdAt", direction=firestore.Query.DESCENDING).stream()
+        async for user_doc in users_snapshot:
+            user_info = user_doc.to_dict()
+            user_info["id"] = user_doc.id # Ensure 'id' is present, as 'uid' might be the doc id
+            assigned_role_ids = user_info.get("assignedRoleIds", [])
+            if assigned_role_ids: # Only collect role IDs if they exist
+                all_role_ids.update(assigned_role_ids)
+            user_docs_with_roles.append((user_info, assigned_role_ids))
+
+        # Fetch all unique role names in batches if necessary
+        role_names_map: Dict[str, str] = {}
+        if all_role_ids:
+            # Firestore 'in' query limit is 30
+            role_ids_list = list(all_role_ids)
+            chunk_size = 30
+            role_fetch_tasks = []
+
+            for i in range(0, len(role_ids_list), chunk_size):
+                batch_role_ids = role_ids_list[i:i + chunk_size]
+                if not batch_role_ids:
+                    continue
+                
+                async def fetch_batch_roles(ids_batch):
+                    roles_query_snapshot = await db.collection("roles").where(firestore.FieldPath.document_id(), "in", ids_batch).get()
+                    batch_role_names = {}
+                    for role_doc_snap in roles_query_snapshot:
+                        role_data = role_doc_snap.to_dict()
+                        batch_role_names[role_doc_snap.id] = role_data.get("name", "Unknown Role")
+                    return batch_role_names
+
+                role_fetch_tasks.append(fetch_batch_roles(batch_role_ids))
+            
+            results = await asyncio.gather(*role_fetch_tasks)
+            for batch_result in results:
+                role_names_map.update(batch_result)
+
+        # Second pass: Construct UserReportEntry objects
+        for user_info, assigned_role_ids in user_docs_with_roles:
+            role_names = [role_names_map.get(role_id, "Unknown Role") for role_id in assigned_role_ids if role_id in role_names_map]
+            
+            # Handle createdAt conversion if it's a string
+            created_at_val = user_info.get("createdAt")
+            if isinstance(created_at_val, str):
+                try:
+                    created_at_val = datetime.datetime.fromisoformat(created_at_val.replace("Z", "+00:00"))
+                except ValueError:
+                    created_at_val = None # Or some default
+            elif not isinstance(created_at_val, datetime.datetime):
+                 created_at_val = None
+
+
+            users_data.append(UserReportEntry(
+                id=user_info.get("uid", user_info["id"]), # Prefer 'uid' if present, else 'id'
+                displayName=user_info.get("displayName"),
+                email=user_info.get("email"),
+                assignedRoleNames=role_names,
+                status=user_info.get("status", "active"), # Default to active if not present
+                createdAt=created_at_val
+            ))
+
+        return UsersReport(data=users_data, totalUsers=len(users_data))
+    except Exception as e:
+        import traceback
+        print(f"Unexpected error in get_users_list_report: {traceback.format_exc()}")
+        raise HTTPException(status_code=500, detail=f"An error occurred while fetching users list: {str(e)}")
