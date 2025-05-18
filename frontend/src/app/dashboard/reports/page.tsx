@@ -7,7 +7,7 @@ import Head from 'next/head';
 import VolunteerActivitySection from '@/components/reports/VolunteerActivitySection';
 import EventPerformanceSection from '@/components/reports/EventPerformanceSection';
 import DonationInsightsSection from '@/components/reports/DonationInsightsSection';
-import UsersReportSection from '@/components/reports/UsersReportSection'; // Import the new component
+import UsersReportSection from '@/components/reports/UsersReportSection'; 
 
 // --- Data Interfaces ---
 interface AdminSummaryStats {
@@ -70,14 +70,16 @@ interface DonationInsightsReport {
   totalDonationsCountOverall: number;
 }
 
-// New Interfaces for Users Report
+// Updated Interface for Users Report
 interface UserReportEntry {
   id: string;
-  displayName?: string | null;
+  firstName?: string | null; // Added
+  lastName?: string | null;  // Added
+  displayName?: string | null; // Kept for flexibility
   email?: string | null;
   assignedRoleNames: string[];
   status?: string | null;
-  createdAt?: string | null; // Dates from backend are often ISO strings
+  createdAt?: string | null; 
 }
 
 interface UsersReport {
@@ -93,13 +95,13 @@ const ReportsPage: NextPage = () => {
   const [volunteerActivityReport, setVolunteerActivityReport] = useState<VolunteerActivityReport | null>(null);
   const [eventPerformanceReport, setEventPerformanceReport] = useState<EventPerformanceReport | null>(null);
   const [donationInsightsReport, setDonationInsightsReport] = useState<DonationInsightsReport | null>(null);
-  const [usersReport, setUsersReport] = useState<UsersReport | null>(null); // State for users report
+  const [usersReport, setUsersReport] = useState<UsersReport | null>(null); 
 
   const [loadingSummary, setLoadingSummary] = useState<boolean>(true);
   const [loadingVolunteerActivity, setLoadingVolunteerActivity] = useState<boolean>(true);
   const [loadingEventPerformance, setLoadingEventPerformance] = useState<boolean>(true);
   const [loadingDonationInsights, setLoadingDonationInsights] = useState<boolean>(true);
-  const [loadingUsersReport, setLoadingUsersReport] = useState<boolean>(true); // Loading state for users report
+  const [loadingUsersReport, setLoadingUsersReport] = useState<boolean>(true); 
   
   const [currentError, setCurrentError] = useState<string | null>(null);
 
@@ -158,7 +160,7 @@ const ReportsPage: NextPage = () => {
         fetchApiData("/api/reports/volunteer-activity?period=all_time", setVolunteerActivityReport, setLoadingVolunteerActivity, "Volunteer Activity");
         fetchApiData("/api/reports/event-performance?date_range=all", setEventPerformanceReport, setLoadingEventPerformance, "Event Performance");
         fetchApiData("/api/reports/donation-insights?period=all_time", setDonationInsightsReport, setLoadingDonationInsights, "Donation Insights");
-        fetchApiData("/api/reports/users-list", setUsersReport, setLoadingUsersReport, "Users List"); // Fetch users list
+        fetchApiData("/api/reports/users-list", setUsersReport, setLoadingUsersReport, "Users List"); 
     } else if (!authLoading) {
         setCurrentError("You do not have permission to view these reports.");
         allLoadersFalse();
@@ -210,7 +212,7 @@ const ReportsPage: NextPage = () => {
       <Head>
         <title>Reports Dashboard - Fiji</title>
       </Head>
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> {/* Increased max-width for more content */}
+      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
           Reports Dashboard
         </h1>
@@ -300,7 +302,7 @@ const ReportsPage: NextPage = () => {
         </section>
 
         {/* Donation Insights Section */}
-        <section className="p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl"> {/* Removed mb-12 for last section */}
+        <section className="p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl"> 
           <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
             Donation Insights
           </h2>

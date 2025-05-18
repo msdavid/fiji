@@ -17,10 +17,12 @@ import {
 } from '@tanstack/react-table';
 import { format, parseISO, isValid } from 'date-fns';
 
-// Interfaces (matching those in page.tsx)
+// Updated Interface to include firstName and lastName
 interface UserReportEntry {
   id: string;
-  displayName?: string | null;
+  firstName?: string | null;
+  lastName?: string | null;
+  displayName?: string | null; 
   email?: string | null;
   assignedRoleNames: string[];
   status?: string | null;
@@ -38,7 +40,6 @@ interface UsersReportSectionProps {
   error?: string | null; 
 }
 
-// Generic filter component for column headers
 function ColumnFilter({ column, table }: { column: Column<any, any>; table: Table<any> }) {
   const columnFilterValue = column.getFilterValue();
 
@@ -54,7 +55,6 @@ function ColumnFilter({ column, table }: { column: Column<any, any>; table: Tabl
   );
 }
 
-
 const fuzzyFilter: FilterFn<any> = (row: Row<any>, columnId: string, value: any, addMeta: (meta: any) => void) => {
   const item = row.getValue(columnId);
   if (typeof item === 'string' || typeof item === 'number') {
@@ -63,8 +63,23 @@ const fuzzyFilter: FilterFn<any> = (row: Row<any>, columnId: string, value: any,
   if (Array.isArray(item)) {
     return item.some(subItem => String(subItem).toLowerCase().includes(String(value).toLowerCase()));
   }
+  // For custom cells like 'fullName', the value might be an object if accessorFn is used,
+  // or it might be the pre-formatted string if cell rendering does the formatting.
+  // If it's an object from accessorFn, you might need to access specific fields.
+  // For now, this handles strings, numbers, and arrays of strings/numbers.
   return false;
 };
+
+// Custom filter function for full name
+const fullNameFilterFn: FilterFn<UserReportEntry> = (row, columnId, filterValue) => {
+    const { firstName, lastName, displayName } = row.original;
+    const fn = firstName || '';
+    const ln = lastName || '';
+    const dn = displayName || '';
+    const combined = `${fn} ${ln} ${dn}`.toLowerCase();
+    return combined.includes(String(filterValue).toLowerCase());
+};
+
 
 const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoading, error }) => {
   const [sorting, setSorting] = useState<SortingState>([]);
@@ -74,16 +89,22 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
   const columns = useMemo<ColumnDef<UserReportEntry>[]>(
     () => [
       {
-        accessorKey: 'displayName',
+        id: 'fullName', // Custom ID for the column
         header: ({ column, table }) => (
           <div>
             <div onClick={column.getToggleSortingHandler()} className="cursor-pointer">
-              Display Name {column.getIsSorted() === 'asc' ? '🔼' : column.getIsSorted() === 'desc' ? '🔽' : ''}
+              Full Name {column.getIsSorted() === 'asc' ? '🔼' : column.getIsSorted() === 'desc' ? '🔽' : ''}
             </div>
             {column.getCanFilter() ? <ColumnFilter column={column} table={table} /> : null}
           </div>
         ),
-        cell: info => info.getValue() || 'N/A',
+        accessorFn: row => `${row.firstName || ''} ${row.lastName || ''}`.trim() || row.displayName || 'N/A',
+        cell: info => {
+            const { firstName, lastName, displayName } = info.row.original;
+            const fullName = `${firstName || ''} ${lastName || ''}`.trim();
+            return fullName || displayName || 'N/A';
+        },
+        filterFn: fullNameFilterFn, // Use custom filter for full name
         enableColumnFilter: true,
       },
       {
@@ -142,7 +163,6 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
             <div onClick={column.getToggleSortingHandler()} className="cursor-pointer">
               Created At {column.getIsSorted() === 'asc' ? '🔼' : column.getIsSorted() === 'desc' ? '🔽' : ''}
             </div>
-            {/* No filter for date for now, can be added with a date picker */}
           </div>
         ),
         cell: info => {
@@ -155,20 +175,6 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
         },
         enableColumnFilter: false, 
       },
-      // User ID column removed
-      // {
-      //   accessorKey: 'id',
-      //   header: ({ column, table }) => (
-      //       <div>
-      //         <div onClick={column.getToggleSortingHandler()} className="cursor-pointer">
-      //           User ID {column.getIsSorted() === 'asc' ? '🔼' : column.getIsSorted() === 'desc' ? '🔽' : ''}
-      //         </div>
-      //         {column.getCanFilter() ? <ColumnFilter column={column} table={table} /> : null}
-      //       </div>
-      //     ),
-      //   cell: info => info.getValue(),
-      //   enableColumnFilter: true,
-      // },
     ],
     []
   );
@@ -178,7 +184,7 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
   const table = useReactTable({
     data: tableData,
     columns,
-    filterFns: { fuzzy: fuzzyFilter }, 
+    filterFns: { fuzzy: fuzzyFilter, fullName: fullNameFilterFn }, 
     state: { 
         sorting, 
         globalFilter,
@@ -196,20 +202,17 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
   const exportToCsv = () => {
     if (!report?.data) return;
     
-    // Filter out the 'id' column from headers and data for CSV export
-    const activeColumns = columns.filter(col => col.accessorKey !== 'id');
+    const activeColumns = columns.filter(col => col.id !== 'id' && (col as any).accessorKey !== 'id'); // Ensure 'id' column is excluded
 
     const csvHeaders = activeColumns.map(colDef => {
+        // For the custom 'fullName' column, use its id or a defined header string
+        if (colDef.id === 'fullName') return 'Full Name';
         if (typeof colDef.header === 'string') return colDef.header;
-        // For complex headers (like those with filter inputs), extract a simple name
-        if (colDef.accessorKey) return String(colDef.accessorKey); 
-        // Fallback if accessorKey is not directly on colDef (it should be for our simple cases)
-        // This part might need adjustment based on how headers are structured if they become more complex
+        if ((colDef as any).accessorKey) return String((colDef as any).accessorKey); 
+        
         const headerContext = { column: { getIsSorted: () => false, getToggleSortingHandler: () => {} }, table } as any;
         const renderedHeader = typeof colDef.header === 'function' ? colDef.header(headerContext) : colDef.id;
         if (typeof renderedHeader === 'string') return renderedHeader;
-        // If header is a React element, try to get a meaningful string (e.g., from a child or prop)
-        // This is a simplified example; robust extraction might be needed for complex React elements
         if (React.isValidElement(renderedHeader) && renderedHeader.props.children && typeof renderedHeader.props.children[0] === 'string') {
             return renderedHeader.props.children[0].trim();
         }
@@ -220,19 +223,24 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
     const csvRows = table.getRowModel().rows.map(row => { 
       return activeColumns.map(colDef => {
         let cellValue: any;
-        const accessor = colDef.accessorKey as keyof UserReportEntry;
-        if (accessor) {
-          cellValue = row.original[accessor];
-        } else if (typeof colDef.cell === 'function') {
-          // Find the cell context for the current column to render it
-          const cellContext = row.getVisibleCells().find(c => c.column.id === colDef.id)?.getContext();
-          if (cellContext) {
-            cellValue = flexRender(colDef.cell, cellContext);
-          } else {
-            cellValue = ''; // Should not happen if column is in activeColumns
-          }
+        if (colDef.id === 'fullName') {
+            const { firstName, lastName, displayName } = row.original;
+            cellValue = `${firstName || ''} ${lastName || ''}`.trim() || displayName || 'N/A';
+        } else {
+            const accessor = (colDef as any).accessorKey as keyof UserReportEntry;
+            if (accessor) {
+              cellValue = row.original[accessor];
+            } else if (typeof colDef.cell === 'function') {
+              const cellContext = row.getVisibleCells().find(c => c.column.id === colDef.id)?.getContext();
+              if (cellContext) {
+                cellValue = flexRender(colDef.cell, cellContext);
+              } else {
+                cellValue = '';
+              }
+            }
         }
         
+        const accessor = (colDef as any).accessorKey as keyof UserReportEntry; // Re-check accessor for specific formatting
         if (accessor === 'assignedRoleNames' && Array.isArray(cellValue)) {
           cellValue = cellValue.join('; ');
         } else if (accessor === 'createdAt' && typeof cellValue === 'string') {

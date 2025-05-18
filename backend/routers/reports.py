@@ -1,13 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from google.cloud import firestore
-from google.cloud.firestore_v1.field_path import FieldPath # Corrected import
+from google.cloud.firestore_v1.field_path import FieldPath 
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import datetime
 from collections import defaultdict
 import asyncio 
 
-# Corrected imports
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission 
 from models.donation import DonationResponse 
@@ -62,10 +61,12 @@ class DonationInsightsReport(BaseModel):
     totalMonetaryAmountOverall: float
     totalDonationsCountOverall: int
 
-# New Models for Users Report
+# Updated Models for Users Report
 class UserReportEntry(BaseModel):
     id: str
-    displayName: Optional[str] = None
+    firstName: Optional[str] = None # Added
+    lastName: Optional[str] = None  # Added
+    displayName: Optional[str] = None # Kept for flexibility, but frontend will prioritize firstName/lastName
     email: Optional[str] = None
     assignedRoleNames: List[str] = []
     status: Optional[str] = None 
@@ -308,7 +309,7 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
         role_names_map: Dict[str, str] = {}
         if all_role_ids:
             role_ids_list = list(all_role_ids)
-            chunk_size = 30 # Firestore 'in' query limit
+            chunk_size = 30 
             role_fetch_tasks = []
 
             for i in range(0, len(role_ids_list), chunk_size):
@@ -320,7 +321,6 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
                     roles_query_snapshot = await db.collection("roles").where(FieldPath.document_id(), "in", ids_batch).get()
                     batch_role_names = {}
                     for role_doc_snap in roles_query_snapshot:
-                        # Corrected: Use role_doc_snap.id (which is the roleName) as the name
                         batch_role_names[role_doc_snap.id] = role_doc_snap.id 
                     return batch_role_names
 
@@ -331,7 +331,6 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
                 role_names_map.update(batch_result)
 
         for user_info, assigned_role_ids in user_docs_with_roles:
-            # Ensure role_id exists in role_names_map before trying to get it
             role_names = [role_names_map[role_id] for role_id in assigned_role_ids if role_id in role_names_map]
             
             created_at_val = user_info.get("createdAt")
@@ -345,7 +344,9 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
 
             users_data.append(UserReportEntry(
                 id=user_info.get("uid", user_info["id"]), 
-                displayName=user_info.get("displayName"),
+                firstName=user_info.get("firstName"), # Populate firstName
+                lastName=user_info.get("lastName"),   # Populate lastName
+                displayName=user_info.get("displayName"), # Keep existing displayName
                 email=user_info.get("email"),
                 assignedRoleNames=role_names,
                 status=user_info.get("status", "active"), 
