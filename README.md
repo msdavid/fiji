@@ -47,6 +47,7 @@ This assumes you are starting with a new GCP project.
     *   Search for and enable the following APIs for your project:
         *   **Cloud Firestore API** (for the database)
         *   **Identity Platform API** (Firebase Authentication relies on this; enabling Firebase Auth often handles this)
+        *   **Cloud Storage API** (Firebase Storage relies on this. Also ensure "Cloud Storage for Firebase API" is enabled, usually handled by Firebase setup)
         *   **Cloud Run API** (for deploying the backend/frontend as services)
         *   **Cloud Build API** (for automated CI/CD pipelines)
         *   **Artifact Registry API** (if you plan to store Docker images in GCP)
@@ -66,7 +67,7 @@ This assumes you are starting with a new GCP project.
     *   (Optional) Enable any other sign-in providers you intend to use (e.g., Google, Facebook).
 
 5.  **Configure Firestore Database:**
-    *   In the Firebase Console, navigate to "Firestore Database" (under "Build").
+    *   In the Firebase Console, navigate to "Firestore Database" (under "Build" in the left menu).
     *   Click "Create database".
     *   Choose "Start in **production mode**". This sets up more secure default security rules.
     *   Select a Cloud Firestore location (e.g., `us-central`, `europe-west`). **This choice is permanent for the project.** Choose a location close to your users.
@@ -86,7 +87,45 @@ This assumes you are starting with a new GCP project.
         ```
         Click "Publish" to save the rules.
 
-6.  **Create a Web App in Firebase (for Frontend Configuration):**
+6.  **Configure Firebase Storage:**
+    *   **Navigate to Storage:** In the Firebase Console, find "Storage" in the left-hand navigation menu (usually under the "Build" category, alongside Firestore Database and Authentication). Click on it.
+    *   **Get Started:** If this is your first time setting up Storage for this project, you'll see a "Get started" button. Click it.
+    *   **Security Rules Modal:** A dialog box will appear explaining the default security rules for Cloud Storage. These rules, by default, deny all read and write access to unauthenticated users. For development, you'll likely adjust these later. Click "Next" (or "Got it" depending on the UI version).
+    *   **Choose Location:** You'll be prompted to select a location for your default Cloud Storage bucket.
+        *   **Important:** It's highly recommended to choose the **same location as your Cloud Firestore database** to minimize latency and costs.
+        *   This location choice is **permanent** for the default bucket.
+        *   Select your desired location from the dropdown (e.g., `us-central1`, `europe-west1`).
+    *   Click "Done". Firebase will provision your default Storage bucket. This might take a moment.
+    *   **Review/Edit Security Rules:** Once the bucket is created, you'll be taken to the Storage dashboard (Files tab).
+        *   Navigate to the "**Rules**" tab within the Storage section.
+        *   The initial rules will look something like this (denying access):
+            ```storage-rules
+            rules_version = '2';
+            service firebase.storage {
+              match /b/{bucket}/o {
+                match /{allPaths=**} {
+                  allow read, write: if false; // Or if request.auth != null && request.auth.uid == <some_condition>;
+                }
+              }
+            }
+            ```
+        *   **For development purposes**, you might want to allow authenticated users to read and write files. A common starting point (be sure to secure this properly for production):
+            ```storage-rules
+            rules_version = '2';
+            service firebase.storage {
+              match /b/{bucket}/o {
+                // Allow read and write access to all paths for authenticated users
+                // For production, restrict by path (e.g., /users/{userId}/), file type, size, etc.
+                match /{allPaths=**} {
+                  allow read, write: if request.auth != null;
+                }
+              }
+            }
+            ```
+        *   Modify the rules as needed and click "**Publish**".
+    *   The `storageBucket` URL (e.g., `your-project-id.appspot.com`) is automatically configured for your Firebase project and will be part of the `firebaseConfig` object used by your frontend (see next step).
+
+7.  **Create a Web App in Firebase (for Frontend Configuration):**
     *   In the Firebase Console, go to "Project Overview" (click the Firebase icon or project name at the top).
     *   In the center, under "Get started by adding Firebase to your app", click the Web icon (`</>`).
     *   Enter an "App nickname" (e.g., "Fiji Frontend"). This is for your reference.
@@ -98,7 +137,7 @@ This assumes you are starting with a new GCP project.
           apiKey: "AIzaSyXXXXXXXXXXXXXXXXXXXXXXXXXXX",
           authDomain: "your-project-id.firebaseapp.com",
           projectId: "your-project-id", // Should match your GCP Project ID
-          storageBucket: "your-project-id.appspot.com",
+          storageBucket: "your-project-id.appspot.com", // This is your Firebase Storage bucket
           messagingSenderId: "123456789012",
           appId: "1:123456789012:web:abcdef1234567890abcd",
           // measurementId: "G-XXXXXXXXXX" // Optional, if you enabled Analytics
@@ -106,8 +145,8 @@ This assumes you are starting with a new GCP project.
         ```
     *   Click "Continue to console". You can always find this config again in Project Settings > General > Your apps.
 
-7.  **Configure Application Default Credentials (ADC) for Local Backend Development:**
-    *   ADC allows your local backend server to authenticate with GCP services (like Firestore) using your user credentials, without needing service account keys for local dev.
+8.  **Configure Application Default Credentials (ADC) for Local Backend Development:**
+    *   ADC allows your local backend server to authenticate with GCP services (like Firestore and Storage) using your user credentials, without needing service account keys for local dev.
     *   Ensure you have the gcloud CLI installed and initialized (`gcloud init`).
     *   Log in with your Google account that has access to the GCP project:
         ```bash
@@ -143,7 +182,10 @@ This assumes you are starting with a new GCP project.
         ```env
         # backend/.env
         GOOGLE_CLOUD_PROJECT=YOUR_GCP_PROJECT_ID
+        # Optional: If you need to specify the storage bucket for the backend Admin SDK
+        # FIREBASE_STORAGE_BUCKET=your-project-id.appspot.com 
         ```
+        *Note: The Firebase Admin SDK (used in the backend) can usually auto-discover the default Storage bucket associated with the project if `GOOGLE_CLOUD_PROJECT` is set and ADC is configured. Explicitly setting `FIREBASE_STORAGE_BUCKET` might be needed in some complex scenarios or if using a non-default bucket.*
 
 4.  **Set up Python Virtual Environment and Install Dependencies using `uv`:**
     *   Ensure `uv` is installed (`pip install uv`).
@@ -170,7 +212,7 @@ This assumes you are starting with a new GCP project.
 
 2.  **Create `.env.local` file for Frontend Secrets:**
     *   In the `frontend/` directory, create a file named `.env.local`.
-    *   Add the Firebase configuration values you copied when creating the web app in Firebase (Step 2.6). **Prefix each key with `NEXT_PUBLIC_`**:
+    *   Add the Firebase configuration values you copied when creating the web app in Firebase (Step 2.7). **Prefix each key with `NEXT_PUBLIC_`**:
         ```env
         # frontend/.env.local
         NEXT_PUBLIC_FIREBASE_API_KEY="YOUR_API_KEY_FROM_FIREBASE_CONFIG"
@@ -234,10 +276,10 @@ To fully use the application, you'll need an administrative user and roles defin
 ### 6. Key Configuration Files and Secrets Management
 
 *   **Backend (`backend/`):**
-    *   `.env`: Stores `GOOGLE_CLOUD_PROJECT`. This file is typically simple and may not contain highly sensitive secrets if ADC is used for local development.
-    *   **Local Development Authentication:** Relies on Application Default Credentials (ADC) via `gcloud auth application-default login`. This allows the backend to securely access GCP services (like Firestore) using your logged-in gcloud user credentials, avoiding the need to manage service account keys locally.
+    *   `.env`: Stores `GOOGLE_CLOUD_PROJECT` and optionally `FIREBASE_STORAGE_BUCKET`. This file is typically simple and may not contain highly sensitive secrets if ADC is used for local development.
+    *   **Local Development Authentication:** Relies on Application Default Credentials (ADC) via `gcloud auth application-default login`. This allows the backend to securely access GCP services (like Firestore and Storage) using your logged-in gcloud user credentials, avoiding the need to manage service account keys locally.
 *   **Frontend (`frontend/`):**
-    *   `.env.local`: Stores Firebase client SDK configuration (API keys, project ID, etc.) and the `NEXT_PUBLIC_BACKEND_URL`. **This file is critical for frontend operation and MUST NOT be committed to Git.** It is correctly listed in `frontend/.gitignore` (via `.env*`).
+    *   `.env.local`: Stores Firebase client SDK configuration (API keys, project ID, storage bucket, etc.) and the `NEXT_PUBLIC_BACKEND_URL`. **This file is critical for frontend operation and MUST NOT be committed to Git.** It is correctly listed in `frontend/.gitignore` (via `.env*`).
     *   All keys in `.env.local` that need to be accessible in browser-side JavaScript code **must** be prefixed with `NEXT_PUBLIC_`.
 *   **Deployment:**
     *   When deploying to services like Google Cloud Run (for the backend) or Vercel/Netlify (for the frontend), the environment variables defined in `backend/.env` and `frontend/.env.local` (and any other necessary runtime configurations) **must be configured directly in the respective hosting service's environment variable settings panel.** They are not deployed from your local `.env*` files.
@@ -248,6 +290,7 @@ To fully use the application, you'll need an administrative user and roles defin
 *   **Backend:** Python, FastAPI, Uvicorn
 *   **Frontend:** Next.js (React), TypeScript, Tailwind CSS
 *   **Database:** Google Cloud Firestore
+*   **File Storage:** Firebase Storage
 *   **Authentication:** Firebase Authentication
 *   **Package Management:** `uv` (backend), `npm` (frontend)
 *   **Deployment (Planned):** Google Cloud Run (Dockerized applications)
