@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, status
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional, Dict, Set # Added Dict, Set
+from typing import List, Optional, Dict, Set 
 from firebase_admin import auth, firestore
 from datetime import datetime, timezone 
 
@@ -25,7 +25,6 @@ class RegistrationPayload(BaseModel):
     lastName: str = Field(..., min_length=1)
     invitationToken: str
 
-# Helper function to get role names (similar to the one in users.py)
 async def _get_role_names_for_auth(db: firestore.AsyncClient, role_ids: List[str]) -> List[str]:
     role_names = []
     if not isinstance(role_ids, list): 
@@ -139,11 +138,12 @@ async def register_user_with_invitation(
         raise HTTPException(status_code=500, detail="Failed to retrieve newly created user profile.")
 
     user_response_data = final_user_doc.to_dict()
-    user_response_data["id"] = final_user_doc.id
+    user_response_data["id"] = final_user_doc.id # UID from Firebase Auth
     
-    # Populate assignedRoleNames, privileges, isSysadmin for the UserResponse model
+    # Populate assignedRoleNames
     user_response_data["assignedRoleNames"] = await _get_role_names_for_auth(db, assigned_role_ids)
     
+    # Calculate privileges and isSysadmin
     is_sysadmin = "sysadmin" in assigned_role_ids
     consolidated_privileges: Dict[str, Set[str]] = {}
 
@@ -163,15 +163,21 @@ async def register_user_with_invitation(
     user_response_data["privileges"] = {resource: list(actions) for resource, actions in consolidated_privileges.items()}
     user_response_data["isSysadmin"] = is_sysadmin
     
-    # Ensure all fields required by UserResponse are present
-    # Defaulting potentially missing fields from UserInDBBase if not set during creation
-    for field in ["phone", "emergencyContactDetails", "skills", "qualifications", "preferences", "profilePictureUrl", "notes", "availability", "lastLoginAt"]:
+    # Ensure all fields required by UserResponse are present, providing defaults if necessary
+    # This loop ensures that fields defined in UserInDBBase (parent of UserResponse)
+    # but not explicitly set during firestore_user_data creation are defaulted.
+    default_user_in_db_fields = {
+        "phone": None, "emergencyContactDetails": None, "skills": [], 
+        "qualifications": [], "preferences": None, "profilePictureUrl": None, 
+        "notes": None, "availability": { "general_rules": [], "specific_slots": [] },
+        "lastLoginAt": None
+    }
+    for field, default_value in default_user_in_db_fields.items():
         if field not in user_response_data:
-            if field in ["skills", "qualifications", "assignedRoleIds"]:
-                 user_response_data[field] = []
-            elif field == "availability":
-                 user_response_data[field] = { "general_rules": [], "specific_slots": [] }
-            else:
-                 user_response_data[field] = None
-    
+            user_response_data[field] = default_value
+            
+    # Ensure status is present (it should be from firestore_user_data)
+    if "status" not in user_response_data:
+        user_response_data["status"] = "active" # Fallback status
+
     return UserResponse(**user_response_data)
