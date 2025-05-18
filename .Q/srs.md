@@ -1,8 +1,8 @@
 # Software Requirements Specification (SRS)
 ## Project Fiji
 
-**Version:** 1.4 
-**Date:** {{YYYY-MM-DD}} 
+**Version:** 1.5 
+**Date:** {{YYYY-MM-DD}} <!-- Updated when committed -->
 
 ## Table of Contents
 1. [Introduction](#1-introduction)
@@ -35,6 +35,11 @@
     3.5 [Availability Tracking](#35-availability-tracking)
     3.6 [Donation Tracking](#36-donation-tracking)
     3.7 [Reporting and Analytics](#37-reporting-and-analytics)
+        3.7.1 [Volunteer Hours](#fr371-volunteer-hours)
+        3.7.2 [Event Participation](#fr372-event-participation)
+        3.7.3 [Donation Summaries](#fr373-donation-summaries)
+        3.7.4 [Flexible Formats](#fr374-flexible-formats)
+        3.7.5 [Admin Summary Statistics](#fr375-admin-summary-statistics)
     3.8 [Notifications and Communications](#38-notifications-and-communications)
     3.9 [User Interface (Dashboard)](#39-user-interface-dashboard)
 4. [External Interface Requirements](#4-external-interface-requirements)
@@ -112,9 +117,9 @@ A summary of key product functions (detailed in Section 3):
 *   Working group creation, management (CRUD), and member assignment.
 *   Volunteer availability tracking.
 *   Donation tracking (excluding online payment processing).
-*   Reporting and analytics on volunteer hours, event participation, and donations.
-*   Automated notifications and communications (e.g., event reminders).
-*   Personalized user dashboards.
+*   Reporting and analytics on volunteer hours, event participation, donations, and system-level summaries for administrators.
+*   Automated notifications and communications (e.g., event reminders, in-app notifications).
+*   Personalized user dashboards with role-specific information and administrative overviews.
 
 ### 2.3 User Characteristics
 Users will range from system administrators (`sysadmin`) managing the entire platform to organizational staff managing events and volunteers, and individual volunteers interacting with their profiles, events, and assignments. Users are expected to have basic web literacy.
@@ -160,17 +165,17 @@ Details for each feature are derived from the FSD, with technical implementation
 ### 3.2 Permissions and Role-Based Access Control (RBAC)
 *   **FR3.2.1 Role Definition:**
     *   A `roles` collection in Firestore will store role definitions, including `roleName` and a `privileges` map.
-    *   The `privileges` map will associate resources (e.g., "events", "users", "working_groups") with permitted actions (e.g., "create", "view", "edit", "delete", "assign", "revoke", "manage_assignments").
+    *   The `privileges` map will associate resources (e.g., "events", "users", "working_groups", "admin") with permitted actions (e.g., "create", "view", "edit", "delete", "assign", "revoke", "manage_assignments", "view_summary").
 *   **FR3.2.2 `sysadmin` Role:**
     *   A top-level `sysadmin` role will have unrestricted access to all system features and data. This role can manage other roles and assign privileges.
-    *   The initial creation of the `sysadmin` role document in the Firestore `roles` collection is facilitated by the `backend/utils/initialize_firestore.py` script. This script ensures the `sysadmin` role is set up with its defined privileges.
+    *   The initial creation of the `sysadmin` role document in the Firestore `roles` collection is facilitated by the `backend/utils/initialize_firestore.py` script. This script ensures the `sysadmin` role is set up with its defined privileges, including access to administrative summaries (e.g., `admin:view_summary`).
 *   **FR3.2.3 Custom Roles:**
     *   `sysadmin` can create, modify, and delete custom roles.
 *   **FR3.2.4 User Role Assignment:**
     *   Users will have an `assignedRoleIds` array in their Firestore document, linking to roles in the `roles` collection.
     *   A user can have multiple roles; their effective permissions are the union of all privileges from their assigned roles.
 *   **FR3.2.5 Privilege Enforcement:**
-    *   The FastAPI backend will enforce RBAC for all API requests (see Section 8.2).
+    *   The FastAPI backend will enforce RBAC for all API requests (see Section 8.2). Access to administrative endpoints like `/admin/summary` will require the `sysadmin` role or a specific privilege (e.g., `admin:view_summary`).
 
 ### 3.3 Event Management
 *   **FR3.3.1 Event Creation:**
@@ -218,16 +223,19 @@ Details for each feature are derived from the FSD, with technical implementation
 *   **FR3.7.2 Event Participation:** Statistics on attendance, completion rates, etc.
 *   **FR3.7.3 Donation Summaries:** Reports on total donations and trends.
 *   **FR3.7.4 Flexible Formats:** Reports should be exportable (e.g., CSV).
+*   **FR3.7.5 Admin Summary Statistics:** Provide key system-wide statistics for administrators (e.g., total users, active events).
 
 ### 3.8 Notifications and Communications
 *   **FR3.8.1 Event Reminders:** Automated notifications for upcoming events, assignment confirmations, schedule changes.
 *   **FR3.8.2 Email Delivery:** Emails will be sent via Firebase services.
 *   **FR3.8.3 Bulk Email Screening:** Functionality to screen volunteers for bulk email notifications.
+*   **FR3.8.4 In-App Notifications:** The system will store and display in-app notifications for users (e.g., on their dashboard).
 
 ### 3.9 User Interface (Dashboard)
-*   **FR3.9.1 Personalized Dashboard:** Users will see a dashboard tailored to their role(s).
+*   **FR3.9.1 Personalized Dashboard:** Users will see a dashboard tailored to their role(s), including quick access to upcoming events, current assignments, and recent notifications.
 *   **FR3.9.2 Visualizations:** Visual representation of volunteer hours and contributions.
-*   **FR3.9.3 UI Details:** Specific UI mockups and style guides will be provided later.
+*   **FR3.9.3 Admin Overview:** System administrators will see an overview of key system metrics (e.g., total users, active events) on their dashboard.
+*   **FR3.9.4 UI Details:** Specific UI mockups and style guides will be provided later.
 
 ## 4. External Interface Requirements
 
@@ -236,6 +244,7 @@ Details for each feature are derived from the FSD, with technical implementation
 *   The UI must be responsive.
 *   **Event Detail Page:** Will show event information, signup/withdraw buttons for volunteers, and roster management tools for authorized users. For recurring events, it will clearly indicate if it's a template or an instance, and provide navigation to other instances or the template.
 *   **Working Group Pages:** Will include a list page, a creation page, and a detail page with member management for authorized users.
+*   **Dashboard Page:** Will display personalized information, including notifications, contribution summaries, and role-specific overviews like an admin summary.
 *   Other UI notes as per existing SRS.
 
 ### 4.2 Software Interfaces
@@ -243,6 +252,14 @@ Details for each feature are derived from the FSD, with technical implementation
     *   CRUD endpoints for core entities (users, roles, events).
         *   `POST /events` and `PUT /events/{event_id}`: Request body will accept an optional `recurrenceRule` object. If provided, the event is treated as a template. The response will indicate if an event is a template or an instance.
     *   `GET /users/search?q={query}`.
+    *   User Profile Management:
+        *   `GET /users/me`
+        *   `PUT /users/me`
+        *   `GET /users/{user_id}`
+        *   `PUT /users/{user_id}`
+        *   `GET /users`
+    *   User Notifications:
+        *   `GET /users/me/notifications?limit={int}&sort={field:direction}`: Retrieves notifications for the authenticated user. Parameters: `limit` (integer, e.g., 5), `sort` (string, e.g., `createdAt:desc`). Requires: Authenticated user.
     *   Event Participation (applies to individual event instances):
         *   `POST /events/{event_id}/signup`
         *   `DELETE /events/{event_id}/signup`
@@ -260,6 +277,9 @@ Details for each feature are derived from the FSD, with technical implementation
         *   `POST /working-groups/{group_id}/assignments`
         *   `GET /working-groups/{group_id}/assignments`
         *   `DELETE /working-groups/{group_id}/assignments/{assignment_id}`
+    *   Administrative Endpoints:
+        *   `GET /admin/summary`: Retrieves summary statistics for administrators (e.g., total users, active events). Requires: `sysadmin` role or `admin:view_summary` privilege.
+            *   Response example: `{ "totalUsers": 150, "activeEvents": 25 }`
 *   Other interfaces (Firebase Auth, Firestore, Cloud Build, Artifact Registry, Firebase Services for email) as per existing SRS.
 
 ### 4.3 Hardware Interfaces
@@ -274,57 +294,22 @@ Details for each feature are derived from the FSD, with technical implementation
 ## 6. Data Management
 
 ### 6.1 Data Model (Firestore)
-*   **`users`** (No changes in this sprint)
-*   **`events`**
-    *   `id` (String, Document ID)
-    *   `eventType` (String)
-    *   `eventName` (String)
-    *   `purpose` (String, Optional)
-    *   `description` (String, Optional)
-    *   `location` (String, Optional)
-    *   `startDate` (Timestamp) - For template events, this is the start date of the first instance.
-    *   `endDate` (Timestamp) - For template events, this is the end date of the first instance.
-    *   `volunteersNeeded` (Integer, Optional)
-    *   `status` (String: e.g., "planned", "active", "completed", "cancelled")
-    *   `organizerUserId` (String, references `users.uid`, Optional)
-    *   `isOpenForSignup` (Boolean, default: `true`)
-    *   `createdByUserId` (String, references `users.uid`)
-    *   `createdAt` (Timestamp)
-    *   `updatedAt` (Timestamp)
-    *   **`isTemplate`** (Boolean, Optional, default: `false`): Marks the event document as a template for a recurring series.
-    *   **`recurrenceRule`** (Object, Optional): Stores the recurrence pattern if `isTemplate` is `true`.
-        *   `frequency` (String: "daily", "weekly", "monthly")
-        *   `interval` (Integer: e.g., 1, 2)
-        *   `daysOfWeek` (Array of String: e.g., `["monday", "wednesday"]`, applicable for "weekly" frequency)
-        *   `dayOfMonth` (Integer: e.g., 15, applicable for "monthly" frequency on a specific day)
-        *   `endDate` (Timestamp, Optional): The date after which no more instances are generated.
-        *   `count` (Integer, Optional): The total number of instances to generate. (System uses either `endDate` or `count`).
-    *   **`templateEventId`** (String, Optional): If the event is an instance, this field links to the ID of its parent template event.
-    *   **`isException`** (Boolean, Optional, default: `false`): Set to `true` if this instance has been modified independently of its template.
-    *   **`originalInstanceDate`** (Timestamp, Optional): For instances, this stores the originally scheduled start date based on the template.
-*   **`workingGroups`**
-    *   `id` (String, Document ID)
-    *   `groupName` (String)
-    *   `description` (String, Optional)
-    *   `status` (String: "active", "archived")
-    *   `createdByUserId` (String, references `users.uid`)
-    *   `createdAt` (Timestamp)
-    *   `updatedAt` (Timestamp)
-*   **`assignments`** (Links users to events or working groups)
+*   **`users`** (Schema as previously defined)
+*   **`events`** (Schema as previously defined)
+*   **`workingGroups`** (Schema as previously defined)
+*   **`assignments`** (Schema as previously defined)
+*   **`donations`** (Schema as previously defined)
+*   **`roles`** (Schema as previously defined, privileges for `working_groups`, `events:manage_assignments`, and `admin:view_summary` will be added here or ensured for `sysadmin`)
+*   **`registrationInvitations`** (Schema as previously defined)
+*   **`notifications`**
     *   `id` (String, Document ID)
     *   `userId` (String, references `users.uid`)
-    *   `assignableId` (String, references `events` or `workingGroups` document ID. For recurring events, this will be the ID of an *instance*.)
-    *   `assignableType` (String: "event", "workingGroup")
-    *   `status` (String: e.g., "confirmed", "attended", "active", "cancelled_signup", "confirmed_admin")
-    *   `assignedByUserId` (String, references `users.uid` or "self_signup")
-    *   `assignmentDate` (Timestamp)
-    *   `performanceNotes` (String, Optional, for events)
-    *   `hoursContributed` (Number, Optional)
-    *   `createdAt` (Timestamp)
-    *   `updatedAt` (Timestamp)
-*   **`donations`** (No changes in this sprint)
-*   **`roles`** (Privileges for `working_groups` and `events:manage_assignments` will be added here)
-*   **`registrationInvitations`** (No changes in this sprint)
+    *   `message` (String)
+    *   `link` (String, Optional, URL for navigation, e.g., `/dashboard/events/{eventId}`)
+    *   `icon` (String, Optional, Material Icon name, e.g., "event_available", "assignment_turned_in")
+    *   `read` (Boolean, default: `false`)
+    *   `createdAt` (Timestamp, server-generated)
+    *   `type` (String, Optional, e.g., "event_reminder", "assignment_update", "new_event_posted", "general_announcement") 
 
 ### 6.2 Data Backup and Recovery
 *   Firestore PITR.
@@ -336,7 +321,7 @@ Details for each feature are derived from the FSD, with technical implementation
 (Sections 7.1 to 7.4 remain largely unchanged from v1.3.)
 
 ## 8. Authentication and Authorization
-(Sections 8.1 and 8.2 remain largely unchanged, but the RBAC section implicitly covers new privileges.)
+(Sections 8.1 and 8.2 remain largely unchanged, but the RBAC section implicitly covers new privileges like `admin:view_summary`.)
 
 ## 9. Logging and Monitoring
 (Sections 9.1 and 9.2 remain largely unchanged.)
