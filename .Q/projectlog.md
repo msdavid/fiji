@@ -1,6 +1,38 @@
 # Project Log - Fiji
 
 ## Session (YYYY-MM-DD HH:MM)
+**Goal**: Implement Mailjet Email Sending Service.
+
+**Summary**:
+Established the foundational architecture for sending emails via Mailjet. This involved adding the `mailjet-rest` library, creating a dedicated email service module in the backend, and configuring it to use API keys and sender details from environment variables. The service provides a flexible `send_email` function capable of handling various email types (HTML, text, attachments, CC, BCC).
+
+**Activities**:
+
+1.  **Dependency Management (`backend/pyproject.toml`)**:
+    *   Added `mailjet-rest>=1.3.5` (actually installed v1.4.0) to the project's dependencies.
+2.  **Installation**:
+    *   Successfully installed `mailjet-rest` into the backend virtual environment using `uv pip install mailjet-rest`.
+3.  **Email Service Creation (`backend/services/email_service.py`)**:
+    *   Created a new `EmailService` class.
+    *   The service initializes the Mailjet client (v3.1) using `MAIJET_API_KEY` and `MAIJET_API_SECRET` loaded from `.env`.
+    *   It uses `EMAIL_SENDER` for the "From" address and `EMAIL_SENDER_NAME` (defaults to "Fiji Platform") for the "From" name, also loaded from `.env`.
+    *   Implemented an `async def send_email(...)` method:
+        *   Accepts parameters: `to_email`, `to_name`, `subject`, `html_content`.
+        *   Optionally accepts: `text_content`, `custom_id`, `attachments`, `cc_emails`, `bcc_emails`.
+        *   Constructs the payload for Mailjet's Send API v3.1.
+        *   Includes basic error handling and console logging for API responses.
+    *   Added commented-out example usage (`main_test`) within the module for direct testing.
+4.  **Configuration**:
+    *   Relies on `python-dotenv` to load `MAIJET_API_KEY`, `MAIJET_API_SECRET`, `EMAIL_SENDER`, and optionally `EMAIL_SENDER_NAME` from the `backend/.env` file.
+
+**Next Steps**:
+- Integrate the `EmailService.send_email` method into actual application workflows, such as sending emails for new user invitations or event confirmations.
+- Implement robust logging for email sending activities.
+- Develop email templating capabilities if complex or varied email layouts are required.
+- Thoroughly test email sending with various scenarios and recipients using the Mailjet sandbox or a test account.
+
+---
+## Session (YYYY-MM-DD HH:MM)
 **Goal**: Change "Display Name" to "Full Name" in Users Report.
 
 **Summary**:
