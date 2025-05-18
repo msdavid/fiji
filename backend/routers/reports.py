@@ -317,12 +317,11 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
                     continue
                 
                 async def fetch_batch_roles(ids_batch):
-                    # Use FieldPath from the correct import
                     roles_query_snapshot = await db.collection("roles").where(FieldPath.document_id(), "in", ids_batch).get()
                     batch_role_names = {}
                     for role_doc_snap in roles_query_snapshot:
-                        role_data = role_doc_snap.to_dict()
-                        batch_role_names[role_doc_snap.id] = role_data.get("name", "Unknown Role")
+                        # Corrected: Use role_doc_snap.id (which is the roleName) as the name
+                        batch_role_names[role_doc_snap.id] = role_doc_snap.id 
                     return batch_role_names
 
                 role_fetch_tasks.append(fetch_batch_roles(batch_role_ids))
@@ -332,7 +331,8 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
                 role_names_map.update(batch_result)
 
         for user_info, assigned_role_ids in user_docs_with_roles:
-            role_names = [role_names_map.get(role_id, "Unknown Role") for role_id in assigned_role_ids if role_id in role_names_map]
+            # Ensure role_id exists in role_names_map before trying to get it
+            role_names = [role_names_map[role_id] for role_id in assigned_role_ids if role_id in role_names_map]
             
             created_at_val = user_info.get("createdAt")
             if isinstance(created_at_val, str):
