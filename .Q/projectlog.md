@@ -1,6 +1,38 @@
 # Project Log - Fiji
 
 ## Session (YYYY-MM-DD HH:MM)
+**Goal**: Integrate Mailjet Email Service for User Invitations.
+
+**Summary**:
+Modified the user invitation creation process to send actual invitation emails via the newly implemented Mailjet `EmailService`. This replaces the previous placeholder email simulation. The system now constructs and sends a formatted HTML email containing a unique registration link.
+
+**Activities**:
+
+1.  **Invitations Router Update (`backend/routers/invitations.py`)**:
+    *   Imported `EmailService` from `backend.services.email_service`.
+    *   Instantiated `EmailService` at the module level, with a fallback to disable email sending if service initialization fails (e.g., missing Mailjet credentials).
+    *   Added logic to read `FRONTEND_URL` from environment variables (defaulting to `http://localhost:3000`) to construct the registration link. Users need to set this in their `.env` file.
+    *   Replaced the `send_invitation_email_placeholder` function with `send_actual_invitation_email`.
+        *   This new async function takes the recipient's email, invitation token, inviter's name, and the `EmailService` instance.
+        *   It constructs the subject, HTML content (including the registration link), and plain text content for the invitation email.
+        *   It calls `email_service.send_email()` to dispatch the email via Mailjet.
+        *   Includes basic console logging for email sending success or failure.
+    *   Updated the `create_invitation` endpoint:
+        *   The `background_tasks.add_task` now calls `send_actual_invitation_email`, passing the necessary parameters and the `email_service` instance.
+
+**Configuration Reminder**:
+*   Users must ensure `MAIJET_API_KEY`, `MAIJET_API_SECRET`, and `EMAIL_SENDER` are correctly set in `backend/.env`.
+*   A new environment variable `FRONTEND_URL` (e.g., `FRONTEND_URL=http://localhost:3000`) must be added to `backend/.env` for constructing correct registration links in emails.
+*   Optionally, `EMAIL_SENDER_NAME` can be set in `.env`.
+
+**Next Steps**:
+- Thoroughly test the invitation creation flow to ensure emails are generated and sent correctly via Mailjet.
+- Monitor Mailjet dashboard for email delivery status and potential issues.
+- Consider more robust error handling for email sending failures (e.g., retry mechanisms, admin notifications, or flagging invitations that failed to send).
+- Implement email sending for other features like password resets and event confirmations.
+
+---
+## Session (YYYY-MM-DD HH:MM)
 **Goal**: Implement Mailjet Email Sending Service.
 
 **Summary**:
