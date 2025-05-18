@@ -42,17 +42,12 @@ export default function AdminInvitationsPage() {
     }
     setIsLoading(true); setError(null); setActionError(null);
     try {
-      // Construct query parameters for backend filtering
       const queryParams = new URLSearchParams();
       if (filterStatus !== 'all') {
         queryParams.append('status', filterStatus);
       }
-      // Add other params like limit, offset, search if backend supports them directly
-      // queryParams.append('limit', '50'); 
-      // queryParams.append('offset', '0');
-      // if (searchTerm) queryParams.append('search', searchTerm); // If backend supports search
-
-      const pathWithParams = `/admin/invitations/?${queryParams.toString()}`; // Updated path
+      
+      const pathWithParams = `/admin/invitations/?${queryParams.toString()}`; 
 
       const response = await apiClient<Invitation[]>({
         path: pathWithParams, 
@@ -66,7 +61,7 @@ export default function AdminInvitationsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [adminAuthUser, idToken, canListInvitations, filterStatus /*, searchTerm */]); // Re-fetch if filterStatus changes
+  }, [adminAuthUser, idToken, canListInvitations, filterStatus]); 
 
   useEffect(() => {
     if (!authLoading && !adminAuthUser) router.push('/login');
@@ -87,12 +82,10 @@ export default function AdminInvitationsPage() {
     setActionError(null);
     try {
         await apiClient({
-            path: `/admin/invitations/${invitationId}`, // Ensure this path matches backend admin_router
+            path: `/admin/invitations/${invitationId}`, 
             token: idToken,
             method: 'DELETE',
         });
-        // Refresh the list after revoking or update status locally
-        // For simplicity, re-fetch. For better UX, update locally then confirm with backend.
         await fetchInvitations(); 
     } catch (err: any) {
         setActionError(err.response?.data?.detail || err.message || 'Failed to revoke invitation.');
@@ -100,17 +93,13 @@ export default function AdminInvitationsPage() {
     }
   };
 
-  // Client-side search if backend doesn't support search term directly on list endpoint
   const filteredInvitations = invitations.filter(inv => {
     const term = searchTerm.toLowerCase();
     const matchesSearch = searchTerm === '' || (
       inv.email.toLowerCase().includes(term) ||
       inv.id.toLowerCase().includes(term) ||
-      (inv.creatorName && inv.creatorName.toLowerCase().includes(term))
+      (inv.creatorName && inv.creatorName.toLowerCase().includes(term)) 
     );
-    // Status filtering is now handled by the backend via query param,
-    // but if not, it would be done here:
-    // const matchesStatus = filterStatus === 'all' || inv.status === filterStatus;
     return matchesSearch; 
   });
 
@@ -163,25 +152,36 @@ export default function AdminInvitationsPage() {
         )}
       </header>
 
-      <div className="mb-6 p-4 bg-white dark:bg-gray-900 rounded-lg shadow-md flex flex-col sm:flex-row gap-4">
-        <input
-          type="text"
-          placeholder="Search by email or ID..."
-          value={searchTerm}
-          onChange={(e) => setSearchTerm(e.target.value)}
-          className="flex-grow p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
-        />
-        <select
-            value={filterStatus}
-            onChange={(e) => setFilterStatus(e.target.value as any)}
-            className="p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white min-w-[180px]"
-        >
-            <option value="all">All Statuses</option>
-            <option value="pending">Pending</option>
-            <option value="accepted">Accepted</option>
-            <option value="expired">Expired</option>
-            <option value="revoked">Revoked</option>
-        </select>
+      {/* Search and Filter Controls - No separate background box, elements use standard page flow */}
+      <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center">
+        <div className="flex-grow w-full sm:w-auto">
+            <label htmlFor="search-invitations" className="sr-only">Search Invitations</label>
+            <input
+            id="search-invitations"
+            type="text"
+            placeholder="Search by email or ID..."
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            // Standard input styling, padding is part of the input's own classes (p-3)
+            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
+            />
+        </div>
+        <div className="w-full sm:w-auto">
+            <label htmlFor="filter-status" className="sr-only">Filter by Status</label>
+            <select
+                id="filter-status"
+                value={filterStatus}
+                onChange={(e) => setFilterStatus(e.target.value as any)}
+                // Standard select styling, padding is part of the select's own classes (p-3)
+                className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white min-w-[180px]"
+            >
+                <option value="all">All Statuses</option>
+                <option value="pending">Pending</option>
+                <option value="accepted">Accepted</option>
+                <option value="expired">Expired</option>
+                <option value="revoked">Revoked</option>
+            </select>
+        </div>
       </div>
 
       {actionError && (
