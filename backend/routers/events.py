@@ -85,26 +85,29 @@ async def list_events(
     db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac),
     status_filter: Optional[str] = Query(None, alias="status"),
-    from_date: Optional[datetime.date] = Query(None, description="Filter events from this date (YYYY-MM-DD). Defaults to today."),
-    to_date: Optional[datetime.date] = Query(None, description="Filter events up to this date (YYYY-MM-DD). Defaults to 14 days from today.")
+    from_date: Optional[datetime.date] = Query(None, description="Filter events from this date (YYYY-MM-DD). Defaults to today if days_range is also provided or if no date filters are set."),
+    days_range: Optional[int] = Query(14, description="Number of days from from_date to include in the filter (e.g., 1 for just from_date, 7 for a week). Defaults to 14. Max 90.", ge=1, le=90)
 ):
     try:
         query = db.collection(EVENTS_COLLECTION)
         
-        # Handle date defaults and conversion
         today = datetime.date.today()
+        
+        # Determine actual_from_date. If from_date is not given, but days_range is, default from_date to today.
+        # If neither from_date nor days_range are explicitly set by client, from_date defaults to today due to days_range default.
         actual_from_date = from_date if from_date else today
-        actual_to_date = to_date if to_date else (today + datetime.timedelta(days=14))
 
-        if actual_to_date < actual_from_date:
-            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="to_date cannot be before from_date.")
+        if days_range is None: # Should not happen due to default, but as a safeguard
+            days_range = 14 
+        
+        # Calculate to_date based on from_date and days_range
+        # days_range=1 means only the from_date itself.
+        actual_to_date = actual_from_date + datetime.timedelta(days=days_range - 1)
 
         # Convert dates to timezone-aware datetimes for Firestore comparison
-        # Assuming event.dateTime is stored in UTC
         from_datetime_utc = datetime.datetime.combine(actual_from_date, datetime.time.min, tzinfo=datetime.timezone.utc)
         to_datetime_utc = datetime.datetime.combine(actual_to_date, datetime.time.max, tzinfo=datetime.timezone.utc)
         
-        # Apply filters
         if status_filter:
             query = query.where(filter=FieldFilter("status", "==", status_filter))
         
@@ -129,7 +132,7 @@ async def list_events(
 
         user_details_map = {}
         user_ids_list = list(all_user_ids_to_fetch)
-        MAX_FIRESTORE_IN_QUERY_LIMIT = 30 # Firestore 'in' query limit
+        MAX_FIRESTORE_IN_QUERY_LIMIT = 30
         for i in range(0, len(user_ids_list), MAX_FIRESTORE_IN_QUERY_LIMIT):
             batch_ids = user_ids_list[i:i+MAX_FIRESTORE_IN_QUERY_LIMIT]
             if not batch_ids: continue
@@ -166,7 +169,7 @@ async def list_events(
             events_list.append(EventWithSignupStatus(**event_data, isCurrentUserSignedUp=is_signed_up, currentUserAssignmentStatus=assignment_status))
         return events_list
     except HTTPException as http_exc:
-        raise http_exc # Re-raise HTTPException to ensure FastAPI handles it correctly
+        raise http_exc
     except Exception as e:
         import traceback
         print(f"Error in list_events: {str(e)}")
