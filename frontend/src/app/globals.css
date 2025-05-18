@@ -1,4 +1,5 @@
 @import "tailwindcss";
+@import 'tippy.js/dist/tippy.css'; /* Added Tippy.js base CSS */
 
 :root {
   --background: #ffffff;
@@ -50,4 +51,20 @@ body {
 .dark .status-ongoing-blinking {
   background-color: #16a34a; /* bg-green-600 (example, adjust as needed for dark mode visibility) */
   color: #dcfce7; /* text-green-100 (example) */
+}
+
+/* Custom Tippy.js styling */
+.tippy-box[data-theme~='light-border'][data-placement^='top'] > .tippy-arrow::before {
+  border-top-color: #cbd5e1; /* slate-300 for a light border */
+}
+.tippy-box[data-theme~='light-border'][data-placement^='bottom'] > .tippy-arrow::before {
+  border-bottom-color: #cbd5e1;
+}
+/* etc. for left and right placements if needed */
+
+/* Class for smaller font in Tippy tooltips */
+/* Targets the content element within the Tippy box */
+.tippy-small-font .tippy-content {
+  font-size: 0.75rem; /* Equivalent to Tailwind's text-xs */
+  padding: 0.25rem 0.5rem; /* Adjust padding if needed */
 }
