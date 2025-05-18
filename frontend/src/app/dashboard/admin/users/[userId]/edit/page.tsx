@@ -1,150 +1,491 @@
-"use client";
+'use client';
 
-import React, { useState, useEffect } from 'react';
-import { useParams, useRouter } from 'next/navigation';
+import { useState, useEffect, useCallback } from 'react';
+import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/lib/apiClient';
 
-// Interface for the user profile data (can be shared or adapted)
-interface UserProfileData {
-  uid: string;
+// Interfaces
+interface UserDetails {
+  id: string;
   email: string;
-  firstName: string;
-  lastName: string;
-  phoneNumber?: string | null;
-  skills?: string | null;
-  qualifications?: string | null;
-  preferences?: string | null;
-  profilePictureUrl?: string | null;
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
+  status: 'active' | 'disabled' | 'pending_verification';
   assignedRoleIds: string[];
-  status: string;
+  skills?: string[];
+  qualifications?: string[];
+  preferences?: string;
+  emergencyContactDetails?: string;
+  notes?: string;
   createdAt: string;
-  updatedAt: string;
+  updatedAt?: string;
 }
 
-const AdminEditUserProfilePage = () => {
-  const { idToken, userProfile: adminUserProfile, loading: authLoading, error: authError } = useAuth();
-  const params = useParams();
+interface Role {
+  id: string; 
+  roleName: string;
+  description?: string;
+}
+
+interface UserUpdatePayload {
+  firstName?: string;
+  lastName?: string;
+  phoneNumber?: string;
+  profilePictureUrl?: string;
+  status?: 'active' | 'disabled' | 'pending_verification';
+  assignedRoleIds?: string[];
+  skills?: string[];
+  qualifications?: string[];
+  preferences?: string;
+  emergencyContactDetails?: string;
+  notes?: string;
+}
+
+export default function EditUserPage() {
   const router = useRouter();
-  const userIdToEdit = params.userId as string;
+  const params = useParams();
+  const userId = params.userId as string;
 
-  const [userToEdit, setUserToEdit] = useState<UserProfileData | null>(null);
+  const { user: adminUser, idToken, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  
+  const [formData, setFormData] = useState<UserUpdatePayload>({
+    assignedRoleIds: [],
+    skills: [],
+    qualifications: [],
+  });
+  const [originalUser, setOriginalUser] = useState<UserDetails | null>(null);
+  const [allRoles, setAllRoles] = useState<Role[]>([]);
+  
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  const [isSubmitting, setIsSubmitting] = useState(false);
+  const [isDeleting, setIsDeleting] = useState(false);
+  const [pageError, setPageError] = useState<string | null>(null);
+  const [submitError, setSubmitError] = useState<string | null>(null);
+  const [deleteError, setDeleteError] = useState<string | null>(null);
 
-  // Admin auth check (simplified for this placeholder)
-  const canAccessPage = adminUserProfile?.assignedRoleIds?.includes('sysadmin');
+  const canEditUser = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'edit') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
+  const canDeleteUser = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'delete') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
+
+  const fetchUserDetails = useCallback(async () => {
+    if (!adminUser || !idToken || !userId || userId === 'undefined') {
+      if (userId === 'undefined') setPageError("Invalid user ID provided.");
+      return false; // Indicate failure or prerequisite not met
+    }
+    if (adminUserProfile && !canEditUser) {
+        setPageError("You don't have permission to edit users.");
+        return false;
+    }
+
+    setPageError(null);
+    try {
+      const fetchedUser = await apiClient<UserDetails>({
+        path: `/users/${userId}`,
+        token: idToken,
+        method: 'GET',
+      });
+      setOriginalUser(fetchedUser);
+      setFormData({
+        firstName: fetchedUser.firstName || '',
+        lastName: fetchedUser.lastName || '',
+        phoneNumber: fetchedUser.phoneNumber || '',
+        profilePictureUrl: fetchedUser.profilePictureUrl || '',
+        status: fetchedUser.status,
+        assignedRoleIds: fetchedUser.assignedRoleIds || [],
+        skills: fetchedUser.skills || [],
+        qualifications: fetchedUser.qualifications || [],
+        preferences: fetchedUser.preferences || '',
+        emergencyContactDetails: fetchedUser.emergencyContactDetails || '',
+        notes: fetchedUser.notes || '',
+      });
+      return true; // Indicate success
+    } catch (err: any) {
+      setPageError(err.response?.data?.detail || err.message || 'Failed to fetch user details.');
+      console.error("Fetch user error:", err);
+      return false; // Indicate failure
+    }
+  }, [adminUser, idToken, userId, adminUserProfile, canEditUser]);
+
+  const fetchAllRoles = useCallback(async () => {
+    if (!adminUser || !idToken || !canEditUser) {
+        return false;
+    }
+    try {
+        const rolesData = await apiClient<Role[]>({
+            path: '/roles',
+            token: idToken,
+            method: 'GET',
+        });
+        setAllRoles(rolesData);
+        return true;
+    } catch (err: any) {
+        console.error("Fetch all roles error:", err);
+        setPageError(prev => prev ? `${prev}\nFailed to fetch roles.` : 'Failed to fetch roles.');
+        return false;
+    }
+  }, [adminUser, idToken, canEditUser]);
 
   useEffect(() => {
-    if (authLoading) {
-      setIsLoading(true);
-      return;
+    if (!authLoading && !adminUser) {
+        router.push('/login');
+        return;
     }
-
-    if (authError) {
-      setError(`Authentication error: ${authError.message}`);
-      setIsLoading(false);
-      return;
+    if (adminUser && !adminUserProfile) {
+        fetchUserProfile();
+        return; // Wait for adminUserProfile
     }
-
-    if (!canAccessPage) {
-      setError("Access Denied. You do not have permission to edit this page.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (!idToken) {
-      setError("Authentication token not available. Cannot fetch user data.");
-      setIsLoading(false);
-      return;
-    }
-
-    if (!userIdToEdit) {
-      setError("User ID not found in URL.");
-      setIsLoading(false);
-      return;
-    }
-
-    const fetchUserProfileToEdit = async () => {
-      setIsLoading(true);
-      setError(null);
-      try {
-        const data = await apiClient<UserProfileData>({
-          path: `/users/${userIdToEdit}`,
-          token: idToken,
-          method: 'GET',
-        });
-        setUserToEdit(data);
-      } catch (err: any) {
-        console.error('Failed to fetch user profile for editing:', err);
-        setError(err.data?.detail || err.message || 'Failed to load user profile for editing.');
-      } finally {
+    
+    if (adminUser && adminUserProfile && idToken && userId && userId !== 'undefined') {
+        setIsLoading(true);
+        Promise.all([fetchUserDetails(), fetchAllRoles()])
+            .catch(() => { /* Errors handled in individual functions by setting pageError */ })
+            .finally(() => setIsLoading(false));
+    } else if (userId === 'undefined') {
+        setPageError("Invalid user ID provided.");
         setIsLoading(false);
-      }
-    };
+    } else if (adminUser && adminUserProfile && (!idToken || !userId)) {
+        // If prerequisites like idToken or userId are missing after auth is loaded
+        setIsLoading(false);
+    }
+  }, [adminUser, authLoading, adminUserProfile, fetchUserProfile, idToken, userId, router, fetchUserDetails, fetchAllRoles]);
 
-    fetchUserProfileToEdit();
-  }, [userIdToEdit, idToken, canAccessPage, authLoading, authError, router]);
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value } = e.target;
+    setFormData(prev => ({ ...prev, [name]: value }));
+  };
+
+  const handleMultiTextChange = (name: 'skills' | 'qualifications', value: string) => {
+    const arr = value.split(',').map(s => s.trim()).filter(s => s);
+    setFormData(prev => ({ ...prev, [name]: arr }));
+  };
+  
+  const handleRoleChange = (roleId: string, checked: boolean) => {
+    setFormData(prev => {
+        const currentAssignedRoleIds = prev.assignedRoleIds ? [...prev.assignedRoleIds] : [];
+        if (checked) {
+            if (!currentAssignedRoleIds.includes(roleId)) {
+                return { ...prev, assignedRoleIds: [...currentAssignedRoleIds, roleId] };
+            }
+        } else {
+            // Prevent unassigning 'sysadmin' from the user being edited if it's their only sysadmin-like role
+            // This is a client-side safeguard. Backend should have ultimate control.
+            if (roleId === 'sysadmin' && originalUser?.id === userId) {
+                const otherAdminRoles = currentAssignedRoleIds.filter(id => id === 'sysadmin');
+                if (otherAdminRoles.length <= 1) { // If this is the last 'sysadmin' role entry
+                    // Optionally show an error or just prevent unchecking
+                    console.warn("Attempted to unassign the last/only 'sysadmin' role from this user.");
+                    return prev; // Do not allow unchecking
+                }
+            }
+            return { ...prev, assignedRoleIds: currentAssignedRoleIds.filter(id => id !== roleId) };
+        }
+        return prev;
+    });
+  };
+
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!originalUser || !canEditUser || !idToken) {
+      setSubmitError("Cannot submit: Insufficient permissions or data missing.");
+      return;
+    }
+
+    setIsSubmitting(true); setSubmitError(null);
+
+    const payload: UserUpdatePayload = {};
+    if (formData.firstName !== (originalUser.firstName || '')) payload.firstName = formData.firstName;
+    if (formData.lastName !== (originalUser.lastName || '')) payload.lastName = formData.lastName;
+    if (formData.phoneNumber !== (originalUser.phoneNumber || '')) payload.phoneNumber = formData.phoneNumber;
+    if (formData.profilePictureUrl !== (originalUser.profilePictureUrl || '')) payload.profilePictureUrl = formData.profilePictureUrl;
+    if (formData.status !== originalUser.status) payload.status = formData.status;
+    
+    const sortedFormDataRoles = [...(formData.assignedRoleIds || [])].sort();
+    const sortedOriginalRoles = [...(originalUser.assignedRoleIds || [])].sort();
+    if (JSON.stringify(sortedFormDataRoles) !== JSON.stringify(sortedOriginalRoles)) {
+        payload.assignedRoleIds = formData.assignedRoleIds;
+    }
+
+    const sortedFormDataSkills = [...(formData.skills || [])].sort();
+    const sortedOriginalSkills = [...(originalUser.skills || [])].sort();
+    if (JSON.stringify(sortedFormDataSkills) !== JSON.stringify(sortedOriginalSkills)) {
+        payload.skills = formData.skills;
+    }
+
+    const sortedFormDataQuals = [...(formData.qualifications || [])].sort();
+    const sortedOriginalQuals = [...(originalUser.qualifications || [])].sort();
+    if (JSON.stringify(sortedFormDataQuals) !== JSON.stringify(sortedOriginalQuals)) {
+        payload.qualifications = formData.qualifications;
+    }
+    
+    if (formData.preferences !== (originalUser.preferences || '')) payload.preferences = formData.preferences;
+    if (formData.emergencyContactDetails !== (originalUser.emergencyContactDetails || '')) payload.emergencyContactDetails = formData.emergencyContactDetails;
+    if (formData.notes !== (originalUser.notes || '')) payload.notes = formData.notes;
+
+    if (Object.keys(payload).length === 0) {
+      setSubmitError("No changes detected to submit.");
+      setIsSubmitting(false);
+      return;
+    }
+    
+    try {
+      await apiClient({
+        path: `/users/${userId}`,
+        token: idToken,
+        method: 'PUT',
+        data: payload,
+      });
+      router.push(`/dashboard/admin/users`); 
+    } catch (err: any) {
+      setSubmitError(err.response?.data?.detail || err.message || 'Failed to update user.');
+      console.error("Update user error:", err);
+    } finally {
+      setIsSubmitting(false);
+    }
+  };
+
+  const handleDeleteUser = async () => {
+    if (!originalUser || !canDeleteUser || !idToken) {
+        setDeleteError("Cannot delete: Insufficient permissions or user data missing.");
+        return;
+    }
+    if (originalUser.id === adminUser?.uid) {
+        setDeleteError("You cannot delete your own account through this admin interface.");
+        return;
+    }
+    if (!confirm(`Are you sure you want to delete the user "${originalUser.firstName || originalUser.email}"? This action is permanent.`)) return;
+
+    setIsDeleting(true); setDeleteError(null);
+    try {
+        await apiClient({
+            path: `/users/${userId}`, 
+            token: idToken,
+            method: 'DELETE',
+        });
+        router.push('/dashboard/admin/users'); 
+    } catch (err: any) {
+        setDeleteError(err.response?.data?.detail || err.message || 'Failed to delete user.');
+        console.error("Delete user error:", err);
+    } finally {
+        setIsDeleting(false);
+    }
+  };
 
   if (authLoading || isLoading) {
-    return <div className="flex justify-center items-center h-screen"><p className="text-lg">Loading user data for editing...</p></div>;
-  }
-
-  if (error) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl text-center">
-        <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200">Edit User Profile</h1>
-        <p className="text-red-500 text-lg">{error}</p>
-        <Link href="/dashboard/admin/users" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-6 inline-block">
-          ← Back to User List
-        </Link>
-      </div>
+      <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
+        <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">sync</span>
+        <p className="text-lg text-gray-700 dark:text-gray-300">Loading user details...</p>
+      </main>
     );
   }
 
-  if (!userToEdit) {
+  if (pageError) {
     return (
-      <div className="container mx-auto p-6 max-w-2xl text-center">
-        <h1 className="text-2xl font-bold mb-6 text-gray-800 dark:text-gray-200">Edit User Profile</h1>
-        <p className="text-gray-600 dark:text-gray-400">User profile not found for editing.</p>
-        <Link href="/dashboard/admin/users" className="text-indigo-600 dark:text-indigo-400 hover:underline mt-6 inline-block">
-          ← Back to User List
-        </Link>
-      </div>
+        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="bg-red-50 dark:bg-red-900/30 text-red-700 dark:text-red-400 shadow-xl rounded-lg p-6 sm:p-8 text-center">
+                <span className="material-icons text-5xl mx-auto mb-3">error_outline</span>
+                <h1 className="text-2xl font-semibold mb-4">Error Loading User Data</h1>
+                <p className="mb-6">{pageError}</p>
+                <Link href="/dashboard/admin/users" className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 shadow-sm">
+                    <span className="material-icons text-lg mr-2">arrow_back</span>
+                    Back to Users List
+                </Link>
+            </div>
+        </main>
     );
   }
   
+  if (!canEditUser && adminUserProfile && !isLoading) {
+    return (
+        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
+            <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8 text-center">
+                <span className="material-icons text-5xl text-red-500 dark:text-red-400 mx-auto mb-3">lock</span>
+                <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400 mb-4">Access Denied</h1>
+                <p className="text-gray-700 dark:text-gray-300 mb-6">You do not have permission to edit users.</p>
+                <Link href="/dashboard/admin/users" className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 shadow-sm">
+                    <span className="material-icons text-lg mr-2">arrow_back</span>
+                    Back to Users List
+                </Link>
+            </div>
+        </main>
+    );
+  }
+
+  if (!originalUser && !isLoading && !pageError) {
+    return (
+        <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8 text-center">
+                <span className="material-icons text-5xl text-gray-400 dark:text-gray-500 mx-auto mb-3">person_search</span>
+                <h1 className="text-2xl font-semibold text-gray-700 dark:text-gray-300 mb-4">User Not Found</h1>
+                <p className="text-gray-600 dark:text-gray-400 mb-6">The user data could not be loaded for editing (ID: {userId}).</p>
+                <Link href="/dashboard/admin/users" className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 shadow-sm">
+                    <span className="material-icons text-lg mr-2">arrow_back</span>
+                    Back to Users List
+                </Link>
+            </div>
+        </main>
+    );
+  }
+
   return (
-    <div className="container mx-auto p-4 sm:p-6 max-w-3xl">
-      <div className="flex justify-between items-center mb-2">
-        <h1 className="text-2xl sm:text-3xl font-bold text-gray-800 dark:text-gray-200">
-          Edit User: {userToEdit.firstName} {userToEdit.lastName}
-        </h1>
-      </div>
+    <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <Link href="/dashboard/admin/users" className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline">
-          ← Back to User List
+        <Link href="/dashboard/admin/users" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+          <span className="material-icons text-lg mr-1">arrow_back_ios</span>
+          Back to Users List
         </Link>
       </div>
 
-      <div className="bg-white dark:bg-gray-800 shadow-lg rounded-lg p-6">
-        <p className="text-gray-700 dark:text-gray-300">
-          This is the placeholder page for editing user (UID: {userToEdit.uid}). 
-          Full editing functionality will be implemented here.
-        </p>
-        {/* Placeholder for form fields */}
-        <div className="mt-6">
-          <h3 className="text-lg font-medium text-gray-900 dark:text-gray-100">Current Details (Read-only for now):</h3>
-          <ul className="mt-2 list-disc list-inside text-gray-600 dark:text-gray-400">
-            <li>Email: {userToEdit.email}</li>
-            <li>Status: {userToEdit.status}</li>
-            {/* Add more fields as needed for quick reference */}
-          </ul>
-        </div>
-      </div>
-    </div>
-  );
-};
+      <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
+        Edit User: <span className="text-indigo-600 dark:text-indigo-400">{originalUser?.firstName || originalUser?.email}</span>
+      </h1>
+      
+      <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
+        <form onSubmit={handleSubmit} className="space-y-6">
+          {/* Personal Information Section */}
+          <section className="border-b border-gray-200 dark:border-gray-700 pb-6 mb-6">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Personal Information</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+              <div>
+                <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name</label>
+                <input type="text" name="firstName" id="firstName" value={formData.firstName || ''} onChange={handleChange} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name</label>
+                <input type="text" name="lastName" id="lastName" value={formData.lastName || ''} onChange={handleChange} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email Address</label>
+                <input type="email" name="email" id="email" value={originalUser?.email || ''} disabled className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm sm:text-sm dark:bg-gray-800 dark:text-gray-400 cursor-not-allowed" />
+                <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">Email cannot be changed by an admin.</p>
+              </div>
+              <div>
+                <label htmlFor="phoneNumber" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone Number</label>
+                <input type="tel" name="phoneNumber" id="phoneNumber" value={formData.phoneNumber || ''} onChange={handleChange} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+              </div>
+              <div>
+                <label htmlFor="profilePictureUrl" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Profile Picture URL</label>
+                <input type="url" name="profilePictureUrl" id="profilePictureUrl" value={formData.profilePictureUrl || ''} onChange={handleChange} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+              </div>
+            </div>
+          </section>
 
-export default AdminEditUserProfilePage;
+          <section className="border-b border-gray-200 dark:border-gray-700 pb-6 mb-6">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Account Status & Roles</h2>
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
+                <div>
+                    <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Account Status</label>
+                    <select name="status" id="status" value={formData.status || 'pending_verification'} onChange={handleChange} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
+                        <option value="active">Active</option>
+                        <option value="disabled">Disabled</option>
+                        <option value="pending_verification">Pending Verification</option>
+                    </select>
+                </div>
+                <div className="sm:col-span-2">
+                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Assigned Roles</label>
+                    <div className="space-y-2 max-h-60 overflow-y-auto p-2 border border-gray-200 dark:border-gray-700 rounded-md">
+                        {allRoles.length > 0 ? allRoles.map(role => (
+                            <label key={role.id} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
+                                <input
+                                type="checkbox"
+                                checked={formData.assignedRoleIds?.includes(role.id) || false}
+                                onChange={(e) => handleRoleChange(role.id, e.target.checked)}
+                                disabled={role.id === 'sysadmin' && originalUser?.id === adminUser?.uid && (formData.assignedRoleIds?.filter(id => id === 'sysadmin').length ?? 0) <=1 && formData.assignedRoleIds?.includes('sysadmin')}
+                                className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 dark:bg-gray-600 dark:checked:bg-indigo-500"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">{role.roleName}</span>
+                                {role.id === 'sysadmin' && originalUser?.id === adminUser?.uid && (formData.assignedRoleIds?.filter(id => id === 'sysadmin').length ?? 0) <=1 && formData.assignedRoleIds?.includes('sysadmin') && (
+                                    <span className="text-xs text-yellow-600 dark:text-yellow-400 ml-2">(Cannot unassign last sysadmin role from self)</span>
+                                )}
+                            </label>
+                        )) : <p className="text-sm text-gray-500 dark:text-gray-400 italic">No roles available or failed to load roles.</p>}
+                    </div>
+                </div>
+            </div>
+          </section>
+          
+          <section className="border-b border-gray-200 dark:border-gray-700 pb-6 mb-6">
+            <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Additional Information</h2>
+            <div className="space-y-4">
+                <div>
+                    <label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Skills (comma-separated)</label>
+                    <input type="text" name="skills" id="skills" value={formData.skills?.join(', ') || ''} onChange={(e) => handleMultiTextChange('skills', e.target.value)} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                </div>
+                <div>
+                    <label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Qualifications (comma-separated)</label>
+                    <input type="text" name="qualifications" id="qualifications" value={formData.qualifications?.join(', ') || ''} onChange={(e) => handleMultiTextChange('qualifications', e.target.value)} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                </div>
+                 <div>
+                    <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferences</label>
+                    <textarea name="preferences" id="preferences" rows={3} value={formData.preferences || ''} onChange={handleChange} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                </div>
+                 <div>
+                    <label htmlFor="emergencyContactDetails" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Emergency Contact Details</label>
+                    <textarea name="emergencyContactDetails" id="emergencyContactDetails" rows={3} value={formData.emergencyContactDetails || ''} onChange={handleChange} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                </div>
+                <div>
+                    <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Administrative Notes</label>
+                    <textarea name="notes" id="notes" rows={4} value={formData.notes || ''} onChange={handleChange} className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                </div>
+            </div>
+          </section>
+
+          {submitError && ( 
+            <div className="my-4 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg flex items-center" role="alert">
+              <span className="material-icons text-lg mr-2">error_outline</span>
+              {submitError}
+            </div>
+          )}
+
+          <div className="flex flex-col sm:flex-row justify-end items-center pt-8 mt-4 border-t border-gray-200 dark:border-gray-700 space-y-3 sm:space-y-0 sm:space-x-3">
+            <Link href="/dashboard/admin/users" passHref>
+              <button type="button" className="w-full sm:w-auto py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center justify-center">
+                  <span className="material-icons text-base mr-2">cancel</span>
+                  Cancel
+              </button>
+            </Link>
+            <button
+              type="submit"
+              disabled={isSubmitting || isLoading}
+              className="w-full sm:w-auto py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center justify-center"
+            >
+              {isSubmitting ? (
+                <><span className="material-icons animate-spin text-base mr-2">sync</span>Saving Changes...</>
+              ) : (
+                <><span className="material-icons text-base mr-2">save</span>Save Changes</>
+              )}
+            </button>
+          </div>
+        </form>
+
+        {canDeleteUser && originalUser && (
+            <div className="mt-10 pt-6 border-t border-red-300 dark:border-red-700">
+                <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-3">Danger Zone</h3>
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
+                    Deleting this user is permanent and cannot be undone.
+                </p>
+                <button
+                    onClick={handleDeleteUser}
+                    disabled={isDeleting || isSubmitting || originalUser.id === adminUser?.uid}
+                    className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md shadow-sm inline-flex items-center disabled:opacity-50"
+                >
+                    <span className="material-icons text-base mr-2">delete_forever</span>
+                    {isDeleting ? 'Deleting User...' : 'Delete This User'}
+                </button>
+                {originalUser.id === adminUser?.uid && <p className="mt-2 text-xs text-yellow-600 dark:text-yellow-400">You cannot delete your own account via this admin page.</p>}
+                {deleteError && 
+                    <div className="mt-3 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert">
+                    <span className="material-icons text-lg mr-2">error_outline</span>
+                    {deleteError}
+                    </div>
+                }
+            </div>
+        )}
+      </div>
+    </main>
+  );
+}

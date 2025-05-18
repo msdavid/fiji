@@ -3,9 +3,14 @@ from typing import List, Optional, Any, Dict, Set
 from firebase_admin import firestore, auth
 import datetime 
 
-from models.user import UserCreate, UserResponse, UserUpdate, UserListResponse, UserSearchResponseItem, UserAvailability, GeneralAvailabilityRule, SpecificDateSlot
+from models.user import (
+    UserCreate, UserResponse, UserUpdate, UserListResponse, 
+    UserSearchResponseItem, UserAvailability, GeneralAvailabilityRule, 
+    SpecificDateSlot, UserAdminCreatePayload, UserAdminCreateResponse
+)
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
+from utils.password_generator import generate_random_password # Import the new utility
 
 router = APIRouter(
     prefix="/users",
@@ -42,7 +47,7 @@ def _sanitize_user_data_fields(user_data: Dict[str, Any]) -> Dict[str, Any]:
             availability_data["general_rules"] = []
         if not isinstance(availability_data.get("specific_slots"), list):
             availability_data["specific_slots"] = []
-    else: # Not a dict or None, force default
+    else: 
         user_data["availability"] = UserAvailability(general_rules=[], specific_slots=[]).model_dump()
             
     return user_data
@@ -57,8 +62,128 @@ async def _get_role_names(db: firestore.AsyncClient, role_ids: List[str]) -> Lis
             role_data = role_doc.to_dict()
             role_names.append(role_data.get("roleName", role_id)) 
         else:
-            role_names.append(role_id) # Append ID if name not found
+            role_names.append(role_id) 
     return role_names
+
+@router.post(
+    "/admin-create",
+    response_model=UserAdminCreateResponse,
+    status_code=status.HTTP_201_CREATED,
+    dependencies=[Depends(require_permission("users", "admin_create"))] # Or users:create
+)
+async def admin_create_user(
+    user_create_data: UserAdminCreatePayload,
+    db: firestore.AsyncClient = Depends(get_db),
+    # current_admin: RBACUser = Depends(get_current_user_with_rbac) # For logging who created
+):
+    """
+    Allows an administrator to create a new user account.
+    A password will be auto-generated and returned in the response.
+    The new user should be prompted to change this password upon first login.
+    """
+    try:
+        # Check if email already exists in Firebase Auth
+        try:
+            auth.get_user_by_email(user_create_data.email)
+            raise HTTPException(
+                status_code=status.HTTP_400_BAD_REQUEST,
+                detail=f"User with email '{user_create_data.email}' already exists in Firebase Authentication."
+            )
+        except auth.UserNotFoundError:
+            # Email is not in use, proceed
+            pass
+
+        generated_password = generate_random_password(12) # Generate a 12-char password
+
+        # Create user in Firebase Authentication
+        try:
+            firebase_user = auth.create_user(
+                email=user_create_data.email,
+                password=generated_password,
+                display_name=f"{user_create_data.firstName} {user_create_data.lastName}",
+                email_verified=False # Or True, depending on policy. Usually false, user verifies.
+            )
+        except Exception as e:
+            print(f"Error creating user in Firebase Auth: {e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to create user in authentication system: {str(e)}")
+
+        # Prepare user data for Firestore
+        firestore_user_data = {
+            "email": user_create_data.email,
+            "firstName": user_create_data.firstName,
+            "lastName": user_create_data.lastName,
+            "status": user_create_data.status,
+            "assignedRoleIds": user_create_data.assignedRoleIds or [],
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP,
+            "skills": [], # Default empty lists
+            "qualifications": [],
+            "availability": UserAvailability().model_dump(), # Default availability
+            # Add other default fields as necessary from UserInDBBase
+        }
+
+        # Save user profile to Firestore with Firebase UID as document ID
+        user_doc_ref = db.collection(USERS_COLLECTION).document(firebase_user.uid)
+        await user_doc_ref.set(firestore_user_data)
+
+        # Fetch the created document to confirm and get all fields including server timestamps
+        created_user_doc = await user_doc_ref.get()
+        if not created_user_doc.exists:
+            # This would be an issue, try to clean up Firebase Auth user if Firestore save fails?
+            # For now, raise error.
+            try: # Attempt to delete the Firebase Auth user if Firestore save failed
+                auth.delete_user(firebase_user.uid)
+                print(f"Cleaned up Firebase Auth user {firebase_user.uid} due to Firestore save failure.")
+            except Exception as cleanup_e:
+                print(f"Error cleaning up Firebase Auth user {firebase_user.uid}: {cleanup_e}")
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save user profile to database after auth creation.")
+
+        response_data = created_user_doc.to_dict()
+        response_data['id'] = created_user_doc.id
+        response_data['generatedPassword'] = generated_password # Add generated password to response
+        
+        # Get role names for the response
+        response_data["assignedRoleNames"] = await _get_role_names(db, response_data.get("assignedRoleIds", []))
+        
+        # Calculate privileges and isSysadmin for the response
+        target_user_assigned_roles = response_data.get("assignedRoleIds", [])
+        target_is_sysadmin = "sysadmin" in target_user_assigned_roles
+        target_privileges: Dict[str, Set[str]] = {}
+        if not target_is_sysadmin and target_user_assigned_roles:
+            for role_id_val in target_user_assigned_roles:
+                role_doc_ref_resp = db.collection(ROLES_COLLECTION).document(role_id_val) # Unique var name
+                role_doc_resp = await role_doc_ref_resp.get()
+                if role_doc_resp.exists:
+                    role_data_for_priv_resp = role_doc_resp.to_dict()
+                    privs_for_role_resp = role_data_for_priv_resp.get("privileges", {})
+                    for resource, actions in privs_for_role_resp.items():
+                        if not isinstance(actions, list): continue
+                        if resource not in target_privileges:
+                            target_privileges[resource] = set()
+                        target_privileges[resource].update(actions)
+        
+        response_data["privileges"] = {resource: list(actions) for resource, actions in target_privileges.items()}
+        response_data["isSysadmin"] = target_is_sysadmin
+        
+        # Ensure all fields for UserAdminCreateResponse are present
+        # UserResponse fields are inherited, so they should be covered by UserResponse logic
+        # The main addition is generatedPassword
+        
+        return UserAdminCreateResponse(**response_data)
+
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"Unexpected error in admin_create_user: {e}")
+        # Potentially try to clean up Firebase Auth user if created before an unexpected error
+        if 'firebase_user' in locals() and firebase_user and firebase_user.uid:
+             try:
+                auth.delete_user(firebase_user.uid)
+                print(f"Cleaned up Firebase Auth user {firebase_user.uid} due to unexpected error.")
+             except Exception as cleanup_e:
+                print(f"Error cleaning up Firebase Auth user {firebase_user.uid} during unexpected error: {cleanup_e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
 
 @router.get("", response_model=List[UserListResponse], dependencies=[Depends(require_permission("users", "list"))])
 async def list_users(
@@ -69,25 +194,17 @@ async def list_users(
 ):
     try:
         users_ref = db.collection(USERS_COLLECTION)
-        
         query = users_ref.order_by("lastName").order_by("firstName")
-
         if roleId:
-            query = query.where("assignedRoleIds", "array_contains", roleId) # Corrected operator to "array_contains"
-        
+            query = query.where("assignedRoleIds", "array_contains", roleId)
         query = query.limit(limit).offset(offset)
-        
         docs_snapshot = query.stream()
-        
         users_list = []
         async for doc in docs_snapshot:
             user_data = doc.to_dict()
             user_data['id'] = doc.id 
-            
             user_data = _sanitize_user_data_fields(user_data) 
-            
             user_data["assignedRoleNames"] = await _get_role_names(db, user_data.get("assignedRoleIds", []))
-            
             users_list.append(UserListResponse(
                 id=user_data['id'],
                 email=user_data.get('email', 'N/A'),
@@ -96,13 +213,16 @@ async def list_users(
                 status=user_data.get('status', 'unknown'),
                 assignedRoleIds=user_data.get('assignedRoleIds', []), 
                 assignedRoleNames=user_data.get('assignedRoleNames', []),
-                createdAt=user_data.get('createdAt', datetime.datetime.now(datetime.timezone.utc)) 
+                createdAt=user_data.get('createdAt', datetime.datetime.now(datetime.timezone.utc)),
+                profilePictureUrl=user_data.get('profilePictureUrl') 
             ))
-            
         return users_list
     except Exception as e:
         print(f"Error listing users: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+# ... (rest of the existing endpoints: /search, /me, PUT /me, GET /{user_id}, PUT /{user_id}) ...
+# Ensure they are below this point
 
 @router.get("/search", response_model=List[UserSearchResponseItem], dependencies=[Depends(require_permission("users", "list"))])
 async def search_users(
@@ -174,7 +294,7 @@ async def update_users_me(
 ):
     user_ref = db.collection(USERS_COLLECTION).document(current_rbac_user.uid)
     
-    update_dict = user_update_data.model_dump(exclude_unset=True, exclude={"assignedRoleIds", "status", "email"}) 
+    update_dict = user_update_data.model_dump(exclude_unset=True, exclude={"assignedRoleIds", "status", "email", "notes"}) 
     
     if not update_dict:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid update data provided.")
@@ -250,7 +370,9 @@ async def update_user_by_admin(
     
     current_user_data = user_doc_snap.to_dict()
     if "email" in update_dict and update_dict["email"] != current_user_data.get("email"):
-        print(f"Admin {current_rbac_user.uid} attempt to change email for user {user_id} was ignored.")
+        # This check is largely symbolic as Firebase Auth email changes are complex and not handled here.
+        # Direct email changes in Firestore without updating Firebase Auth would lead to inconsistencies.
+        print(f"Admin {current_rbac_user.uid} attempt to change email for user {user_id} was ignored in payload. Email updates require a separate process.")
         del update_dict["email"] 
 
     if not update_dict: 
@@ -291,7 +413,7 @@ async def update_user_by_admin(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
 
-# --- New Endpoints for Assigning/Unassigning Roles ---
+# --- Endpoints for Assigning/Unassigning Roles to User ---
 
 @router.post(
     "/{user_id}/roles/{role_id_to_assign}",
@@ -303,10 +425,6 @@ async def assign_role_to_user(
     role_id_to_assign: str, 
     db: firestore.AsyncClient = Depends(get_db)
 ):
-    """
-    Assigns a role to a user. The role_id_to_assign is the roleName.
-    Requires 'roles:manage_assignments' permission.
-    """
     user_doc_ref = db.collection(USERS_COLLECTION).document(user_id)
     role_doc_ref = db.collection(ROLES_COLLECTION).document(role_id_to_assign)
 
@@ -339,10 +457,6 @@ async def unassign_role_from_user(
     role_id_to_unassign: str, 
     db: firestore.AsyncClient = Depends(get_db)
 ):
-    """
-    Unassigns a role from a user. The role_id_to_unassign is the roleName.
-    Requires 'roles:manage_assignments' permission.
-    """
     user_doc_ref = db.collection(USERS_COLLECTION).document(user_id)
 
     user_doc = await user_doc_ref.get()

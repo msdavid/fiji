@@ -27,14 +27,16 @@ export default function AdminUserManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const canViewUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'list') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
+  const canListUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'list') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
+  // Assuming 'users:create' is the privilege for creating new users (invitations)
+  const canCreateUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'create') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
   const canEditUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'edit') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
   const canDeleteUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'delete') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
 
 
   const fetchUsers = useCallback(async () => {
-    if (!user || !canViewUsers) {
-        if (user && !canViewUsers && adminUserProfile) setError("You don't have permission to view users.");
+    if (!user || !canListUsers) { // Changed from canViewUsers to canListUsers
+        if (user && !canListUsers && adminUserProfile) setError("You don't have permission to view users.");
         setIsLoading(false);
         return;
     }
@@ -59,7 +61,7 @@ export default function AdminUserManagementPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, canViewUsers, adminUserProfile]);
+  }, [user, canListUsers, adminUserProfile]); // Changed from canViewUsers to canListUsers
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -100,7 +102,7 @@ export default function AdminUserManagementPage() {
     );
   }
 
-  if (!canViewUsers && adminUserProfile) {
+  if (!canListUsers && adminUserProfile) { // Changed from canViewUsers to canListUsers
     return (
         <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
             <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8 text-center">
@@ -118,12 +120,23 @@ export default function AdminUserManagementPage() {
   
   return (
     <main className="max-w-7xl mx-auto"> 
-      <header className="mb-8 pt-8"> 
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">User Management</h1>
-        <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage all registered users in the system.</p>
+      <header className="mb-8 pt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center"> 
+        <div className="mb-4 sm:mb-0">
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white">User Management</h1>
+            <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage all registered users in the system.</p>
+        </div>
+        {canCreateUsers && (
+            <Link
+                href="/dashboard/admin/users/new" // Placeholder for new user/invitation page
+                className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
+            >
+                <span className="material-icons mr-2 text-base">person_add</span>
+                Create New User
+            </Link>
+        )}
       </header>
 
-      <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg shadow-md"> {/* Removed px-4 py-4 */}
+      <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg shadow-md">
         <input
           type="text"
           placeholder="Search users by name, email, status, or role..."
@@ -153,6 +166,15 @@ export default function AdminUserManagementPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {users.length === 0 ? "There are no users in the system yet." : "No users match your current search criteria."}
           </p>
+          {users.length === 0 && canCreateUsers && (
+             <Link 
+                href="/dashboard/admin/users/new" 
+                className="mt-6 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
+              >
+                <span className="material-icons mr-2 text-base">person_add</span>
+                Create First User
+            </Link>
+          )}
         </div>
       ) : (
         <div className="shadow-xl border border-gray-200 dark:border-gray-700 sm:rounded-lg overflow-hidden mb-8"> 
