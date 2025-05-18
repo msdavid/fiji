@@ -31,9 +31,18 @@ interface QuickLinkItem {
   privilege?: { resource: string; action: string }; 
 }
 
-interface VolunteerHoursSummary {
-    grandTotalHours: number;
+// Interface for the expected structure from /api/reports/volunteer-activity
+interface VolunteerActivityEntry {
+  userId: string;
+  totalHours: number;
+  // other fields like displayName, eventCount might be present but not strictly needed here
 }
+interface VolunteerActivityReport {
+  data: VolunteerActivityEntry[];
+  totalHoursOverall?: number; // This is overall system total, not per user from this field
+  totalVolunteers?: number;
+}
+
 
 export default function DashboardPage() {
   const { user, idToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege } = useAuth();
@@ -57,16 +66,16 @@ export default function DashboardPage() {
       setLoadingData(true);
       setError(null);
       try {
-        if (authUserProfile && authUserProfile.uid === user.uid) { // uid from Firebase User, id from backend UserProfile
+        if (authUserProfile && authUserProfile.uid === user.uid) { 
             setProfile({
-                id: authUserProfile.uid, // Use uid from Firebase User as the primary ID here for consistency
+                id: authUserProfile.uid, 
                 firstName: authUserProfile.firstName,
                 lastName: authUserProfile.lastName,
                 email: authUserProfile.email || undefined,
-                assignedRoleNames: authUserProfile.assignedRoleNames || authUserProfile.assignedRoleIds, // Prefer names if available
+                assignedRoleNames: authUserProfile.assignedRoleNames || authUserProfile.assignedRoleIds, 
             });
         } else {
-            const userProfileData = await apiClient<UserProfile>({ // UserProfile here is the local simplified one
+            const userProfileData = await apiClient<UserProfile>({ 
               method: 'GET',
               path: '/users/me',
               token: idToken,
@@ -76,7 +85,7 @@ export default function DashboardPage() {
         
         const eventAssignmentsData = await apiClient<Assignment[]>({
           method: 'GET',
-          path: '/assignments?user_id=me&assignableType=event', // Corrected: userId to user_id
+          path: '/assignments?user_id=me&assignableType=event', 
           token: idToken,
         });
         
@@ -95,21 +104,34 @@ export default function DashboardPage() {
 
         const wgAssignmentsData = await apiClient<Assignment[]>({
           method: 'GET',
-          path: '/assignments?user_id=me&assignableType=workingGroup', // Corrected: userId to user_id
+          path: '/assignments?user_id=me&assignableType=workingGroup', 
           token: idToken,
         });
         setActiveWorkingGroups(wgAssignmentsData.filter(a => a.status === 'active'));
 
         setLoadingStats(true);
+        setUserTotalHours(null); // Reset before fetching
         try {
-            const hoursSummary = await apiClient<VolunteerHoursSummary>({
+            const report = await apiClient<VolunteerActivityReport>({
                 method: 'GET',
-                path: '/reports/volunteer-hours/summary?userId=me', // This endpoint uses userId (with alias)
+                path: '/api/reports/volunteer-activity', // Updated path
                 token: idToken,
             });
-            setUserTotalHours(hoursSummary.grandTotalHours); 
+            
+            // Find the current user's entry in the report data
+            const currentUserEntry = report.data.find(entry => entry.userId === user.uid);
+            if (currentUserEntry) {
+                setUserTotalHours(currentUserEntry.totalHours);
+            } else {
+                // If user has no activity, or if endpoint was restricted and returned empty/error handled by apiClient
+                // This might happen if the user is not an admin and the endpoint requires admin privileges
+                // Or if the user simply has no recorded hours.
+                setUserTotalHours(0); // Default to 0 if not found or not accessible
+            }
         } catch (statsErr: any) {
-            console.error('Failed to load volunteer hours stats:', statsErr);
+            console.error('Failed to load volunteer activity stats:', statsErr);
+            // If the endpoint is permission-restricted and user is not admin, this catch will likely be hit.
+            setUserTotalHours(0); // Default to 0 on error for now
         } finally {
             setLoadingStats(false);
         }
@@ -160,7 +182,7 @@ export default function DashboardPage() {
   }
   
   const displayProfile = profile || (authUserProfile ? {
-      id: authUserProfile.uid, // Use uid from Firebase User
+      id: authUserProfile.uid, 
       firstName: authUserProfile.firstName,
       lastName: authUserProfile.lastName,
       email: authUserProfile.email || undefined,
@@ -168,7 +190,6 @@ export default function DashboardPage() {
   } : null);
 
   const displayName = displayProfile?.firstName ? `${displayProfile.firstName} ${displayProfile.lastName || ''}` : user?.displayName || user?.email;
-  // Ensure displayRoles is an array before join, or provide a fallback string
   const rolesString = Array.isArray(displayProfile?.assignedRoleNames) ? displayProfile.assignedRoleNames.join(', ') : 
                       (authUserProfile?.isSysadmin ? 'System Administrator' : 'User');
 
