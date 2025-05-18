@@ -1,42 +1,51 @@
-from pydantic import BaseModel, Field, EmailStr, ConfigDict
-from typing import List, Optional
-import datetime
-import uuid # For generating unique tokens
+from pydantic import BaseModel, EmailStr, Field, ConfigDict
+from typing import Optional, List
+from datetime import datetime
 
 class InvitationBase(BaseModel):
-    """
-    Base model for invitation data.
-    """
-    email: EmailStr = Field(..., description="Email address of the invitee.")
-    rolesToAssignOnRegistration: List[str] = Field(default_factory=list, description="List of role IDs to assign upon successful registration.")
-    # invitedByUserId will be automatically populated from the authenticated sysadmin user
+    email: EmailStr = Field(..., description="Email address of the invited user.")
+    assignedRoleIds: Optional[List[str]] = Field(default_factory=list, description="List of role IDs to be assigned upon registration.")
+    # inviterMessage: Optional[str] = Field(None, max_length=500, description="Optional message from the inviter.") # Future consideration
 
 class InvitationCreate(InvitationBase):
-    """
-    Model for creating a new registration invitation.
-    """
-    expiresInDays: Optional[int] = Field(7, description="Number of days until the invitation expires. Default is 7 days.")
+    """Payload for creating a new invitation."""
+    pass
 
-
-class InvitationResponse(InvitationBase):
-    """
-    Model for returning invitation data in API responses.
-    """
-    invitationId: str = Field(..., description="Unique ID of the invitation (Firestore document ID).")
-    token: str = Field(..., description="Unique, secure token for registration.")
+class InvitationInDB(InvitationBase):
+    id: str = Field(..., description="Unique ID of the invitation document.")
+    token: str = Field(..., description="Unique token for this invitation.")
     status: str = Field(default="pending", description="Status of the invitation (e.g., pending, accepted, expired).")
-    invitedByUserId: str = Field(..., description="UID of the user who created the invitation.")
-    createdAt: datetime.datetime = Field(..., description="Timestamp of when the invitation was created.")
-    expiresAt: datetime.datetime = Field(..., description="Timestamp of when the invitation will expire.")
-
+    expiresAt: datetime = Field(..., description="Timestamp when the invitation token expires.")
+    createdByUserId: str = Field(..., description="ID of the user who created the invitation.")
+    createdAt: datetime = Field(..., description="Timestamp of when the invitation was created.")
+    updatedAt: datetime = Field(..., description="Timestamp of when the invitation was last updated.")
+    
     model_config = ConfigDict(from_attributes=True)
 
-class InvitationStatusResponse(BaseModel):
+class InvitationResponse(InvitationInDB):
     """
-    Model for responding to an invitation token validation request.
+    Response model for an invitation.
+    For security, the token might be omitted in list views or after creation,
+    but included here for completeness if needed by admin for some reason (e.g. manual resend).
+    Typically, token is not exposed after creation via API list.
     """
-    valid: bool = Field(..., description="Whether the token is valid for registration.")
-    reason: Optional[str] = Field(None, description="Reason why the token is not valid, if applicable.")
-    email: Optional[EmailStr] = Field(None, description="Email associated with the token, if found.")
+    pass # Inherits all fields from InvitationInDB
 
+class InvitationListResponse(BaseModel):
+    """Response model for listing invitations (omits token for security)."""
+    id: str
+    email: EmailStr
+    status: str
+    expiresAt: datetime
+    createdByUserId: str
+    createdAt: datetime
+    assignedRoleIds: Optional[List[str]] = Field(default_factory=list)
+    
     model_config = ConfigDict(from_attributes=True)
+
+class InvitationValidateResponse(BaseModel):
+    """Response when validating an invitation token."""
+    isValid: bool
+    email: Optional[EmailStr] = None # Email associated with the token if valid
+    message: str
+    assignedRoleIds: Optional[List[str]] = None # Roles to pre-fill on registration form
