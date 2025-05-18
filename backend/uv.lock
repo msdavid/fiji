@@ -32,6 +32,7 @@ dependencies = [
     { name = "click" },
     { name = "fastapi" },
     { name = "firebase-admin" },
+    { name = "mailjet-rest" },
     { name = "pydantic", extra = ["email"] },
     { name = "python-dotenv" },
     { name = "uvicorn", extra = ["standard"] },
@@ -49,6 +50,7 @@ requires-dist = [
     { name = "click", specifier = ">=8.2.0" },
     { name = "fastapi", specifier = ">=0.110.0" },
     { name = "firebase-admin", specifier = ">=6.8.0" },
+    { name = "mailjet-rest", specifier = ">=1.3.5" },
     { name = "pydantic", extras = ["email"], specifier = ">=2.11.4" },
     { name = "python-dotenv", specifier = ">=1.0.0" },
     { name = "uvicorn", extras = ["standard"], specifier = ">=0.27.0" },
@@ -507,6 +509,18 @@ source = { registry = "https://pypi.org/simple" }
 sdist = { url = "https://files.pythonhosted.org/packages/f2/97/ebf4da567aa6827c909642694d71c9fcf53e5b504f2d96afea02718862f3/iniconfig-2.1.0.tar.gz", hash = "sha256:3abbd2e30b36733fee78f9c7f7308f2d0050e88f0087fd25c2645f63c773e1c7", size = 4793, upload-time = "2025-03-19T20:09:59.721Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/2c/e1/e6716421ea10d38022b952c159d5161ca1193197fb744506875fbb87ea7b/iniconfig-2.1.0-py3-none-any.whl", hash = "sha256:9deba5723312380e77435581c6bf4935c94cbfab9b1ed33ef8d238ea168eb760", size = 6050, upload-time = "2025-03-19T20:10:01.071Z" },
+]
+
+[[package]]
+name = "mailjet-rest"
+version = "1.4.0"
+source = { registry = "https://pypi.org/simple" }
+dependencies = [
+    { name = "requests" },
+]
+sdist = { url = "https://files.pythonhosted.org/packages/ac/02/3bc7963dfde9c928272756714ab8b37d2dbee9dae9be463ac4a3c0fb343e/mailjet_rest-1.4.0.tar.gz", hash = "sha256:76ff9f2fc748045dd0577cf4e4b08f0366b77e58d6ff7a45cdf74b9604ee2da8", size = 39364, upload-time = "2025-05-07T09:50:28.276Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/4b/91/4f923479b66da62461444fcc5dd58ec1629bec7cd9b81a36217c6b3bce15/mailjet_rest-1.4.0-py3-none-any.whl", hash = "sha256:1c5313208ba2d78bda6d60600a2fbd2699fb835191578d50b94332d83a2ff219", size = 28314, upload-time = "2025-05-07T09:50:24.064Z" },
 ]
 
 [[package]]
