@@ -89,7 +89,6 @@ export default function DeleteUserPage() {
       });
 
       if (!response.ok) {
-        // Try to parse error detail, but handle cases where it might not be JSON
         let errorDetail = `Failed to delete user (status: ${response.status})`;
         try {
             const errorData = await response.json();
@@ -107,7 +106,6 @@ export default function DeleteUserPage() {
       console.error("Delete user error:", err);
       setIsDeleting(false);
     }
-    // No finally for setIsDeleting(false) here, as success leads to navigation
   };
 
   if (authLoading || isLoading) {
@@ -119,7 +117,7 @@ export default function DeleteUserPage() {
     );
   }
 
-  if (error && !userToDelete) { // If error occurred and no user data was fetched
+  if (error && !userToDelete) { 
     return (
       <div className="max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg text-center">
         <span className="material-icons text-5xl text-red-500 dark:text-red-400 mb-4">error_outline</span>
@@ -132,7 +130,7 @@ export default function DeleteUserPage() {
     );
   }
   
-  if (!userToDelete) { // Should be covered by loading or error state, but as a fallback
+  if (!userToDelete) { 
     return (
         <div className="max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg text-center">
             <p className="text-gray-600 dark:text-gray-300">User not found or unable to load details.</p>
@@ -163,14 +161,14 @@ export default function DeleteUserPage() {
           <div className="mt-8 flex justify-center space-x-4">
             <Link
               href="/dashboard/admin/users"
-              className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
+              className="inline-flex items-center justify-center py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-200 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
             >
               Cancel
             </Link>
             <button
               onClick={handleDelete}
               disabled={isDeleting}
-              className={`py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white 
+              className={`flex items-center justify-center py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white 
                           ${isDeleting ? 'bg-red-400 dark:bg-red-700 cursor-not-allowed' : 'bg-red-600 hover:bg-red-700 dark:bg-red-500 dark:hover:bg-red-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500'}`}
             >
               {isDeleting ? (
