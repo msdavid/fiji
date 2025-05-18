@@ -13,7 +13,6 @@ interface UserProfile {
   lastName?: string;
   email?: string;
   assignedRoleNames?: string[];
-  // For AuthContext's hasPrivilege, we rely on its internal userProfile which might have more details
 }
 
 interface Assignment {
@@ -22,22 +21,28 @@ interface Assignment {
   assignableName?: string;
   assignableType: 'event' | 'workingGroup';
   status: string;
-  assignableStartDate?: string; // YYYY-MM-DD string, primarily for events
+  assignableStartDate?: string; 
 }
 
 interface QuickLinkItem {
   href: string;
   label: string;
-  icon: string; // Material Icon name
-  privilege?: { resource: string; action: string }; // Optional: for RBAC
+  icon: string; 
+  privilege?: { resource: string; action: string }; 
+}
+
+interface VolunteerHoursSummary {
+    grandTotalHours: number;
 }
 
 export default function DashboardPage() {
-  const { user, idToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege } = useAuth(); // Get hasPrivilege and authUserProfile
-  const [profile, setProfile] = useState<UserProfile | null>(null); // This profile is from /users/me for dashboard display
+  const { user, idToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege } = useAuth();
+  const [profile, setProfile] = useState<UserProfile | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<Assignment[]>([]);
   const [activeWorkingGroups, setActiveWorkingGroups] = useState<Assignment[]>([]);
+  const [userTotalHours, setUserTotalHours] = useState<number | null>(null);
   const [loadingData, setLoadingData] = useState(true);
+  const [loadingStats, setLoadingStats] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
   useEffect(() => {
@@ -52,21 +57,16 @@ export default function DashboardPage() {
       setLoadingData(true);
       setError(null);
       try {
-        // Use authUserProfile if available and matches current user, otherwise fetch
-        // Note: authUserProfile from AuthContext is already fetched from /users/me
-        if (authUserProfile && authUserProfile.uid === user.uid) {
+        if (authUserProfile && authUserProfile.uid === user.uid) { // uid from Firebase User, id from backend UserProfile
             setProfile({
-                id: authUserProfile.uid,
+                id: authUserProfile.uid, // Use uid from Firebase User as the primary ID here for consistency
                 firstName: authUserProfile.firstName,
                 lastName: authUserProfile.lastName,
                 email: authUserProfile.email || undefined,
-                assignedRoleNames: authUserProfile.assignedRoleIds, // Assuming UserProfile in AuthContext has assignedRoleIds
-                                                                  // If it has names, use that. For now, using IDs as placeholder.
-                                                                  // This needs alignment with AuthContext's UserProfile definition.
+                assignedRoleNames: authUserProfile.assignedRoleNames || authUserProfile.assignedRoleIds, // Prefer names if available
             });
         } else {
-            // Fallback to fetch if authUserProfile is not suitable or to get latest
-            const userProfileData = await apiClient<UserProfile>({
+            const userProfileData = await apiClient<UserProfile>({ // UserProfile here is the local simplified one
               method: 'GET',
               path: '/users/me',
               token: idToken,
@@ -74,10 +74,9 @@ export default function DashboardPage() {
             setProfile(userProfileData);
         }
         
-
         const eventAssignmentsData = await apiClient<Assignment[]>({
           method: 'GET',
-          path: '/assignments?userId=me&assignableType=event',
+          path: '/assignments?user_id=me&assignableType=event', // Corrected: userId to user_id
           token: idToken,
         });
         
@@ -96,10 +95,24 @@ export default function DashboardPage() {
 
         const wgAssignmentsData = await apiClient<Assignment[]>({
           method: 'GET',
-          path: '/assignments?userId=me&assignableType=workingGroup',
+          path: '/assignments?user_id=me&assignableType=workingGroup', // Corrected: userId to user_id
           token: idToken,
         });
         setActiveWorkingGroups(wgAssignmentsData.filter(a => a.status === 'active'));
+
+        setLoadingStats(true);
+        try {
+            const hoursSummary = await apiClient<VolunteerHoursSummary>({
+                method: 'GET',
+                path: '/reports/volunteer-hours/summary?userId=me', // This endpoint uses userId (with alias)
+                token: idToken,
+            });
+            setUserTotalHours(hoursSummary.grandTotalHours); 
+        } catch (statsErr: any) {
+            console.error('Failed to load volunteer hours stats:', statsErr);
+        } finally {
+            setLoadingStats(false);
+        }
 
       } catch (err: any) {
         console.error('Failed to load dashboard data:', err);
@@ -110,11 +123,11 @@ export default function DashboardPage() {
     };
 
     fetchData();
-  }, [idToken, user, authContextLoading, authUserProfile]); // Added authUserProfile to dependencies
+  }, [idToken, user, authContextLoading, authUserProfile]);
 
   const allQuickLinks: QuickLinkItem[] = [
     { href: '/dashboard/events/new', label: 'Create New Event', icon: 'add_circle_outline', privilege: { resource: 'events', action: 'create' } },
-    { href: '/dashboard/admin/users', label: 'Manage Users', icon: 'manage_accounts', privilege: { resource: 'users', action: 'list' } }, // Assuming 'list' implies management access view
+    { href: '/dashboard/admin/users', label: 'Manage Users', icon: 'manage_accounts', privilege: { resource: 'users', action: 'list' } },
     { href: '/dashboard/admin/roles', label: 'Manage Roles', icon: 'admin_panel_settings', privilege: { resource: 'roles', action: 'list' } },
     { href: '/dashboard/admin/invitations/new', label: 'Send Invitation', icon: 'person_add', privilege: { resource: 'invitations', action: 'create' } },
     { href: '/dashboard/donations', label: 'View Donations', icon: 'volunteer_activism', privilege: { resource: 'donations', action: 'list' } },
@@ -126,8 +139,7 @@ export default function DashboardPage() {
     !link.privilege || hasPrivilege(link.privilege.resource, link.privilege.action)
   );
 
-
-  if (authContextLoading || (loadingData && !profile && !authUserProfile)) { // Check against both profile states
+  if (authContextLoading || (loadingData && !profile && !authUserProfile)) {
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400">
@@ -147,17 +159,18 @@ export default function DashboardPage() {
     );
   }
   
-  // Use authUserProfile for display name and roles if local profile is still loading or failed, but auth context has it.
   const displayProfile = profile || (authUserProfile ? {
-      id: authUserProfile.uid,
+      id: authUserProfile.uid, // Use uid from Firebase User
       firstName: authUserProfile.firstName,
       lastName: authUserProfile.lastName,
       email: authUserProfile.email || undefined,
-      assignedRoleNames: authUserProfile.assignedRoleIds, // Adjust if AuthContext.UserProfile has role names
+      assignedRoleNames: authUserProfile.assignedRoleNames || authUserProfile.assignedRoleIds, 
   } : null);
 
   const displayName = displayProfile?.firstName ? `${displayProfile.firstName} ${displayProfile.lastName || ''}` : user?.displayName || user?.email;
-  const displayRoles = displayProfile?.assignedRoleNames?.join(', ') || (authUserProfile?.assignedRoleIds?.includes('sysadmin') ? 'System Administrator' : 'User');
+  // Ensure displayRoles is an array before join, or provide a fallback string
+  const rolesString = Array.isArray(displayProfile?.assignedRoleNames) ? displayProfile.assignedRoleNames.join(', ') : 
+                      (authUserProfile?.isSysadmin ? 'System Administrator' : 'User');
 
 
   return (
@@ -166,9 +179,9 @@ export default function DashboardPage() {
         <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           Welcome, {displayName}!
         </h1>
-        {displayRoles && (
+        {rolesString && (
           <p className="mt-2 text-sm text-indigo-600 dark:text-indigo-400 font-medium">
-            Roles: {displayRoles}
+            Roles: {rolesString}
           </p>
         )}
         <p className="mt-4 text-gray-600 dark:text-gray-300">
@@ -176,7 +189,25 @@ export default function DashboardPage() {
         </p>
       </div>
 
-      {/* Quick Links Section */}
+      <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 inline-flex items-center">
+            <span className="material-icons mr-2 text-indigo-600 dark:text-indigo-400">leaderboard</span>
+            My Contributions
+        </h2>
+        <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg">
+                <h3 className="text-sm font-medium text-gray-500 dark:text-gray-400">Total Volunteer Hours</h3>
+                {loadingStats ? (
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white animate-pulse">Loading...</p>
+                ) : (
+                    <p className="text-2xl font-semibold text-gray-900 dark:text-white">
+                        {userTotalHours !== null ? userTotalHours.toFixed(1) : 'N/A'}
+                    </p>
+                )}
+            </div>
+        </div>
+      </div>
+
       {availableQuickLinks.length > 0 && (
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
           <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 inline-flex items-center">

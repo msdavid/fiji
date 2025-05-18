@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr, Field, ConfigDict, field_validator, model_validator
-from typing import Optional, List, Dict, Any, Literal 
+from typing import Optional, List, Dict, Any, Literal, Set 
 from datetime import datetime, date, time 
 import re 
 
@@ -60,7 +60,7 @@ class UserBase(BaseModel):
     firstName: Optional[str] = Field(None, min_length=1, max_length=50, description="User's first name.")
     lastName: Optional[str] = Field(None, min_length=1, max_length=50, description="User's last name.")
     phone: Optional[str] = Field(None, description="User's phone number.")
-    emergencyContactDetails: Optional[str] = Field(None, description="Emergency contact details (e.g., name, relation, phone).") # New field
+    emergencyContactDetails: Optional[str] = Field(None, description="Emergency contact details (e.g., name, relation, phone).")
     skills: Optional[List[str]] = Field(default_factory=list, description="List of user's skills.")
     qualifications: Optional[List[str]] = Field(default_factory=list, description="List of user's qualifications.")
     preferences: Optional[str] = Field(None, description="User's preferences as a string (e.g., free text, or JSON string).")
@@ -74,15 +74,15 @@ class UserUpdate(BaseModel):
     firstName: Optional[str] = Field(None, min_length=1, max_length=50)
     lastName: Optional[str] = Field(None, min_length=1, max_length=50)
     phone: Optional[str] = None
-    emergencyContactDetails: Optional[str] = None # New field
+    emergencyContactDetails: Optional[str] = None
     skills: Optional[List[str]] = None
     qualifications: Optional[List[str]] = None
     preferences: Optional[str] = None 
     profilePictureUrl: Optional[str] = None
     availability: Optional[UserAvailability] = None 
     
-    assignedRoleIds: Optional[List[str]] = None
-    status: Optional[str] = None
+    assignedRoleIds: Optional[List[str]] = None # For admin updates
+    status: Optional[str] = None # For admin updates
     
     model_config = ConfigDict(extra='forbid')
 
@@ -98,7 +98,11 @@ class UserInDBBase(UserBase):
 
 class UserResponse(UserInDBBase):
     assignedRoleNames: Optional[List[str]] = Field(default_factory=list, description="Names of assigned roles.")
-    pass
+    # Consolidated privileges for the user, derived from their roles.
+    # Format: {"resource_name": ["action1", "action2"], ...}
+    privileges: Dict[str, List[str]] = Field(default_factory=dict, description="Consolidated privileges of the user.")
+    isSysadmin: bool = Field(default=False, description="Indicates if the user has the sysadmin role.")
+
 
 class UserListResponse(BaseModel): 
     id: str

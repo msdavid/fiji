@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List, Optional, Dict, Set
 from firebase_admin import firestore 
-from google.cloud.firestore_v1.field_path import FieldPath # Explicit import for FieldPath
+from google.cloud.firestore_v1.field_path import FieldPath 
 from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import EmailStr
 import datetime
@@ -27,13 +27,35 @@ EVENTS_COLLECTION = "events"
 @router.get(
     "/volunteer-hours/summary",
     response_model=VolunteerHoursSummaryReport,
-    dependencies=[Depends(require_permission("reports", "view_volunteer_hours"))] 
+    # Permission: Allow any authenticated user to get their own summary.
+    # If no userId or userId=me, it's for the current user.
+    # If a specific userId is provided (not 'me'), then require 'reports:view_volunteer_hours_all'
+    # The require_permission dependency is static, so complex logic needs to be inside the endpoint.
 )
 async def get_volunteer_hours_summary(
-    db: firestore.AsyncClient = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db),
+    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac),
+    user_id_filter: Optional[str] = Query(None, alias="userId", description="Filter by specific user ID, or 'me' for current user. If omitted, returns for all users (requires admin privilege).")
+    # TODO: Add date range and event_id filters
 ):
     user_hours_map: Dict[str, Dict[str, any]] = {} 
     grand_total_hours = 0.0
+    
+    target_user_id: Optional[str] = None
+    if user_id_filter == "me":
+        target_user_id = current_rbac_user.uid
+    elif user_id_filter:
+        target_user_id = user_id_filter
+
+    # Permission check
+    if target_user_id and target_user_id != current_rbac_user.uid:
+        # Trying to get specific other user's hours
+        if not current_rbac_user.has_permission("reports", "view_volunteer_hours_others"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view volunteer hours for other users.")
+    elif not target_user_id: # No user_id_filter means all users
+        if not current_rbac_user.has_permission("reports", "view_volunteer_hours_all"):
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view all volunteer hours.")
+    # If target_user_id is current_rbac_user.uid, it's allowed.
 
     try:
         assignments_query = db.collection(ASSIGNMENTS_COLLECTION).where(
@@ -41,18 +63,21 @@ async def get_volunteer_hours_summary(
         ).where(
             filter=FieldFilter("hoursContributed", ">", 0) 
         )
+
+        if target_user_id:
+            assignments_query = assignments_query.where(filter=FieldFilter("userId", "==", target_user_id))
         
         assignments_snapshot = assignments_query.stream()
 
         async for assignment_doc in assignments_snapshot:
             assignment_data = assignment_doc.to_dict()
-            user_id = assignment_data.get("userId")
+            user_id = assignment_data.get("userId") # This will be target_user_id if filtered
             hours = assignment_data.get("hoursContributed", 0.0)
 
             if not user_id or not isinstance(hours, (float, int)) or hours <= 0:
                 continue
 
-            grand_total_hours += hours
+            grand_total_hours += hours # This will be total for one user if filtered, or grand total if not
             if user_id not in user_hours_map:
                 user_hours_map[user_id] = {
                     "userId": user_id,
@@ -63,7 +88,7 @@ async def get_volunteer_hours_summary(
                 }
             user_hours_map[user_id]["totalHours"] += hours
         
-        user_ids_to_fetch = list(user_hours_map.keys())
+        user_ids_to_fetch = list(user_hours_map.keys()) # Will be just one ID if target_user_id is set
         if user_ids_to_fetch:
             MAX_FIRESTORE_IN_QUERY_LIMIT = 30
             
@@ -76,18 +101,18 @@ async def get_volunteer_hours_summary(
                     FieldPath.document_id(), "in", batch_user_ids 
                 ).get()
 
-                for user_doc in users_query_snapshot:
-                    if user_doc.id in user_hours_map:
-                        user_data = user_doc.to_dict()
-                        user_hours_map[user_doc.id]["userFirstName"] = user_data.get("firstName")
-                        user_hours_map[user_doc.id]["userLastName"] = user_data.get("lastName")
-                        user_hours_map[user_doc.id]["userEmail"] = user_data.get("email")
+                for user_doc_snap in users_query_snapshot: # Renamed to avoid conflict
+                    if user_doc_snap.id in user_hours_map:
+                        user_data = user_doc_snap.to_dict()
+                        user_hours_map[user_doc_snap.id]["userFirstName"] = user_data.get("firstName")
+                        user_hours_map[user_doc_snap.id]["userLastName"] = user_data.get("lastName")
+                        user_hours_map[user_doc_snap.id]["userEmail"] = user_data.get("email")
             
         detailed_breakdown = [VolunteerHoursReportItem(**data) for data in user_hours_map.values()]
         detailed_breakdown.sort(key=lambda x: x.totalHours, reverse=True)
 
         return VolunteerHoursSummaryReport(
-            grandTotalHours=grand_total_hours,
+            grandTotalHours=grand_total_hours, # If filtered by user, this is their total. If not, it's system total.
             detailedBreakdown=detailed_breakdown
         )
 
@@ -153,10 +178,10 @@ async def get_event_participation_summary(
                     FieldPath.document_id(), "in", batch_event_ids 
                 ).get()
 
-                for event_doc in events_query_snapshot:
-                    if event_doc.id in event_participation_map:
-                        event_data = event_doc.to_dict()
-                        event_participation_map[event_doc.id]["eventName"] = event_data.get("name", "Unknown Event Name")
+                for event_doc_snap in events_query_snapshot: # Renamed to avoid conflict
+                    if event_doc_snap.id in event_participation_map:
+                        event_data = event_doc_snap.to_dict()
+                        event_participation_map[event_doc_snap.id]["eventName"] = event_data.get("name", "Unknown Event Name")
 
         detailed_breakdown = [EventParticipationReportItem(**data) for data in event_participation_map.values()]
         detailed_breakdown.sort(key=lambda x: x.eventName or x.eventId)
