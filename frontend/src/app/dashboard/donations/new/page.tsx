@@ -11,13 +11,13 @@ type DonationType = 'monetary' | 'in_kind' | 'time_contribution';
 
 interface NewDonationFormData {
   donorName: string;
-  donorEmail: string; // Changed to string for controlled input, can be empty
-  donorPhone: string; // Changed to string
+  donorEmail: string; 
+  donorPhone: string; 
   donationType: DonationType;
-  amount: string; // string for form input
+  amount: string; 
   currency: string;
   description: string;
-  donationDate: string; // YYYY-MM-DD
+  donationDate: string; 
   notes: string;
 }
 
@@ -27,9 +27,9 @@ const initialFormData: NewDonationFormData = {
     donorPhone: '',
     donationType: 'monetary',
     amount: '',
-    currency: 'USD', // Default currency
+    currency: 'USD', 
     description: '',
-    donationDate: format(new Date(), 'yyyy-MM-dd'), // Default to today
+    donationDate: format(new Date(), 'yyyy-MM-dd'), 
     notes: '',
 };
 
@@ -97,15 +97,15 @@ const NewDonationPage = () => {
       payload.amount = parseFloat(formData.amount.toString());
       payload.currency = formData.currency.trim();
     } else {
-      payload.amount = null; // Explicitly nullify for non-monetary
-      payload.currency = null; // Explicitly nullify for non-monetary
-      if (!formData.description.trim()) { // Description is always required
+      payload.amount = null; 
+      payload.currency = null; 
+      if (!formData.description.trim()) { 
         setError("Description is required.");
         setIsSubmitting(false);
         return;
       }
     }
-    if (!formData.description.trim()) { // Double check description as it's always required
+    if (!formData.description.trim()) { 
         setError("Description is required.");
         setIsSubmitting(false);
         return;
@@ -119,7 +119,7 @@ const NewDonationPage = () => {
         data: payload,
       });
       setSuccessMessage('Donation recorded successfully! Redirecting...');
-      setFormData(initialFormData); // Reset form
+      setFormData(initialFormData); 
       setTimeout(() => {
         router.push('/dashboard/donations');
       }, 1500);
@@ -145,7 +145,7 @@ const NewDonationPage = () => {
     );
   }
 
-  if (!user || (userProfile && !canCreateDonations && !error)) { // Show error if explicitly set, or if permissions are missing
+  if (!user || (userProfile && !canCreateDonations && !error)) { 
     return (
         <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
             <div className="mb-6">
@@ -246,11 +246,12 @@ const NewDonationPage = () => {
             </div>
 
             <div className="flex justify-end space-x-3 pt-8 mt-4 border-t border-gray-200 dark:border-gray-700">
-                <Link href="/dashboard/donations" legacyBehavior>
-                    <a className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center">
-                        <span className="material-icons mr-2 text-base">cancel</span>
-                        Cancel
-                    </a>
+                <Link 
+                    href="/dashboard/donations" 
+                    className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
+                >
+                    <span className="material-icons mr-2 text-base">cancel</span>
+                    Cancel
                 </Link>
                 <button type="submit" disabled={isSubmitting || !canCreateDonations} className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center">
                     <span className="material-icons mr-2 text-base">{isSubmitting ? 'hourglass_empty' : 'add_circle_outline'}</span>
