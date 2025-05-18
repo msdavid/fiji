@@ -119,7 +119,7 @@ export default function DeleteUserPage() {
 
   if (error && !userToDelete) { 
     return (
-      <div className="max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg text-center">
+      <div className="max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-900 shadow-xl rounded-lg text-center">
         <span className="material-icons text-5xl text-red-500 dark:text-red-400 mb-4">error_outline</span>
         <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-3">Error Loading User</h2>
         <p className="text-gray-600 dark:text-gray-300 mb-6">{error}</p>
@@ -132,7 +132,7 @@ export default function DeleteUserPage() {
   
   if (!userToDelete) { 
     return (
-        <div className="max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-800 shadow-xl rounded-lg text-center">
+        <div className="max-w-md mx-auto mt-10 p-6 bg-white dark:bg-gray-900 shadow-xl rounded-lg text-center">
             <p className="text-gray-600 dark:text-gray-300">User not found or unable to load details.</p>
             <Link href="/dashboard/admin/users" className="mt-4 inline-block text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300 font-medium">
             Back to User List
@@ -145,7 +145,7 @@ export default function DeleteUserPage() {
 
   return (
     <div className="max-w-2xl mx-auto py-12 px-4 sm:px-6 lg:px-8">
-      <div className="bg-white dark:bg-gray-800 shadow-xl rounded-lg overflow-hidden">
+      <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg overflow-hidden"> {/* Changed dark:bg-gray-800 to dark:bg-gray-900 */}
         <div className="p-6 sm:p-8">
           <div className="text-center">
             <span className="material-icons text-6xl text-red-500 dark:text-red-400 mb-4">warning_amber</span>
