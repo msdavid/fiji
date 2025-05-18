@@ -1,9 +1,9 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { User, signOut } from 'firebase/auth'; // Import signOut
+import { User, signOut } from 'firebase/auth'; 
 import { auth } from '@/lib/firebaseConfig'; 
-import { useRouter } from 'next/navigation'; // Import useRouter
+import { useRouter } from 'next/navigation'; 
 
 interface UserProfileFromBackend { 
   id: string; 
@@ -30,7 +30,7 @@ interface AuthContextType {
   loading: boolean;
   error: Error | null;
   hasPrivilege: (resource: string, action: string) => boolean;
-  logout: () => Promise<void>; // Add logout function to context type
+  logout: (options?: { redirect?: boolean }) => Promise<void>; 
 }
 
 const defaultAuthContextValue: AuthContextType = {
@@ -40,7 +40,7 @@ const defaultAuthContextValue: AuthContextType = {
   loading: true,
   error: null,
   hasPrivilege: () => false, 
-  logout: async () => {}, // Default empty logout function
+  logout: async () => {}, 
 };
 
 const AuthContext = createContext<AuthContextType>(defaultAuthContextValue);
@@ -51,24 +51,26 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userProfile, setUserProfile] = useState<UserProfileFromBackend | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
-  const router = useRouter(); // Initialize router
+  const router = useRouter(); 
 
-  const performLogout = useCallback(async (shouldRedirect: boolean = true) => {
+  const performLogout = useCallback(async (options?: { redirect?: boolean }) => {
+    const { redirect = true } = options || {};
+    setError(null); 
+
     try {
       await signOut(auth);
-      // State updates (user, idToken, userProfile to null) will be handled by onIdTokenChanged
     } catch (e) {
       console.error("Error signing out: ", e);
-      setError(e instanceof Error ? e : new Error('Failed to sign out'));
+      setError(e instanceof Error ? e : new Error('Failed to sign out')); 
     } finally {
-      // Explicitly clear state here as well, as onIdTokenChanged might not fire immediately
-      // or if there's an issue with the listener.
       setUser(null);
       setIdToken(null);
       setUserProfile(null);
-      setLoading(false); // Ensure loading is false after logout attempt
-      if (shouldRedirect) {
-        router.push('/login');
+      setLoading(false); 
+      if (redirect) {
+        if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
+            router.push('/login');
+        }
       }
     }
   }, [router]);
@@ -76,23 +78,22 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   useEffect(() => {
     const unsubscribe = auth.onIdTokenChanged(
       async (currentUser) => {
-        setLoading(true);
-        setError(null); 
+        setLoading(true); // Start loading for any auth state change
+        // setError(null); // Clear general errors, specific errors handled below
 
         if (currentUser) {
-          setUser(currentUser);
+          setUser(currentUser); // Optimistically set user
+          setError(null); // Clear previous errors if we have a current user now
+
           try {
-            const token = await currentUser.getIdToken();
+            const token = await currentUser.getIdToken(); 
             setIdToken(token);
 
             const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
             if (!backendUrl) {
               const msg = "Backend URL (NEXT_PUBLIC_BACKEND_URL) is not configured.";
               console.error(msg);
-              setError(new Error(msg));
-              // No user profile, but user might still be "authenticated" with Firebase.
-              // Consider if logout is appropriate here or just an error state.
-              // For now, we let them stay "logged in" with Firebase but without a profile.
+              setError(new Error(msg)); 
               setUserProfile(null); 
               setLoading(false);
               return; 
@@ -100,86 +101,71 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             try {
               const response = await fetch(`${backendUrl}/users/me`, {
-                headers: {
-                  'Authorization': `Bearer ${token}`,
-                  'Content-Type': 'application/json',
-                },
+                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
               });
 
               if (!response.ok) {
                 let errorDetails = `HTTP error ${response.status}`;
-                try {
-                  const errorData = await response.json();
-                  errorDetails += `: ${errorData.detail || errorData.message || response.statusText}`;
-                } catch (e) {
-                  errorDetails += `: ${response.statusText}`;
-                }
+                try { const errorData = await response.json(); errorDetails += `: ${errorData.detail || errorData.message || response.statusText}`; } 
+                catch (e) { errorDetails += `: ${response.statusText}`; }
                 
-                // If token is invalid/expired (401), logout and redirect
                 if (response.status === 401) {
-                  console.warn("Unauthorized (401) fetching user profile. Logging out.");
-                  await performLogout(); 
-                  // performLogout will set loading to false and redirect
+                  console.warn(`AuthContext: Unauthorized (401) fetching profile (${errorDetails}). Logging out.`);
+                  setError(null); 
+                  setUser(null); setIdToken(null); setUserProfile(null); setLoading(false);
+                  router.push('/login'); // Attempt redirect immediately
+                  await performLogout({ redirect: false }); // Ensure signOut and state cleanup, but redirect already attempted
                   return; 
                 }
-                throw new Error(`Failed to fetch user profile. ${errorDetails}`);
+                setError(new Error(`Failed to fetch user profile. ${errorDetails}`));
+                setUserProfile(null); setLoading(false); 
+                return; 
               }
               
               const profileData = await response.json();
               setUserProfile(profileData as UserProfileFromBackend);
-            } catch (profileError: any) {
-              console.error("Error fetching user profile:", profileError.message);
-              setError(new Error(`Profile fetch error: ${profileError.message}`));
-              setUserProfile(null); 
-              // If profile fetch fails for reasons other than 401, user might still be auth'd with Firebase.
-              // Decide if this warrants a full logout. For now, keeping Firebase session.
+              setError(null); // Clear error on successful profile fetch
+              setLoading(false); 
+            } catch (profileError: any) { 
+              console.error("AuthContext: Network/parsing error fetching profile:", profileError.message);
+              setError(new Error(`Profile fetch error: ${profileError.message}`)); 
+              setUserProfile(null); setLoading(false); 
             }
-          } catch (tokenError: any) {
-            console.error("Error getting ID token:", tokenError.message);
-            setError(tokenError);
-            // This error means Firebase itself had an issue with the token (e.g., user deleted, disabled mid-session)
-            // This is a critical auth issue, so logout.
-            await performLogout();
+          } catch (tokenError: any) { 
+            console.error("AuthContext: Firebase ID token error. Logging out.", tokenError.message);
+            setError(null); 
+            setUser(null); setIdToken(null); setUserProfile(null); setLoading(false);
+            router.push('/login'); // Attempt redirect immediately
+            await performLogout({ redirect: false }); // Ensure signOut and state cleanup
             return;
           }
         } else { // No currentUser
-          setUser(null);
-          setIdToken(null);
-          setUserProfile(null);
-          // Only redirect if not already on login/register page to avoid redirect loops
-          // This part is tricky because onIdTokenChanged fires on initial load (currentUser is null)
-          // and also on explicit logout.
-          // The performLogout function handles redirection, so this might be redundant if logout is always explicit.
-          // However, if Firebase session expires "naturally" and currentUser becomes null, this redirect is needed.
-          if (router && typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+          setError(null); // No user, so no auth error from context
+          setUser(null); setIdToken(null); setUserProfile(null); setLoading(false);
+          if (typeof window !== 'undefined' && 
+              window.location.pathname !== '/login' && 
+              window.location.pathname !== '/register' &&
+              !window.location.pathname.startsWith('/register?token=')) {
              router.push('/login');
           }
         }
-        setLoading(false);
       },
-      async (authError) => { // Error callback for onIdTokenChanged
-        console.error("Auth ID token listener error:", authError.message);
-        setError(authError);
-        // This indicates a fundamental issue with Firebase auth state. Logout.
-        await performLogout();
+      async (authListenerError) => { 
+        console.error("AuthContext: Critical Firebase Auth listener error. Logging out.", authListenerError.message);
+        setError(null); 
+        setUser(null); setIdToken(null); setUserProfile(null); setLoading(false);
+        router.push('/login'); // Attempt redirect immediately
+        await performLogout({ redirect: false }); // Ensure signOut and state cleanup
       }
     );
-
     return () => unsubscribe();
-  }, [performLogout, router]); // Added performLogout and router to dependency array
+  }, [performLogout, router]); // performLogout and router are stable
 
   const hasPrivilege = useCallback((resource: string, action: string): boolean => {
-    if (loading || !userProfile) { 
-      return false; 
-    }
-    if (userProfile.isSysadmin) {
-      return true;
-    }
-    const resourcePrivileges = userProfile.privileges?.[resource];
-    if (resourcePrivileges && Array.isArray(resourcePrivileges) && resourcePrivileges.includes(action)) {
-      return true;
-    }
-    return false;
+    if (loading || !userProfile) return false; 
+    if (userProfile.isSysadmin) return true;
+    const RPr = userProfile.privileges?.[resource];
+    return RPr && Array.isArray(RPr) && RPr.includes(action);
   }, [userProfile, loading]); 
 
   return (
@@ -191,8 +177,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
 export const useAuth = (): AuthContextType => {
   const context = useContext(AuthContext);
-  if (context === undefined) {
-    throw new Error('useAuth must be used within an AuthProvider');
-  }
+  if (context === undefined) throw new Error('useAuth must be used within an AuthProvider');
   return context;
 };

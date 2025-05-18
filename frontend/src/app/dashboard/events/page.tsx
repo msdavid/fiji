@@ -56,7 +56,8 @@ const EVENT_STATUS_LABELS: { [key: string]: string } = {
 
 export default function EventsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth(); 
+  // Added logout to useAuth destructuring
+  const { user, loading: authLoading, userProfile, hasPrivilege, logout } = useAuth(); 
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
   const [actionInProgress, setActionInProgress] = useState<{[eventId: string]: boolean}>({});
@@ -80,68 +81,73 @@ export default function EventsPage() {
     if (!user) return;
 
     setIsLoadingEvents(true);
+    let response; // Define response here to access status in catch
     try {
       const token = await user.getIdToken();
-      if (!token) {
-        throw new Error("Authentication token not available.");
-      }
+      // No need to throw if token is null, getIdToken() would throw or AuthContext handles it
+      // if (!token) { 
+      //   logout(); // This would be handled by AuthContext if getIdToken fails
+      //   return;
+      // }
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       let url = `${backendUrl}/events`;
-      // If the user specifically filters for "draft", let the backend handle it.
-      // The frontend will then apply its own visibility logic on top of what's returned.
       if (currentStatusFilter && currentStatusFilter !== EVENT_STATUSES.ALL) {
         url += `?status=${currentStatusFilter}`;
       }
 
-      const response = await fetch(url, {
+      response = await fetch(url, { // Assign to outer scope response
         headers: {
           'Authorization': `Bearer ${token}`,
         },
       });
 
       if (!response.ok) {
+        // Check for 401 specifically before trying to parse JSON
+        if (response.status === 401) {
+          console.warn("EventsPage: Unauthorized (401) fetching events. Logging out.");
+          await logout(); // Call logout from AuthContext
+          return; // Stop further processing
+        }
         const errorData = await response.json();
         throw new Error(errorData.detail || `Failed to fetch events (status: ${response.status})`);
       }
       const data: Event[] = await response.json();
       setEvents(data);
     } catch (err: any) {
-      toast.error(err.message || 'An unexpected error occurred while fetching events.');
-      console.error("Fetch events error:", err);
+      // If logout was called due to 401, response might be undefined or this catch might not be hit in that path.
+      // Only show toast if it's not a 401 that's being handled by logout.
+      // The check `response?.status !== 401` ensures we don't toast for handled auth errors.
+      if (response?.status !== 401) {
+        toast.error(err.message || 'An unexpected error occurred while fetching events.');
+        console.error("Fetch events error:", err);
+      }
     } finally {
       setIsLoadingEvents(false);
     }
-  }, [user]); 
+  }, [user, logout]); // Added logout to dependencies
 
   useEffect(() => {
+    // This effect already handles redirect if !user after authLoading.
+    // AuthContext is now more aggressive in nullifying user on token issues.
     if (!authLoading && !user) {
-      router.push('/login');
+      // router.push('/login'); // This redirect is handled by DashboardLayout or AuthContext
       return;
     }
     if (user && !authLoading) { 
       fetchEvents(statusFilter);
     }
-  }, [user, authLoading, router, fetchEvents, statusFilter]); 
+  }, [user, authLoading, fetchEvents, statusFilter]); // Removed router from here as redirect is handled elsewhere
 
   const displayedEvents = useMemo(() => {
     const now = currentTimeTick;
-
-    // Step 1: Filter events based on draft status and user permissions
     const permissionFilteredEvents = events.filter(event => {
       if (event.status === EVENT_STATUSES.DRAFT) {
         const currentUserIsCreator = user && event.createdByUserId === user.uid;
-        // Using 'events:edit' as a proxy for being an "event admin" who can see all drafts.
-        // Sysadmin is implicitly covered by hasPrivilege if it's set up to grant all.
         const currentUserCanManageEvents = hasPrivilege('events', 'edit'); 
-        
-        if (!currentUserIsCreator && !currentUserCanManageEvents) {
-          return false; // Hide draft if not creator and no manage privilege
-        }
+        if (!currentUserIsCreator && !currentUserCanManageEvents) return false;
       }
-      return true; // Keep non-drafts, or drafts if permission check passed
+      return true;
     });
-
-    // Step 2: Filter by search term
     const searchFilteredEvents = permissionFilteredEvents.filter(event => {
       if (!searchTerm.trim()) return true;
       const lowercasedSearchTerm = searchTerm.toLowerCase();
@@ -154,58 +160,52 @@ export default function EventsPage() {
       const creatorMatch = creatorFullName.includes(lowercasedSearchTerm);
       return eventNameMatch || descriptionMatch || creatorMatch;
     });
-
-    // Step 3: Map to DisplayEvent and calculate dynamic status
     return searchFilteredEvents.map(event => {
       let dynamicStatus = event.status;
       const originalStatus = event.status;
-
       if (originalStatus !== EVENT_STATUSES.COMPLETED && originalStatus !== EVENT_STATUSES.CANCELLED) {
         try {
           const eventStart = parseISO(event.dateTime);
           const eventEnd = event.endTime ? parseISO(event.endTime) : null;
-
           const isStarted = isAfter(now, eventStart) || isEqual(now, eventStart);
           const isNotEnded = !eventEnd || isBefore(now, eventEnd);
-          
-          if (isStarted && isNotEnded) {
-            dynamicStatus = EVENT_STATUSES.ONGOING;
-          }
-        } catch (e) {
-          console.error("Error parsing event dates for dynamic status:", event.id, e);
-        }
+          if (isStarted && isNotEnded) dynamicStatus = EVENT_STATUSES.ONGOING;
+        } catch (e) { console.error("Error parsing event dates:", event.id, e); }
       }
       return { ...event, displayStatus: dynamicStatus };
     });
-  }, [events, searchTerm, currentTimeTick, user, hasPrivilege]); // Added user and hasPrivilege to dependencies
+  }, [events, searchTerm, currentTimeTick, user, hasPrivilege]);
 
   const handleSignUp = async (eventId: string, eventName: string) => {
     if (!user) return;
     setActionInProgress(prev => ({...prev, [eventId]: true}));
     const loadingToastId = toast.loading(`Signing up for ${eventName}...`);
+    let response;
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${eventId}/signup`, {
+      response = await fetch(`${backendUrl}/events/${eventId}/signup`, {
         method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-          'Content-Type': 'application/json',
-        },
+        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          console.warn("EventsPage: Unauthorized (401) signing up. Logging out.");
+          toast.dismiss(loadingToastId);
+          await logout(); return;
+        }
         const errorData = await response.json();
         throw new Error(errorData.detail || 'Failed to sign up for event.');
       }
       setEvents(prevEvents => prevEvents.map(e => 
-        e.id === eventId 
-        ? { ...e, isCurrentUserSignedUp: true, currentUserAssignmentStatus: 'confirmed' } 
-        : e
+        e.id === eventId ? { ...e, isCurrentUserSignedUp: true, currentUserAssignmentStatus: 'confirmed' } : e
       ));
       toast.success(`Successfully signed up for ${eventName}!`, { id: loadingToastId });
     } catch (err: any) {
-      toast.error(err.message || `Failed to sign up for ${eventName}.`, { id: loadingToastId });
-      console.error("Sign up error:", err);
+      if (response?.status !== 401) {
+        toast.error(err.message || `Failed to sign up for ${eventName}.`, { id: loadingToastId });
+        console.error("Sign up error:", err);
+      }
     } finally {
       setActionInProgress(prev => ({...prev, [eventId]: false}));
     }
@@ -215,35 +215,38 @@ export default function EventsPage() {
     if (!user) return;
     setActionInProgress(prev => ({...prev, [eventId]: true}));
     const loadingToastId = toast.loading(`Withdrawing from ${eventName}...`);
+    let response;
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${eventId}/signup`, {
+      response = await fetch(`${backendUrl}/events/${eventId}/signup`, {
         method: 'DELETE',
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
+        headers: { 'Authorization': `Bearer ${token}` },
       });
       if (!response.ok) {
+        if (response.status === 401) {
+          console.warn("EventsPage: Unauthorized (401) withdrawing. Logging out.");
+          toast.dismiss(loadingToastId);
+          await logout(); return;
+        }
         const errorData = await response.json().catch(() => ({})); 
         throw new Error(errorData.detail || 'Failed to withdraw from event.');
       }
       setEvents(prevEvents => prevEvents.map(e => 
-        e.id === eventId 
-        ? { ...e, isCurrentUserSignedUp: false, currentUserAssignmentStatus: undefined } 
-        : e
+        e.id === eventId ? { ...e, isCurrentUserSignedUp: false, currentUserAssignmentStatus: undefined } : e
       ));
       toast.success(`Successfully withdrew from ${eventName}.`, { id: loadingToastId });
     } catch (err: any) {
-      toast.error(err.message || `Failed to withdraw from ${eventName}.`, { id: loadingToastId });
-      console.error("Withdraw error:", err);
+      if (response?.status !== 401) {
+        toast.error(err.message || `Failed to withdraw from ${eventName}.`, { id: loadingToastId });
+        console.error("Withdraw error:", err);
+      }
     } finally {
       setActionInProgress(prev => ({...prev, [eventId]: false}));
     }
   };
 
-
-  if (authLoading || isLoadingEvents) { 
+  if (authLoading || (!user && !isLoadingEvents)) { // Adjusted loading condition
     return (
       <div className="flex flex-col justify-center items-center h-full min-h-[300px]">
         <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">
@@ -253,6 +256,11 @@ export default function EventsPage() {
       </div>
     );
   }
+  
+  // If after auth loading, user is null, DashboardLayout should handle redirect.
+  // This page shouldn't render its content if user is null.
+  // The loading check above might need to be combined with !user check more carefully.
+  // However, AuthContext and DashboardLayout are primary guards.
 
   return (
     <div> 
