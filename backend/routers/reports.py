@@ -1,15 +1,16 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from google.cloud import firestore
+from google.cloud.firestore_v1.field_path import FieldPath # Corrected import
 from pydantic import BaseModel, Field
 from typing import List, Dict, Any, Optional
 import datetime
 from collections import defaultdict
-import asyncio # Added for asyncio.gather
+import asyncio 
 
 # Corrected imports
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission 
-from models.donation import DonationResponse # Changed from Donation to DonationResponse
+from models.donation import DonationResponse 
 
 router = APIRouter(
     prefix="/api/reports",
@@ -57,7 +58,7 @@ class MonetaryDonationTrendEntry(BaseModel):
 class DonationInsightsReport(BaseModel):
     breakdownByType: List[DonationTypeSummary]
     monetaryTrend: List[MonetaryDonationTrendEntry]
-    recentDonations: List[DonationResponse] # Changed type hint from Donation to DonationResponse
+    recentDonations: List[DonationResponse] 
     totalMonetaryAmountOverall: float
     totalDonationsCountOverall: int
 
@@ -67,7 +68,7 @@ class UserReportEntry(BaseModel):
     displayName: Optional[str] = None
     email: Optional[str] = None
     assignedRoleNames: List[str] = []
-    status: Optional[str] = None # e.g., active, inactive
+    status: Optional[str] = None 
     createdAt: Optional[datetime.datetime] = None
 
 class UsersReport(BaseModel):
@@ -218,14 +219,14 @@ async def get_donation_insights_report(
         if period == "last_30_days": start_date_filter = now - datetime.timedelta(days=30)
         elif period == "last_90_days": start_date_filter = now - datetime.timedelta(days=90)
         elif period == "year_to_date": start_date_filter = datetime.datetime(now.year, 1, 1, tzinfo=datetime.timezone.utc)
-        if start_date_filter: query = query.where("donationDate", ">=", start_date_filter.strftime("%Y-%m-%d")) # Compare with string date
+        if start_date_filter: query = query.where("donationDate", ">=", start_date_filter.strftime("%Y-%m-%d")) 
 
-        recent_donations_list: List[DonationResponse] = [] # Changed type hint
+        recent_donations_list: List[DonationResponse] = [] 
         type_summary: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"count": 0, "totalAmount": 0.0})
         monthly_trend: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"totalAmount": 0.0, "count": 0})
         total_monetary_overall = 0.0
         total_donations_count = 0
-        # Order by donationDate (string) descending. Firestore handles string comparison lexicographically.
+        
         donations_stream = query.order_by("donationDate", direction=firestore.Query.DESCENDING).stream()
 
         async for donation_doc in donations_stream:
@@ -294,23 +295,20 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
         users_data = []
         all_role_ids = set()
         
-        # First pass: Get all users and their role IDs
         user_docs_with_roles = []
         users_snapshot = db.collection("users").order_by("createdAt", direction=firestore.Query.DESCENDING).stream()
         async for user_doc in users_snapshot:
             user_info = user_doc.to_dict()
-            user_info["id"] = user_doc.id # Ensure 'id' is present, as 'uid' might be the doc id
+            user_info["id"] = user_doc.id 
             assigned_role_ids = user_info.get("assignedRoleIds", [])
-            if assigned_role_ids: # Only collect role IDs if they exist
+            if assigned_role_ids: 
                 all_role_ids.update(assigned_role_ids)
             user_docs_with_roles.append((user_info, assigned_role_ids))
 
-        # Fetch all unique role names in batches if necessary
         role_names_map: Dict[str, str] = {}
         if all_role_ids:
-            # Firestore 'in' query limit is 30
             role_ids_list = list(all_role_ids)
-            chunk_size = 30
+            chunk_size = 30 # Firestore 'in' query limit
             role_fetch_tasks = []
 
             for i in range(0, len(role_ids_list), chunk_size):
@@ -319,7 +317,8 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
                     continue
                 
                 async def fetch_batch_roles(ids_batch):
-                    roles_query_snapshot = await db.collection("roles").where(firestore.FieldPath.document_id(), "in", ids_batch).get()
+                    # Use FieldPath from the correct import
+                    roles_query_snapshot = await db.collection("roles").where(FieldPath.document_id(), "in", ids_batch).get()
                     batch_role_names = {}
                     for role_doc_snap in roles_query_snapshot:
                         role_data = role_doc_snap.to_dict()
@@ -332,27 +331,24 @@ async def get_users_list_report(db: firestore.AsyncClient = Depends(get_db)):
             for batch_result in results:
                 role_names_map.update(batch_result)
 
-        # Second pass: Construct UserReportEntry objects
         for user_info, assigned_role_ids in user_docs_with_roles:
             role_names = [role_names_map.get(role_id, "Unknown Role") for role_id in assigned_role_ids if role_id in role_names_map]
             
-            # Handle createdAt conversion if it's a string
             created_at_val = user_info.get("createdAt")
             if isinstance(created_at_val, str):
                 try:
                     created_at_val = datetime.datetime.fromisoformat(created_at_val.replace("Z", "+00:00"))
                 except ValueError:
-                    created_at_val = None # Or some default
+                    created_at_val = None 
             elif not isinstance(created_at_val, datetime.datetime):
                  created_at_val = None
 
-
             users_data.append(UserReportEntry(
-                id=user_info.get("uid", user_info["id"]), # Prefer 'uid' if present, else 'id'
+                id=user_info.get("uid", user_info["id"]), 
                 displayName=user_info.get("displayName"),
                 email=user_info.get("email"),
                 assignedRoleNames=role_names,
-                status=user_info.get("status", "active"), # Default to active if not present
+                status=user_info.get("status", "active"), 
                 createdAt=created_at_val
             ))
 
