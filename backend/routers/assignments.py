@@ -38,6 +38,8 @@ async def _get_assignable_details(db: firestore.AsyncClient, assignable_id: str,
         "startDate": None # For assignableStartDate
     }
     if not assignable_id or not assignable_type:
+        details["name"] = f"Invalid assignable_id or assignable_type provided ({assignable_id}, {assignable_type})"
+        print(f"Warning: Invalid assignable_id or assignable_type in _get_assignable_details: ID='{assignable_id}', Type='{assignable_type}'")
         return details
     
     collection_name = ""
@@ -49,13 +51,15 @@ async def _get_assignable_details(db: firestore.AsyncClient, assignable_id: str,
         collection_name = WORKING_GROUPS_COLLECTION
         name_field = "groupName"
         description_field = "description"
+        # No specific date_field for working groups in this context
     elif assignable_type == "event":
         collection_name = EVENTS_COLLECTION
-        name_field = "name" 
-        description_field = "description"
-        date_field = "startDate" 
+        name_field = "eventName" 
+        description_field = "description" 
+        date_field = "dateTime" 
     else:
-        details["name"] = "Unknown Type"
+        details["name"] = f"Unknown Assignable Type: {assignable_type}"
+        print(f"Warning: Unknown assignable_type in _get_assignable_details: Type='{assignable_type}', ID='{assignable_id}'")
         return details
 
     doc_ref = db.collection(collection_name).document(assignable_id)
@@ -63,12 +67,33 @@ async def _get_assignable_details(db: firestore.AsyncClient, assignable_id: str,
 
     if doc_snap.exists:
         data = doc_snap.to_dict()
-        details["name"] = data.get(name_field, f"{assignable_type.capitalize()} Name Not Found")
+        retrieved_name = data.get(name_field)
+        if retrieved_name:
+            details["name"] = retrieved_name
+        else:
+            details["name"] = f"{assignable_type.capitalize()} Name Not Found (Field: {name_field})"
+            print(f"Warning: Document found for {assignable_type} ID '{assignable_id}' in collection '{collection_name}' but its '{name_field}' field is missing or null.")
+        
         details["description"] = data.get(description_field)
+        
         if date_field and data.get(date_field):
-            details["startDate"] = data.get(date_field)
+            dt_value = data.get(date_field)
+            if isinstance(dt_value, datetime.datetime):
+                details["startDate"] = dt_value.isoformat() # Store as ISO string
+            elif isinstance(dt_value, str): # If it's already an ISO string from Firestore
+                try:
+                    # Validate if it's a parseable ISO string, then store
+                    datetime.datetime.fromisoformat(dt_value.replace("Z", "+00:00")) 
+                    details["startDate"] = dt_value
+                except ValueError:
+                    print(f"Warning: Found string for {date_field} for {assignable_type} ID '{assignable_id}' but it's not a valid ISO date string: {dt_value}")
+                    details["startDate"] = None # Or handle as an error
+            else:
+                print(f"Warning: Unexpected type for {date_field} for {assignable_type} ID '{assignable_id}': {type(dt_value)}. Value: {dt_value}")
+                details["startDate"] = None
     else:
         details["name"] = f"{assignable_type.capitalize()} ID '{assignable_id}' Not Found"
+        print(f"Warning: Document not found for {assignable_type} ID '{assignable_id}' in collection '{collection_name}'.")
     return details
 
 
@@ -82,15 +107,14 @@ async def list_assignments(
 ):
     actual_user_id = current_rbac_user.uid if user_id == "me" else user_id
 
-    # Permission checks
     if actual_user_id and actual_user_id != current_rbac_user.uid:
-        if not current_rbac_user.has_permission("assignments", "list_others_by_user"): # Changed to has_permission
+        if not current_rbac_user.has_permission("assignments", "list_others_by_user"): 
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to list assignments for other users.")
     elif assignable_id and not actual_user_id: 
-        if not current_rbac_user.has_permission("assignments", "list_others_by_entity"): # Changed to has_permission
+        if not current_rbac_user.has_permission("assignments", "list_others_by_entity"): 
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to list assignments for this entity.")
     elif not actual_user_id and not assignable_id: 
-        if not current_rbac_user.has_permission("assignments", "list_all_system"): # Changed to has_permission
+        if not current_rbac_user.has_permission("assignments", "list_all_system"): 
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to list all system assignments.")
 
     query = db.collection(ASSIGNMENTS_COLLECTION)
@@ -117,13 +141,12 @@ async def list_assignments(
             
             assignable_item_details = await _get_assignable_details(db, assignment_data.get("assignableId"), assignment_data.get("assignableType"))
             assignment_data["assignableName"] = assignable_item_details.get("name")
-            assignment_data["assignableStartDate"] = assignable_item_details.get("startDate")
+            assignment_data["assignableStartDate"] = assignable_item_details.get("startDate") 
 
             for dt_field in ["createdAt", "updatedAt", "assignmentDate"]:
                 if not isinstance(assignment_data.get(dt_field), datetime.datetime):
-                    print(f"Warning: Assignment {doc.id} has invalid or missing datetime for field {dt_field}. Value: {assignment_data.get(dt_field)}")
-                    if assignment_data.get(dt_field) is None:
-                         assignment_data[dt_field] = datetime.datetime.utcnow() 
+                    if assignment_data.get(dt_field) is None: 
+                         assignment_data[dt_field] = datetime.datetime.now(datetime.timezone.utc) 
 
             try:
                 assignments_list.append(AssignmentResponse(**assignment_data))

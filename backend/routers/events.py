@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List, Optional
 from firebase_admin import firestore
 from google.cloud.firestore_v1.base_query import FieldFilter
-from google.cloud.firestore_v1.field_path import FieldPath # Corrected explicit import for FieldPath
+from google.cloud.firestore_v1.field_path import FieldPath 
 import datetime
 
 # Use direct imports from subdirectories of 'backend'
@@ -85,11 +85,32 @@ async def list_events(
     db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac),
     status_filter: Optional[str] = Query(None, alias="status"),
+    from_date: Optional[datetime.date] = Query(None, description="Filter events from this date (YYYY-MM-DD). Defaults to today."),
+    to_date: Optional[datetime.date] = Query(None, description="Filter events up to this date (YYYY-MM-DD). Defaults to 14 days from today.")
 ):
     try:
         query = db.collection(EVENTS_COLLECTION)
+        
+        # Handle date defaults and conversion
+        today = datetime.date.today()
+        actual_from_date = from_date if from_date else today
+        actual_to_date = to_date if to_date else (today + datetime.timedelta(days=14))
+
+        if actual_to_date < actual_from_date:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="to_date cannot be before from_date.")
+
+        # Convert dates to timezone-aware datetimes for Firestore comparison
+        # Assuming event.dateTime is stored in UTC
+        from_datetime_utc = datetime.datetime.combine(actual_from_date, datetime.time.min, tzinfo=datetime.timezone.utc)
+        to_datetime_utc = datetime.datetime.combine(actual_to_date, datetime.time.max, tzinfo=datetime.timezone.utc)
+        
+        # Apply filters
         if status_filter:
             query = query.where(filter=FieldFilter("status", "==", status_filter))
+        
+        query = query.where(filter=FieldFilter("dateTime", ">=", from_datetime_utc))
+        query = query.where(filter=FieldFilter("dateTime", "<=", to_datetime_utc))
+        
         query = query.order_by("dateTime", direction=firestore.Query.ASCENDING)
 
         docs_snapshot = query.stream()
@@ -108,7 +129,7 @@ async def list_events(
 
         user_details_map = {}
         user_ids_list = list(all_user_ids_to_fetch)
-        MAX_FIRESTORE_IN_QUERY_LIMIT = 30
+        MAX_FIRESTORE_IN_QUERY_LIMIT = 30 # Firestore 'in' query limit
         for i in range(0, len(user_ids_list), MAX_FIRESTORE_IN_QUERY_LIMIT):
             batch_ids = user_ids_list[i:i+MAX_FIRESTORE_IN_QUERY_LIMIT]
             if not batch_ids: continue
@@ -144,8 +165,13 @@ async def list_events(
 
             events_list.append(EventWithSignupStatus(**event_data, isCurrentUserSignedUp=is_signed_up, currentUserAssignmentStatus=assignment_status))
         return events_list
+    except HTTPException as http_exc:
+        raise http_exc # Re-raise HTTPException to ensure FastAPI handles it correctly
     except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+        import traceback
+        print(f"Error in list_events: {str(e)}")
+        traceback.print_exc()
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred while listing events: {str(e)}")
 
 @router.get("/{event_id}", response_model=EventWithSignupStatus)
 async def get_event(
@@ -168,9 +194,9 @@ async def get_event(
 
         if event_data.get("organizerUserId"):
             organizer_details = await _get_user_details(db, event_data["organizerUserId"])
-            response_data["organizerFirstName"] = organizer_details.get("firstName")
-            response_data["organizerLastName"] = organizer_details.get("lastName")
-            response_data["organizerEmail"] = organizer_details.get("email")
+            event_data["organizerFirstName"] = organizer_details.get("firstName") 
+            event_data["organizerLastName"] = organizer_details.get("lastName")  
+            event_data["organizerEmail"] = organizer_details.get("email")        
 
         is_signed_up = None
         assignment_status = None
@@ -191,6 +217,9 @@ async def get_event(
                 assignment_status = assignment_doc_snap.to_dict().get("status")
         return EventWithSignupStatus(**event_data, isCurrentUserSignedUp=is_signed_up, currentUserAssignmentStatus=assignment_status)
     except Exception as e:
+        print(f"Error in get_event for event_id {event_id}: {str(e)}") 
+        import traceback
+        traceback.print_exc() 
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.put("/{event_id}", response_model=EventResponse, dependencies=[Depends(require_permission("events", "edit"))])

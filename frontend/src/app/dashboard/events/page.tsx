@@ -1,442 +1,325 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
+import { useRouter } from 'next/navigation'; 
 import { useAuth } from '@/context/AuthContext';
-import { format, parseISO, isBefore, isAfter, isEqual } from 'date-fns';
-import toast from 'react-hot-toast'; 
+import apiClient, { ApiResponse } from '@/lib/apiClient';
+import { format, parseISO, isValid as isValidDate } from 'date-fns';
 
-interface Event {
+interface EventWithSignupStatus {
   id: string;
   eventName: string;
   eventType?: string;
-  purpose?: string;
   description?: string;
-  dateTime: string;
-  endTime?: string;
-  venue: string;
-  volunteersRequired?: number;
-  status: string; 
-  createdByUserId: string;
-  creatorFirstName?: string;
-  creatorLastName?: string;
-  createdAt: string;
-  updatedAt: string;
+  dateTime: string; // ISO string
+  endTime: string;  // ISO string
+  venue?: string;
+  status: string;
+  icon?: string;
   isCurrentUserSignedUp?: boolean;
   currentUserAssignmentStatus?: string;
-  organizerUserId?: string;
   organizerFirstName?: string;
   organizerLastName?: string;
-  icon?: string;
+  organizerEmail?: string;
+  creatorFirstName?: string;
+  creatorLastName?: string;
 }
 
-interface DisplayEvent extends Event {
-  displayStatus: string; 
-}
+const EventCard = ({ event, onSignup, onWithdraw, isProcessingSignup, currentUserId }: { 
+  event: EventWithSignupStatus; 
+  onSignup: (eventId: string) => Promise<void>;
+  onWithdraw: (eventId: string) => Promise<void>;
+  isProcessingSignup: string | null; 
+  currentUserId: string | null;
+}) => {
+  const { hasPrivilege, userProfile } = useAuth();
+  // const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.isSysadmin); // Not used in this card version
 
-const EVENT_STATUSES = {
-  ALL: "",
-  DRAFT: "draft",
-  OPEN_FOR_SIGNUP: "open_for_signup",
-  ONGOING: "ongoing", 
-  COMPLETED: "completed",
-  CANCELLED: "cancelled",
-};
+  const isEventOver = new Date(event.endTime) < new Date();
+  const canSignup = event.status === 'open_for_signup' && !isEventOver;
 
-const EVENT_STATUS_LABELS: { [key: string]: string } = {
-  [EVENT_STATUSES.ALL]: "All Statuses",
-  [EVENT_STATUSES.DRAFT]: "Draft",
-  [EVENT_STATUSES.OPEN_FOR_SIGNUP]: "Open For Signup",
-  [EVENT_STATUSES.ONGOING]: "Ongoing", 
-  [EVENT_STATUSES.COMPLETED]: "Completed",
-  [EVENT_STATUSES.CANCELLED]: "Cancelled",
+  return (
+    <div className="bg-white dark:bg-gray-800 shadow-lg rounded-xl overflow-hidden hover:shadow-2xl transition-shadow duration-300 flex flex-col">
+      <div className="p-5 sm:p-6 flex-grow">
+        <div className="flex items-start justify-between mb-2">
+          <h3 className="text-lg sm:text-xl font-semibold text-indigo-700 dark:text-indigo-400 hover:text-indigo-600 dark:hover:text-indigo-300 transition-colors">
+            <Link href={`/dashboard/events/${event.id}`}>{event.eventName}</Link>
+          </h3>
+          {event.icon && <span className="material-icons text-indigo-500 dark:text-indigo-400 ml-2">{event.icon}</span>}
+        </div>
+        {event.eventType && (
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase tracking-wider mb-2">{event.eventType}</p>
+        )}
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+          <span className="font-semibold">Date:</span> {format(parseISO(event.dateTime), 'EEE, MMM d, yyyy')}
+        </p>
+        <p className="text-sm text-gray-600 dark:text-gray-300 mb-1">
+          <span className="font-semibold">Time:</span> {format(parseISO(event.dateTime), 'h:mm a')} - {format(parseISO(event.endTime), 'h:mm a')}
+        </p>
+        {event.venue && (
+          <p className="text-sm text-gray-600 dark:text-gray-300 mb-3">
+            <span className="font-semibold">Venue:</span> {event.venue}
+          </p>
+        )}
+        <p className={`text-xs px-2 py-0.5 inline-block rounded-full font-semibold mb-4
+          ${event.status === 'open_for_signup' ? 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100' :
+            event.status === 'completed' || event.status === 'cancelled' ? 'bg-gray-100 text-gray-800 dark:bg-gray-600 dark:text-gray-200' :
+            'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100'}`}>
+          {event.status.replace(/_/g, ' ').replace(/\b\w/g, l => l.toUpperCase())}
+        </p>
+        {event.description && (
+          <p className="text-sm text-gray-500 dark:text-gray-400 line-clamp-2 mb-3">{event.description}</p>
+        )}
+      </div>
+      <div className="px-5 sm:px-6 py-4 bg-gray-50 dark:bg-gray-800/50 border-t border-gray-200 dark:border-gray-700 flex flex-col sm:flex-row justify-between items-center space-y-2 sm:space-y-0">
+        <Link href={`/dashboard/events/${event.id}`} className="text-sm text-indigo-600 dark:text-indigo-400 hover:underline font-medium">
+          View Details
+        </Link>
+        {currentUserId && (
+          <>
+            {event.isCurrentUserSignedUp ? (
+              <button
+                onClick={() => onWithdraw(event.id)}
+                disabled={isProcessingSignup === event.id || isEventOver}
+                className="py-1.5 px-3 text-xs font-medium rounded-md shadow-sm text-white bg-red-500 hover:bg-red-600 disabled:opacity-50 inline-flex items-center"
+              >
+                {isProcessingSignup === event.id ? <span className="material-icons animate-spin text-sm mr-1">sync</span> : <span className="material-icons text-sm mr-1">event_busy</span>}
+                Withdraw
+              </button>
+            ) : canSignup ? (
+              <button
+                onClick={() => onSignup(event.id)}
+                disabled={isProcessingSignup === event.id}
+                className="py-1.5 px-3 text-xs font-medium rounded-md shadow-sm text-white bg-green-500 hover:bg-green-600 disabled:opacity-50 inline-flex items-center"
+              >
+                 {isProcessingSignup === event.id ? <span className="material-icons animate-spin text-sm mr-1">sync</span> : <span className="material-icons text-sm mr-1">event_available</span>}
+                Sign Up
+              </button>
+            ) : null}
+          </>
+        )}
+      </div>
+    </div>
+  );
 };
 
 
 export default function EventsPage() {
-  const router = useRouter();
-  // Added logout to useAuth destructuring
-  const { user, loading: authLoading, userProfile, hasPrivilege, logout } = useAuth(); 
-  const [events, setEvents] = useState<Event[]>([]);
-  const [isLoadingEvents, setIsLoadingEvents] = useState(true);
-  const [actionInProgress, setActionInProgress] = useState<{[eventId: string]: boolean}>({});
+  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege, logout } = useAuth();
+  const [events, setEvents] = useState<EventWithSignupStatus[]>([]);
+  const [isLoading, setIsLoading] = useState(true);
+  const [error, setError] = useState<string | null>(null);
+  const [signupError, setSignupError] = useState<string | null>(null);
+  const [isProcessingSignup, setIsProcessingSignup] = useState<string | null>(null); 
 
-  const [searchTerm, setSearchTerm] = useState('');
-  const [statusFilter, setStatusFilter] = useState(EVENT_STATUSES.ALL);
-  const [currentTimeTick, setCurrentTimeTick] = useState(new Date());
+  const [statusFilter, setStatusFilter] = useState<string>(''); 
+  const [fromDateFilter, setFromDateFilter] = useState<string>('');
+  const [toDateFilter, setToDateFilter] = useState<string>('');
 
-  const canCreateEvents = useMemo(() => {
-    return hasPrivilege('events', 'create'); 
-  }, [hasPrivilege]); 
 
-  useEffect(() => {
-    const timerId = setInterval(() => {
-      setCurrentTimeTick(new Date());
-    }, 60000); 
-    return () => clearInterval(timerId);
-  }, []);
+  const canCreateEvents = userProfile && (hasPrivilege ? hasPrivilege('events', 'create') : userProfile.isSysadmin);
 
-  const fetchEvents = useCallback(async (currentStatusFilter: string) => {
-    if (!user) return;
-
-    setIsLoadingEvents(true);
-    let response; // Define response here to access status in catch
-    try {
-      const token = await user.getIdToken();
-      // No need to throw if token is null, getIdToken() would throw or AuthContext handles it
-      // if (!token) { 
-      //   logout(); // This would be handled by AuthContext if getIdToken fails
-      //   return;
-      // }
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      let url = `${backendUrl}/events`;
-      if (currentStatusFilter && currentStatusFilter !== EVENT_STATUSES.ALL) {
-        url += `?status=${currentStatusFilter}`;
-      }
-
-      response = await fetch(url, { // Assign to outer scope response
-        headers: {
-          'Authorization': `Bearer ${token}`,
-        },
-      });
-
-      if (!response.ok) {
-        // Check for 401 specifically before trying to parse JSON
-        if (response.status === 401) {
-          console.warn("EventsPage: Unauthorized (401) fetching events. Logging out.");
-          await logout(); // Call logout from AuthContext
-          return; // Stop further processing
-        }
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Failed to fetch events (status: ${response.status})`);
-      }
-      const data: Event[] = await response.json();
-      setEvents(data);
-    } catch (err: any) {
-      // If logout was called due to 401, response might be undefined or this catch might not be hit in that path.
-      // Only show toast if it's not a 401 that's being handled by logout.
-      // The check `response?.status !== 401` ensures we don't toast for handled auth errors.
-      if (response?.status !== 401) {
-        toast.error(err.message || 'An unexpected error occurred while fetching events.');
-        console.error("Fetch events error:", err);
-      }
-    } finally {
-      setIsLoadingEvents(false);
-    }
-  }, [user, logout]); // Added logout to dependencies
-
-  useEffect(() => {
-    // This effect already handles redirect if !user after authLoading.
-    // AuthContext is now more aggressive in nullifying user on token issues.
-    if (!authLoading && !user) {
-      // router.push('/login'); // This redirect is handled by DashboardLayout or AuthContext
+  const fetchEvents = useCallback(async () => {
+    if (!idToken) {
+      if (!authLoading) setIsLoading(false); 
       return;
     }
-    if (user && !authLoading) { 
-      fetchEvents(statusFilter);
+    setIsLoading(true); setError(null); setSignupError(null);
+
+    const params = new URLSearchParams();
+    if (statusFilter) params.append('status', statusFilter);
+    if (fromDateFilter) params.append('from_date', fromDateFilter);
+    if (toDateFilter) params.append('to_date', toDateFilter);
+    
+    const pathWithParams = `/events?${params.toString()}`;
+
+    const result: ApiResponse<EventWithSignupStatus[]> = await apiClient({
+      path: pathWithParams,
+      token: idToken,
+      method: 'GET',
+    });
+
+    setIsLoading(false);
+    if (result.ok && result.data) {
+      setEvents(result.data);
+    } else {
+      console.error("Fetch events error:", result.error);
+      if (result.status === 401) { await logout(); return; }
+      setError(result.error?.message || 'Failed to fetch events.');
     }
-  }, [user, authLoading, fetchEvents, statusFilter]); // Removed router from here as redirect is handled elsewhere
+  }, [idToken, authLoading, statusFilter, fromDateFilter, toDateFilter, logout]);
 
-  const displayedEvents = useMemo(() => {
-    const now = currentTimeTick;
-    const permissionFilteredEvents = events.filter(event => {
-      if (event.status === EVENT_STATUSES.DRAFT) {
-        const currentUserIsCreator = user && event.createdByUserId === user.uid;
-        const currentUserCanManageEvents = hasPrivilege('events', 'edit'); 
-        if (!currentUserIsCreator && !currentUserCanManageEvents) return false;
-      }
-      return true;
-    });
-    const searchFilteredEvents = permissionFilteredEvents.filter(event => {
-      if (!searchTerm.trim()) return true;
-      const lowercasedSearchTerm = searchTerm.toLowerCase();
-      const eventNameMatch = event.eventName.toLowerCase().includes(lowercasedSearchTerm);
-      const descriptionMatch = event.description && event.description.toLowerCase().includes(lowercasedSearchTerm);
-      let creatorFullName = '';
-      if (event.creatorFirstName || event.creatorLastName) {
-        creatorFullName = `${event.creatorFirstName || ''} ${event.creatorLastName || ''}`.trim().toLowerCase();
-      }
-      const creatorMatch = creatorFullName.includes(lowercasedSearchTerm);
-      return eventNameMatch || descriptionMatch || creatorMatch;
-    });
-    return searchFilteredEvents.map(event => {
-      let dynamicStatus = event.status;
-      const originalStatus = event.status;
-      if (originalStatus !== EVENT_STATUSES.COMPLETED && originalStatus !== EVENT_STATUSES.CANCELLED) {
-        try {
-          const eventStart = parseISO(event.dateTime);
-          const eventEnd = event.endTime ? parseISO(event.endTime) : null;
-          const isStarted = isAfter(now, eventStart) || isEqual(now, eventStart);
-          const isNotEnded = !eventEnd || isBefore(now, eventEnd);
-          if (isStarted && isNotEnded) dynamicStatus = EVENT_STATUSES.ONGOING;
-        } catch (e) { console.error("Error parsing event dates:", event.id, e); }
-      }
-      return { ...event, displayStatus: dynamicStatus };
-    });
-  }, [events, searchTerm, currentTimeTick, user, hasPrivilege]);
+  useEffect(() => {
+    if (!authLoading && !user) { /* router.push('/login'); Handled by layout */ }
+    if (user && !userProfile && fetchUserProfile) fetchUserProfile();
+    if (idToken) { 
+        fetchEvents();
+    }
+  }, [user, authLoading, userProfile, fetchUserProfile, idToken, statusFilter, fromDateFilter, toDateFilter, fetchEvents]);
 
-  const handleSignUp = async (eventId: string, eventName: string) => {
-    if (!user) return;
-    setActionInProgress(prev => ({...prev, [eventId]: true}));
-    const loadingToastId = toast.loading(`Signing up for ${eventName}...`);
-    let response;
-    try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      response = await fetch(`${backendUrl}/events/${eventId}/signup`, {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-      });
-      if (!response.ok) {
-        if (response.status === 401) {
-          console.warn("EventsPage: Unauthorized (401) signing up. Logging out.");
-          toast.dismiss(loadingToastId);
-          await logout(); return;
-        }
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to sign up for event.');
-      }
-      setEvents(prevEvents => prevEvents.map(e => 
-        e.id === eventId ? { ...e, isCurrentUserSignedUp: true, currentUserAssignmentStatus: 'confirmed' } : e
-      ));
-      toast.success(`Successfully signed up for ${eventName}!`, { id: loadingToastId });
-    } catch (err: any) {
-      if (response?.status !== 401) {
-        toast.error(err.message || `Failed to sign up for ${eventName}.`, { id: loadingToastId });
-        console.error("Sign up error:", err);
-      }
-    } finally {
-      setActionInProgress(prev => ({...prev, [eventId]: false}));
+
+  const handleSignup = async (eventId: string) => {
+    if (!idToken) { setSignupError("Authentication required."); return; }
+    setIsProcessingSignup(eventId); setSignupError(null);
+    
+    const result = await apiClient({
+      path: `/events/${eventId}/signup`,
+      token: idToken,
+      method: 'POST',
+    });
+
+    setIsProcessingSignup(null);
+    if (result.ok) {
+      fetchEvents(); 
+    } else {
+      console.error("Signup error:", result.error);
+      if (result.status === 401) { await logout(); return; }
+      setSignupError(result.error?.message || 'Failed to sign up for the event.');
     }
   };
 
-  const handleWithdraw = async (eventId: string, eventName: string) => {
-    if (!user) return;
-    setActionInProgress(prev => ({...prev, [eventId]: true}));
-    const loadingToastId = toast.loading(`Withdrawing from ${eventName}...`);
-    let response;
-    try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      response = await fetch(`${backendUrl}/events/${eventId}/signup`, {
-        method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
-      });
-      if (!response.ok) {
-        if (response.status === 401) {
-          console.warn("EventsPage: Unauthorized (401) withdrawing. Logging out.");
-          toast.dismiss(loadingToastId);
-          await logout(); return;
-        }
-        const errorData = await response.json().catch(() => ({})); 
-        throw new Error(errorData.detail || 'Failed to withdraw from event.');
-      }
-      setEvents(prevEvents => prevEvents.map(e => 
-        e.id === eventId ? { ...e, isCurrentUserSignedUp: false, currentUserAssignmentStatus: undefined } : e
-      ));
-      toast.success(`Successfully withdrew from ${eventName}.`, { id: loadingToastId });
-    } catch (err: any) {
-      if (response?.status !== 401) {
-        toast.error(err.message || `Failed to withdraw from ${eventName}.`, { id: loadingToastId });
-        console.error("Withdraw error:", err);
-      }
-    } finally {
-      setActionInProgress(prev => ({...prev, [eventId]: false}));
+  const handleWithdraw = async (eventId: string) => {
+    if (!idToken) { setSignupError("Authentication required."); return; }
+    setIsProcessingSignup(eventId); setSignupError(null);
+
+    const result = await apiClient({
+      path: `/events/${eventId}/signup`, 
+      token: idToken,
+      method: 'DELETE',
+    });
+    
+    setIsProcessingSignup(null);
+    if (result.ok) {
+      fetchEvents(); 
+    } else {
+      console.error("Withdraw error:", result.error);
+      if (result.status === 401) { await logout(); return; }
+      setSignupError(result.error?.message || 'Failed to withdraw from the event.');
     }
   };
 
-  if (authLoading || (!user && !isLoadingEvents)) { // Adjusted loading condition
-    return (
-      <div className="flex flex-col justify-center items-center h-full min-h-[300px]">
-        <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">
-          sync
-        </span>
-        <p className="text-lg text-gray-700 dark:text-gray-300">Loading events...</p>
-      </div>
-    );
+  const clearDateFilters = () => {
+    setFromDateFilter('');
+    setToDateFilter('');
+  };
+
+
+  if (authLoading && !userProfile) {
+    return <div className="text-center py-10"><span className="material-icons animate-spin text-2xl text-indigo-500">sync</span><p className="mt-2">Loading user data...</p></div>;
   }
   
-  // If after auth loading, user is null, DashboardLayout should handle redirect.
-  // This page shouldn't render its content if user is null.
-  // The loading check above might need to be combined with !user check more carefully.
-  // However, AuthContext and DashboardLayout are primary guards.
-
   return (
-    <div> 
-      <div className="flex justify-between items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
-          Events
-        </h1>
+    <main className="max-w-7xl mx-auto">
+      <header className="mb-8 pt-8 flex flex-col sm:flex-row justify-between items-start sm:items-center">
+        <div className="mb-4 sm:mb-0">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Events</h1>
+          <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Browse and sign up for upcoming events.</p>
+        </div>
         {canCreateEvents && (
-          <Link href="/dashboard/events/new">
-            <button className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white text-sm font-medium rounded-md shadow-sm inline-flex items-center">
-              <span className="material-icons text-lg mr-2">add_circle_outline</span>
-              Create New Event
-            </button>
+          <Link 
+            href="/dashboard/events/new" 
+            className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
+          >
+            <span className="material-icons mr-2 text-base">add_circle_outline</span>
+            Create New Event
           </Link>
         )}
+      </header>
+
+      {/* Filters Section - Restored to a simpler flex layout */}
+      <div className="mb-6 p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md">
+        <div className="flex flex-col space-y-4 sm:flex-row sm:space-y-0 sm:space-x-4 sm:items-end">
+            <div className="flex-1 min-w-0"> {/* Allow status to take more space if needed */}
+              <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Status</label>
+              <select 
+                id="status-filter" 
+                value={statusFilter} 
+                onChange={(e) => setStatusFilter(e.target.value)}
+                className="mt-1 block w-full p-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              >
+                <option value="">All Statuses</option>
+                <option value="draft">Draft</option>
+                <option value="open_for_signup">Open for Signup</option>
+                <option value="ongoing">Ongoing</option>
+                <option value="completed">Completed</option>
+                <option value="cancelled">Cancelled</option>
+              </select>
+            </div>
+            <div className="min-w-[150px]"> {/* Fixed width for date inputs */}
+              <label htmlFor="from-date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300">From Date</label>
+              <input 
+                type="date"
+                id="from-date-filter"
+                value={fromDateFilter}
+                onChange={(e) => setFromDateFilter(e.target.value)}
+                className="mt-1 block w-full p-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              />
+            </div>
+            <div className="min-w-[150px]"> {/* Fixed width for date inputs */}
+              <label htmlFor="to-date-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300">To Date</label>
+              <input 
+                type="date"
+                id="to-date-filter"
+                value={toDateFilter}
+                onChange={(e) => setToDateFilter(e.target.value)}
+                className="mt-1 block w-full p-2 border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100 rounded-md shadow-sm focus:ring-indigo-500 focus:border-indigo-500 text-sm"
+              />
+            </div>
+            <div className="flex-shrink-0"> 
+                <button 
+                    onClick={clearDateFilters}
+                    title="Clear date filters"
+                    className="py-2 px-2 bg-gray-200 hover:bg-gray-300 dark:bg-gray-600 dark:hover:bg-gray-500 text-gray-700 dark:text-gray-200 font-medium rounded-md shadow-sm text-sm inline-flex items-center"
+                >
+                    <span className="material-icons text-base">event_busy</span>
+                </button>
+            </div>
+        </div>
       </div>
 
-      <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
-        <div>
-          <label htmlFor="search-events" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Search Events
-          </label>
-          <input
-            type="text"
-            id="search-events"
-            placeholder="Search by name, description, or creator..."
-            value={searchTerm}
-            onChange={(e) => setSearchTerm(e.target.value)}
-            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
-          />
+      {signupError && (
+        <div className="mb-4 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-lg flex items-center" role="alert">
+            <span className="material-icons text-lg mr-2">error_outline</span>
+            {signupError}
         </div>
-        <div>
-          <label htmlFor="status-filter" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-            Filter by Status
-          </label>
-          <select
-            id="status-filter"
-            value={statusFilter}
-            onChange={(e) => setStatusFilter(e.target.value)}
-            className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
-          >
-            {Object.entries(EVENT_STATUS_LABELS).map(([value, label]) => (
-              <option key={value} value={value}>{label}</option>
-            ))}
-          </select>
-        </div>
-      </div>
+      )}
 
-      {displayedEvents.length === 0 && !isLoadingEvents && ( 
-        <div className="text-center py-10 bg-white dark:bg-gray-900 shadow-lg rounded-lg flex flex-col items-center justify-center min-h-[200px]">
-          <span className="material-icons text-6xl text-gray-400 dark:text-gray-500 mb-4">
-            event_busy 
-          </span>
-          <p className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-2">
-            {searchTerm || statusFilter !== EVENT_STATUSES.ALL ? 'No events match your criteria.' : 'No events found.'}
+      {isLoading ? (
+        <div className="text-center py-10"><span className="material-icons animate-spin text-2xl text-indigo-500">sync</span><p className="mt-2">Loading events...</p></div>
+      ) : error ? (
+        <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-md shadow text-center">
+            <p className="text-red-700 dark:text-red-300">Error: {error}</p>
+            <button 
+                onClick={fetchEvents} 
+                className="mt-4 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
+            >
+                <span className="material-icons mr-2 text-base">refresh</span>
+                Retry
+            </button>
+        </div>
+      ) : events.length === 0 ? (
+        <div className="text-center py-10 bg-white dark:bg-gray-800 shadow-xl rounded-lg p-6">
+          <span className="material-icons text-5xl text-gray-400 dark:text-gray-500 mb-4">event_busy</span>
+          <p className="text-lg font-medium text-gray-700 dark:text-gray-300">No Events Found</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
+            There are no events matching your current filters, or no events have been created yet.
           </p>
-          {canCreateEvents && !searchTerm && statusFilter === EVENT_STATUSES.ALL && (
-              <p className="text-sm text-gray-500 dark:text-gray-400">
-                  You can <Link href="/dashboard/events/new" className="text-indigo-600 hover:underline dark:text-indigo-400 font-medium">create one now</Link>.
-              </p>
-          )}
         </div>
-      )}
-
-      {displayedEvents.length > 0 && (
+      ) : (
         <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6">
-          {displayedEvents.map((event: DisplayEvent) => {
-            let statusClass = 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'; 
-            if (event.displayStatus === EVENT_STATUSES.ONGOING) {
-              statusClass = 'status-ongoing-blinking'; 
-            } else if (event.displayStatus === EVENT_STATUSES.OPEN_FOR_SIGNUP) {
-              statusClass = 'bg-green-100 text-green-800 dark:bg-green-700 dark:text-green-100';
-            } else if (event.displayStatus === EVENT_STATUSES.DRAFT) {
-              statusClass = 'bg-yellow-100 text-yellow-800 dark:bg-yellow-700 dark:text-yellow-100';
-            } else if (event.displayStatus === EVENT_STATUSES.COMPLETED) {
-              statusClass = 'bg-blue-100 text-blue-800 dark:bg-blue-700 dark:text-blue-100';
-            } else if (event.displayStatus === EVENT_STATUSES.CANCELLED) {
-              statusClass = 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100';
-            }
-            
-            const isActionForThisEventInProgress = actionInProgress[event.id];
-
-            return (
-              <div key={event.id} className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col group hover:shadow-xl transition-shadow duration-200 ease-in-out">
-                <Link href={`/dashboard/events/${event.id}`} className="flex flex-col flex-grow">
-                  <div className="flex flex-row flex-grow">
-                    <div className="flex-shrink-0 p-3 sm:p-4 flex items-start justify-center border-r border-gray-200 dark:border-gray-700">
-                      <div className="w-12 h-12 sm:w-16 sm:h-16 bg-gray-100 dark:bg-gray-800 rounded-full flex items-center justify-center">
-                        <span className="material-icons text-3xl sm:text-4xl text-indigo-500 dark:text-indigo-400 group-hover:text-indigo-700 dark:group-hover:text-indigo-500 transition-colors duration-150">
-                          {event.icon || 'event'}
-                        </span>
-                      </div>
-                    </div>
-                    <div className="flex flex-col flex-grow p-4 sm:p-6 overflow-hidden">
-                      <div className="flex-grow">
-                        <h2 className="text-lg sm:text-xl font-semibold text-gray-800 dark:text-gray-200 mb-1 sm:mb-2 group-hover:text-indigo-600 dark:group-hover:text-indigo-400 truncate transition-colors duration-150" title={event.eventName}>
-                          {event.eventName}
-                        </h2>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
-                          {event.eventType || 'General Event'} - Venue: {event.venue || 'N/A'}
-                        </p>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
-                          Date: {format(parseISO(event.dateTime), 'PP p')}
-                        </p>
-                        <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-2 sm:mb-3">
-                          Status: <span className={`px-2 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusClass}`}>
-                            {EVENT_STATUS_LABELS[event.displayStatus as keyof typeof EVENT_STATUS_LABELS] || event.displayStatus.replace(/_/g, ' ')}
-                          </span>
-                        </p>
-                        {event.description && (
-                          <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-300 line-clamp-2 sm:line-clamp-3" title={event.description}>
-                            {event.description}
-                          </p>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </Link> 
-                
-                <div className="p-4 sm:p-6 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-700">
-                  <div className="flex justify-between items-center mb-2">
-                    <div>
-                      <p className="text-xs text-gray-500 dark:text-gray-500">
-                        By: {event.creatorFirstName || ''} {event.creatorLastName || event.createdByUserId.substring(0,8)}
-                      </p>
-                      <p className="text-xs text-gray-500 dark:text-gray-500">
-                        On: {format(parseISO(event.createdAt), 'PP')}
-                      </p>
-                    </div>
-                    <div className="flex flex-col items-end space-y-2">
-                      {event.isCurrentUserSignedUp ? (
-                        <>
-                          <p className="text-xs font-medium text-green-600 dark:text-green-400 capitalize">
-                            Status: {event.currentUserAssignmentStatus?.replace(/_/g, ' ') || 'Signed Up'}
-                          </p>
-                          <button
-                            onClick={(e) => { e.stopPropagation(); handleWithdraw(event.id, event.eventName); }}
-                            disabled={isActionForThisEventInProgress || event.displayStatus === EVENT_STATUSES.COMPLETED || event.displayStatus === EVENT_STATUSES.CANCELLED || event.displayStatus === EVENT_STATUSES.ONGOING}
-                            className={`py-1.5 px-3 text-xs font-medium rounded-md shadow-sm inline-flex items-center transition-colors duration-150
-                                        ${isActionForThisEventInProgress || event.displayStatus === EVENT_STATUSES.COMPLETED || event.displayStatus === EVENT_STATUSES.CANCELLED || event.displayStatus === EVENT_STATUSES.ONGOING
-                                          ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                          : 'bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white'}`}
-                          >
-                            {isActionForThisEventInProgress ? (
-                              <span className="material-icons text-sm animate-spin mr-1">sync</span>
-                            ) : (
-                              <span className="material-icons text-sm mr-1">event_busy</span>
-                            )}
-                            Withdraw
-                          </button>
-                        </>
-                      ) : event.status === EVENT_STATUSES.OPEN_FOR_SIGNUP && event.displayStatus !== EVENT_STATUSES.COMPLETED && event.displayStatus !== EVENT_STATUSES.CANCELLED ? (
-                        <button
-                          onClick={(e) => { e.stopPropagation(); handleSignUp(event.id, event.eventName); }}
-                          disabled={isActionForThisEventInProgress}
-                          className={`py-1.5 px-3 text-xs font-medium rounded-md shadow-sm inline-flex items-center transition-colors duration-150
-                                      ${isActionForThisEventInProgress 
-                                        ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
-                                        : 'bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white'}`}
-                        >
-                          {isActionForThisEventInProgress ? (
-                            <span className="material-icons text-sm animate-spin mr-1">sync</span>
-                          ) : (
-                            <span className="material-icons text-sm mr-1">how_to_reg</span>
-                          )}
-                          Sign Up
-                        </button>
-                      ) : null}
-                    </div>
-                  </div>
-                </div>
-              </div>
-            );
-          })}
+          {events.map(event => (
+            <EventCard 
+              key={event.id} 
+              event={event} 
+              onSignup={handleSignup}
+              onWithdraw={handleWithdraw}
+              isProcessingSignup={isProcessingSignup}
+              currentUserId={user?.uid || null}
+            />
+          ))}
         </div>
       )}
-    </div>
+    </main>
   );
 }
