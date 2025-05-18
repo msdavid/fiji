@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO, isBefore, isAfter, isEqual } from 'date-fns';
-import toast from 'react-hot-toast'; // Import toast
+import toast from 'react-hot-toast'; 
 
 interface Event {
   id: string;
@@ -56,20 +56,18 @@ const EVENT_STATUS_LABELS: { [key: string]: string } = {
 
 export default function EventsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile, fetchUserProfile, hasPermission } = useAuth(); // Added hasPermission
+  const { user, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth(); 
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
-  // Removed page-level error state: const [error, setError] = useState<string | null>(null);
   const [actionInProgress, setActionInProgress] = useState<{[eventId: string]: boolean}>({});
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(EVENT_STATUSES.ALL);
   const [currentTimeTick, setCurrentTimeTick] = useState(new Date());
 
-  // Updated canCreateEvents logic
   const canCreateEvents = useMemo(() => {
-    return hasPermission('events', 'create');
-  }, [hasPermission]);
+    return hasPrivilege('events', 'create'); 
+  }, [hasPrivilege]); 
 
   useEffect(() => {
     const timerId = setInterval(() => {
@@ -82,7 +80,6 @@ export default function EventsPage() {
     if (!user) return;
 
     setIsLoadingEvents(true);
-    // setError(null); // Removed
     try {
       const token = await user.getIdToken();
       if (!token) {
@@ -90,6 +87,8 @@ export default function EventsPage() {
       }
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       let url = `${backendUrl}/events`;
+      // If the user specifically filters for "draft", let the backend handle it.
+      // The frontend will then apply its own visibility logic on top of what's returned.
       if (currentStatusFilter && currentStatusFilter !== EVENT_STATUSES.ALL) {
         url += `?status=${currentStatusFilter}`;
       }
@@ -107,31 +106,43 @@ export default function EventsPage() {
       const data: Event[] = await response.json();
       setEvents(data);
     } catch (err: any) {
-      // setError(err.message || 'An unexpected error occurred while fetching events.'); // Removed
       toast.error(err.message || 'An unexpected error occurred while fetching events.');
       console.error("Fetch events error:", err);
     } finally {
       setIsLoadingEvents(false);
     }
-  }, [user]); // Removed setError from dependencies
+  }, [user]); 
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
       return;
     }
-    if (user && !userProfile) {
-        fetchUserProfile();
-    }
-    if (user && userProfile) { // Ensure userProfile is loaded before fetching events, for RBAC check
+    if (user && !authLoading) { 
       fetchEvents(statusFilter);
     }
-  }, [user, authLoading, router, userProfile, fetchUserProfile, fetchEvents, statusFilter]);
+  }, [user, authLoading, router, fetchEvents, statusFilter]); 
 
   const displayedEvents = useMemo(() => {
-    const now = currentTimeTick; 
+    const now = currentTimeTick;
 
-    const searchFilteredEvents = events.filter(event => {
+    // Step 1: Filter events based on draft status and user permissions
+    const permissionFilteredEvents = events.filter(event => {
+      if (event.status === EVENT_STATUSES.DRAFT) {
+        const currentUserIsCreator = user && event.createdByUserId === user.uid;
+        // Using 'events:edit' as a proxy for being an "event admin" who can see all drafts.
+        // Sysadmin is implicitly covered by hasPrivilege if it's set up to grant all.
+        const currentUserCanManageEvents = hasPrivilege('events', 'edit'); 
+        
+        if (!currentUserIsCreator && !currentUserCanManageEvents) {
+          return false; // Hide draft if not creator and no manage privilege
+        }
+      }
+      return true; // Keep non-drafts, or drafts if permission check passed
+    });
+
+    // Step 2: Filter by search term
+    const searchFilteredEvents = permissionFilteredEvents.filter(event => {
       if (!searchTerm.trim()) return true;
       const lowercasedSearchTerm = searchTerm.toLowerCase();
       const eventNameMatch = event.eventName.toLowerCase().includes(lowercasedSearchTerm);
@@ -144,6 +155,7 @@ export default function EventsPage() {
       return eventNameMatch || descriptionMatch || creatorMatch;
     });
 
+    // Step 3: Map to DisplayEvent and calculate dynamic status
     return searchFilteredEvents.map(event => {
       let dynamicStatus = event.status;
       const originalStatus = event.status;
@@ -165,12 +177,11 @@ export default function EventsPage() {
       }
       return { ...event, displayStatus: dynamicStatus };
     });
-  }, [events, searchTerm, currentTimeTick]);
+  }, [events, searchTerm, currentTimeTick, user, hasPrivilege]); // Added user and hasPrivilege to dependencies
 
   const handleSignUp = async (eventId: string, eventName: string) => {
     if (!user) return;
     setActionInProgress(prev => ({...prev, [eventId]: true}));
-    // setError(null); // Removed
     const loadingToastId = toast.loading(`Signing up for ${eventName}...`);
     try {
       const token = await user.getIdToken();
@@ -193,7 +204,6 @@ export default function EventsPage() {
       ));
       toast.success(`Successfully signed up for ${eventName}!`, { id: loadingToastId });
     } catch (err: any) {
-      // setError(err.message); // Removed
       toast.error(err.message || `Failed to sign up for ${eventName}.`, { id: loadingToastId });
       console.error("Sign up error:", err);
     } finally {
@@ -204,7 +214,6 @@ export default function EventsPage() {
   const handleWithdraw = async (eventId: string, eventName: string) => {
     if (!user) return;
     setActionInProgress(prev => ({...prev, [eventId]: true}));
-    // setError(null); // Removed
     const loadingToastId = toast.loading(`Withdrawing from ${eventName}...`);
     try {
       const token = await user.getIdToken();
@@ -226,7 +235,6 @@ export default function EventsPage() {
       ));
       toast.success(`Successfully withdrew from ${eventName}.`, { id: loadingToastId });
     } catch (err: any) {
-      // setError(err.message); // Removed
       toast.error(err.message || `Failed to withdraw from ${eventName}.`, { id: loadingToastId });
       console.error("Withdraw error:", err);
     } finally {
@@ -235,7 +243,7 @@ export default function EventsPage() {
   };
 
 
-  if (authLoading || isLoadingEvents || (!userProfile && user)) {
+  if (authLoading || isLoadingEvents) { 
     return (
       <div className="flex flex-col justify-center items-center h-full min-h-[300px]">
         <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">
@@ -293,9 +301,7 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {/* Removed page-level error display block */}
-
-      {displayedEvents.length === 0 && !isLoadingEvents && ( // Removed !error check as errors are now toasts
+      {displayedEvents.length === 0 && !isLoadingEvents && ( 
         <div className="text-center py-10 bg-white dark:bg-gray-900 shadow-lg rounded-lg flex flex-col items-center justify-center min-h-[200px]">
           <span className="material-icons text-6xl text-gray-400 dark:text-gray-500 mb-4">
             event_busy 
