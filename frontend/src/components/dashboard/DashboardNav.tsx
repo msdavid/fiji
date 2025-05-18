@@ -1,7 +1,7 @@
 'use client';
 
 import Link from 'next/link';
-import { useRouter, usePathname } from 'next/navigation'; // Import usePathname
+import { useRouter, usePathname } from 'next/navigation'; 
 import { signOut } from 'firebase/auth';
 import { auth } from '@/lib/firebaseConfig';
 import { useAuth } from '@/context/AuthContext';
@@ -9,7 +9,7 @@ import React, { useState, useEffect, useRef } from 'react';
 
 export default function DashboardNav() {
   const router = useRouter(); 
-  const pathname = usePathname(); // Get current pathname
+  const pathname = usePathname(); 
   const { user, userProfile, loading: authLoading, hasPrivilege } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null); 
@@ -42,8 +42,6 @@ export default function DashboardNav() {
     };
   }, [isDropdownOpen]);
 
-  const isAdmin = !!userProfile && Array.isArray(userProfile.assignedRoleIds) && userProfile.assignedRoleIds.includes('sysadmin');
-
   if (authLoading && !user) {
     return (
         <nav className="bg-white dark:bg-gray-900 shadow-sm">
@@ -65,14 +63,36 @@ export default function DashboardNav() {
     return null;
   }
 
-  const displayName = userProfile?.firstName ? userProfile.firstName : (user.email || "User");
-  const avatarInitial = userProfile?.firstName ? userProfile.firstName.charAt(0).toUpperCase() : (user.email ? user.email.charAt(0).toUpperCase() : '');
+  let calculatedDisplayName = "User";
+  if (userProfile) {
+    if (userProfile.firstName && userProfile.lastName) {
+      calculatedDisplayName = `${userProfile.firstName} ${userProfile.lastName}`;
+    } else if (userProfile.firstName) {
+      calculatedDisplayName = userProfile.firstName;
+    } else if (userProfile.lastName) {
+      calculatedDisplayName = userProfile.lastName;
+    } else if (user.email) {
+      calculatedDisplayName = user.email;
+    }
+  } else if (user.email) {
+    calculatedDisplayName = user.email;
+  }
+
+  let avatarInitial = '';
+  if (userProfile?.firstName) {
+    avatarInitial = userProfile.firstName.charAt(0).toUpperCase();
+  } else if (userProfile?.lastName) {
+    avatarInitial = userProfile.lastName.charAt(0).toUpperCase();
+  } else if (user.email) {
+    avatarInitial = user.email.charAt(0).toUpperCase();
+  }
+
 
   const getLinkClassName = (path: string) => {
     const baseStyle = "text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-150 ease-in-out px-3 py-2 rounded-md";
     const activeStyle = "text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-md";
     
-    if (pathname === path || (path !== "/dashboard" && pathname.startsWith(path))) { // Use pathname from usePathname()
+    if (pathname === path || (path !== "/dashboard" && pathname.startsWith(path))) { 
         return activeStyle;
     }
     return baseStyle;
@@ -190,13 +210,12 @@ export default function DashboardNav() {
                   aria-orientation="vertical" 
                   aria-labelledby="user-menu-button"
                 >
-                  <div className="py-1 md:hidden"> {/* Mobile Nav Links Section */}
+                  <div className="py-1 md:hidden"> 
                     {navLinks.map(link => {
                       if (React.isValidElement(link) && typeof link.props.href === 'string') {
-                        // Filter out separators for mobile dropdown
                         if (link.key === "admin-separator") return null;
                         return React.cloneElement(link as React.ReactElement<any>, {
-                          className: `${getLinkClassName(link.props.href)} w-full block px-4 py-2 text-left !bg-transparent hover:!bg-gray-100 dark:hover:!bg-gray-700`, // Override active styles for dropdown view
+                          className: `${getLinkClassName(link.props.href)} w-full block px-4 py-2 text-left !bg-transparent hover:!bg-gray-100 dark:hover:!bg-gray-700`, 
                           onClick: () => setIsDropdownOpen(false)
                         });
                       }
@@ -207,7 +226,7 @@ export default function DashboardNav() {
 
                   <div className="px-4 py-3 border-b border-gray-200 dark:border-gray-700 md:border-b-0">
                     <p className="text-xs text-gray-500 dark:text-gray-400">Signed in as</p>
-                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate">{displayName}</p>
+                    <p className="text-sm font-medium text-gray-900 dark:text-white truncate" title={calculatedDisplayName}>{calculatedDisplayName}</p>
                   </div>
                   <div className="py-1" role="none">
                     <Link 
