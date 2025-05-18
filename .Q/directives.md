@@ -47,7 +47,6 @@ Each new log entry MUST begin on a new line, be clearly separated from any previ
     If the `.Q/worklog.md` file does not exist, you must create it. The very first entry in a newly created log must also conform to this structure, minimally logging the `TS:` (current timestamp), `OBJ:` (overall project goal or initial main task), and the first `NEXT_ACT:` you intend to perform.
 
 
-<directive>
 **Optimized Worklog Maintenance & Context Restoration**
 
 **1. Mandate, Purpose & Session Start:**

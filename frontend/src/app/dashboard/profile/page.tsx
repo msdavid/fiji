@@ -5,7 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/lib/apiClient';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
-import { format, parseISO, isValid } from 'date-fns'; // Removed unused parseDateFns
+import { format, parseISO, isValid } from 'date-fns';
 
 // --- Availability Interfaces ---
 type Weekday = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
@@ -37,16 +37,15 @@ interface UserAvailability {
 // --- Assignment Interface (for working groups) ---
 interface UserWorkingGroupAssignment {
   id: string;
-  assignableId: string; // This is the working group ID
-  assignableName?: string; // Name of the working group
+  assignableId: string; 
+  assignableName?: string; 
   status: string;
-  // Add other relevant fields from AssignmentResponse if needed
 }
 // --- End Assignment Interface ---
 
 
 interface UserDataFromBackend {
-  id: string; // Changed from uid to id to match backend UserResponse
+  id: string; 
   email: string;
   firstName: string;
   lastName: string;
@@ -77,8 +76,8 @@ interface EditableUserProfile {
   availability: UserAvailability; 
 }
 
-const baseInputStyles = "block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 dark:focus:ring-indigo-400 sm:text-sm bg-white dark:bg-gray-700 text-gray-900 dark:text-gray-100";
-const disabledInputStyles = "block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed";
+const baseInputStyles = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-offset-1 focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white";
+const disabledInputStyles = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed";
 
 const ProfilePage = () => {
   const authContext = useAuth(); 
@@ -130,7 +129,7 @@ const ProfilePage = () => {
         specific_slots: profileData.availability?.specific_slots?.map(s => ({
             ...s, 
             id: s.id || Math.random().toString(36).substr(2, 9), 
-            date: s.date && isValid(parseISO(s.date)) ? format(parseISO(s.date), 'yyyy-MM-dd') : '', // Check validity before formatting
+            date: s.date && isValid(parseISO(s.date)) ? format(parseISO(s.date), 'yyyy-MM-dd') : '',
             from_time: s.from_time || '', 
             to_time: s.to_time || '',     
         })) || [],
@@ -163,8 +162,7 @@ const ProfilePage = () => {
         initializeFormData(fetchedProfileData); 
         setError(null);
 
-        // After fetching profile, fetch working group assignments
-        if (fetchedProfileData.id) { // Use 'id' from UserDataFromBackend
+        if (fetchedProfileData.id) { 
           setIsLoadingAssignments(true);
           try {
             const assignments = await apiClient<UserWorkingGroupAssignment[]>({
@@ -172,10 +170,9 @@ const ProfilePage = () => {
               path: `/assignments?userId=me&assignableType=workingGroup`,
               token: idToken,
             });
-            setWorkingGroupAssignments(assignments.filter(a => a.status === 'active')); // Show only active memberships
+            setWorkingGroupAssignments(assignments.filter(a => a.status === 'active'));
           } catch (assignErr: any) {
             console.error("Failed to fetch working group assignments:", assignErr);
-            // Optionally set a specific error for assignments or add to general error
             setError(prev => prev ? `${prev}\nFailed to load working group memberships.` : "Failed to load working group memberships.");
           } finally {
             setIsLoadingAssignments(false);
@@ -314,6 +311,7 @@ const ProfilePage = () => {
       setProfile(updatedProfileData); 
       initializeFormData(updatedProfileData); 
       setIsEditing(false);
+      // TODO: Replace alert with a more styled notification/toast
       alert("Profile updated successfully!");
     } catch (err: any) { 
       console.error("Failed to update profile:", err);
@@ -330,61 +328,85 @@ const ProfilePage = () => {
   };
 
   if (authLoading || (isLoading && !isEditing && !profile)) {
-    return <div className="flex justify-center items-center min-h-screen"><p>Loading profile...</p></div>;
+    return (
+        <div className="flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-800">
+            <div className="text-center">
+                <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">sync</span>
+                <p className="text-lg text-gray-700 dark:text-gray-300">Loading profile...</p>
+            </div>
+        </div>
+    );
   }
-  if (error && !isEditing && !profile) { // Show error only if profile hasn't loaded at all
-    return <div className="p-8 text-center text-red-500">Error: {error}</div>;
+  if (error && !isEditing && !profile) { 
+    return (
+        <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="p-4 mb-6 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-700 dark:text-red-100 shadow-md" role="alert">
+                <span className="font-medium">Error:</span> {error}
+            </div>
+        </div>
+    );
   }
   if (!profile && !isEditing) {
-    return <div className="p-8 text-center">Profile data not found.</div>;
+    return (
+        <div className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="p-4 text-center text-gray-700 dark:text-gray-300">Profile data not found.</div>
+        </div>
+    );
   }
 
-  const currentProfileData = profile || initialFormData; // Use profile if available, otherwise initial (empty) form data
+  const currentProfileData = profile || initialFormData; 
   const pageTitle = currentProfileData && currentProfileData.firstName ? `${currentProfileData.firstName} ${currentProfileData.lastName}` : "User Profile";
 
-
-  const ProfileDetailItem = ({ label, value, isTextArea = false }: { label: string; value: string | undefined | null; isTextArea?: boolean }) => {
+  const ProfileDetailItem = ({ label, value, icon, isTextArea = false }: { label: string; value: string | undefined | null; icon?: string; isTextArea?: boolean }) => {
     if (value === null || value === undefined || (typeof value === 'string' && value.trim() === '')) return null;
     return (
-      <div>
-        <label className="block text-sm font-medium text-gray-500 dark:text-gray-400">{label}</label>
-        {isTextArea ? (
-          <p className="mt-1 text-md text-gray-800 dark:text-gray-200 whitespace-pre-wrap">{value}</p>
-        ) : (
-          <p className="mt-1 text-md text-gray-800 dark:text-gray-200">{value}</p>
-        )}
+      <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-800/50 rounded-lg shadow-sm">
+        {icon && <span className="material-icons text-indigo-600 dark:text-indigo-400 mt-1 text-lg">{icon}</span>}
+        <div className="flex-1 min-w-0">
+          <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
+          {isTextArea ? (
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap break-words">{value}</p>
+          ) : (
+            <p className="mt-1 text-sm text-gray-700 dark:text-gray-300 break-words">{value}</p>
+          )}
+        </div>
       </div>
     );
   };
 
 
   return (
-    <div className="max-w-3xl mx-auto"> 
-      <div className="mb-4">
-          <Link href="/dashboard" className="text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-            ← Back to Dashboard
+    <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
+      <div className="mb-6">
+          <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+            <span className="material-icons text-lg mr-1">arrow_back_ios</span>
+            Back to Dashboard
           </Link>
       </div>
 
       <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-gray-100">
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white">
           {isEditing ? `Editing Profile: ${pageTitle}` : pageTitle}
         </h1>
-        {!isEditing && currentProfileData && currentProfileData.id && ( // Ensure profile is loaded before showing edit button
+        {!isEditing && currentProfileData && currentProfileData.id && (
           <button onClick={() => { setIsEditing(true); if(profile) initializeFormData(profile); setError(null); }}
-            className="mt-4 sm:mt-0 px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm">
+            className="mt-4 sm:mt-0 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center justify-center">
+            <span className="material-icons mr-2 text-base">edit</span>
             Edit Profile
           </button>
         )}
       </div>
 
-      {isLoading && isEditing && <p>Loading edit form...</p>}
-      {error && isEditing && <div className="my-4 p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
-      {error && !isEditing && profile && <div className="my-4 p-3 bg-red-100 dark:bg-red-900/80 border border-red-400 dark:border-red-700 text-red-700 dark:text-red-200 rounded-md">{error}</div>}
+      {error && (
+        <div className="mb-6 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-700 dark:text-red-100 shadow-md" role="alert">
+            <span className="font-medium">Error:</span> {error}
+        </div>
+      )}
+      {isLoading && isEditing && <p className="text-gray-700 dark:text-gray-300">Loading edit form...</p>}
 
 
-      <div className="bg-white dark:bg-gray-800 shadow-xl rounded-xl p-6 sm:p-8">
-        {!isEditing && currentProfileData && currentProfileData.id ? ( // Ensure profile is loaded before rendering view mode
+      <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
+        {!isEditing && currentProfileData && currentProfileData.id ? ( 
           // VIEW MODE
           <div className="md:flex md:space-x-6">
             <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center md:items-start">
@@ -396,77 +418,74 @@ const ProfilePage = () => {
                 />
               ) : (
                 <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
-                  No Picture
+                  <span className="material-icons text-5xl">person</span>
                 </div>
               )}
             </div>
 
-            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3"></div>
+            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 self-stretch"></div>
 
-            <div className="flex-grow space-y-4">
-              <div className="space-y-3">
-                <div className="flex flex-col sm:flex-row sm:space-x-6">
-                  <div className="flex-1">
-                    <ProfileDetailItem label="Phone" value={currentProfileData.phone || 'N/A'} />
-                  </div>
-                  <div className="flex-1 mt-3 sm:mt-0">
-                    <ProfileDetailItem label="Email" value={currentProfileData.email} />
-                  </div>
-                </div>
-                <ProfileDetailItem label="Emergency Contact Details" value={currentProfileData.emergencyContactDetails || 'N/A'} isTextArea />
-                <ProfileDetailItem label="Skills" value={arrayFieldToString(currentProfileData.skills) || 'N/A'} isTextArea />
-                <ProfileDetailItem label="Qualifications" value={arrayFieldToString(currentProfileData.qualifications) || 'N/A'} isTextArea />
-                <ProfileDetailItem label="Preferences" value={currentProfileData.preferences || 'N/A'} isTextArea />
-                {currentProfileData.assignedRoleNames && currentProfileData.assignedRoleNames.length > 0 && (
-                    <ProfileDetailItem label="Roles" value={currentProfileData.assignedRoleNames.join(', ')} />
-                )}
+            <div className="flex-grow space-y-6">
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <ProfileDetailItem label="Phone" value={currentProfileData.phone || 'N/A'} icon="phone" />
+                <ProfileDetailItem label="Email" value={currentProfileData.email} icon="email" />
               </div>
+              <ProfileDetailItem label="Emergency Contact Details" value={currentProfileData.emergencyContactDetails || 'N/A'} icon="contact_emergency" isTextArea />
+              <ProfileDetailItem label="Skills" value={arrayFieldToString(currentProfileData.skills) || 'N/A'} icon="psychology" isTextArea />
+              <ProfileDetailItem label="Qualifications" value={arrayFieldToString(currentProfileData.qualifications) || 'N/A'} icon="school" isTextArea />
+              <ProfileDetailItem label="Preferences" value={currentProfileData.preferences || 'N/A'} icon="tune" isTextArea />
+              {currentProfileData.assignedRoleNames && currentProfileData.assignedRoleNames.length > 0 && (
+                  <ProfileDetailItem label="Roles" value={currentProfileData.assignedRoleNames.join(', ')} icon="admin_panel_settings" />
+              )}
               
-              {/* My Working Groups Section */}
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">My Working Groups</h2>
-                {isLoadingAssignments ? <p className="text-md text-gray-800 dark:text-gray-200">Loading memberships...</p> :
+              <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 inline-flex items-center">
+                    <span className="material-icons mr-2 text-indigo-600 dark:text-indigo-400">groups</span>
+                    My Working Groups
+                </h2>
+                {isLoadingAssignments ? <p className="text-sm text-gray-700 dark:text-gray-300">Loading memberships...</p> :
                   workingGroupAssignments.length > 0 ? (
-                    <ul className="list-disc list-inside mt-1 space-y-1">
+                    <ul className="list-disc list-inside space-y-1">
                       {workingGroupAssignments.map((assignment) => (
-                        <li key={assignment.id} className="text-md text-gray-800 dark:text-gray-200">
-                          {/* TODO: Link to /dashboard/admin/working-groups/{assignment.assignableId} if user has view permission for that specific group, or a general user-facing WG view page */}
+                        <li key={assignment.id} className="text-sm text-gray-700 dark:text-gray-300">
                           {assignment.assignableName || `Group ID: ${assignment.assignableId}`} (Status: {assignment.status})
                         </li>
                       ))}
                     </ul>
-                  ) : <p className="mt-1 text-md text-gray-800 dark:text-gray-200">Not a member of any working groups.</p>
+                  ) : <p className="text-sm text-gray-700 dark:text-gray-300">Not a member of any working groups.</p>
                 }
               </div>
 
-
-              <div className="pt-4 border-t border-gray-200 dark:border-gray-700">
-                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-3">Availability</h2>
+              <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
+                <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 inline-flex items-center">
+                    <span className="material-icons mr-2 text-indigo-600 dark:text-indigo-400">event_available</span>
+                    Availability
+                </h2>
                 <div>
-                  <h3 className="text-md font-medium text-gray-500 dark:text-gray-400">General Recurring Availability</h3>
+                  <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">General Recurring Availability</h3>
                   {currentProfileData.availability?.general_rules && currentProfileData.availability.general_rules.length > 0 ? (
-                    <ul className="list-disc list-inside mt-1 space-y-1">
+                    <ul className="list-disc list-inside space-y-1">
                       {currentProfileData.availability.general_rules.map((rule, index) => (
-                        <li key={rule.id || index} className="text-md text-gray-800 dark:text-gray-200">
+                        <li key={rule.id || index} className="text-sm text-gray-700 dark:text-gray-300">
                           Every {rule.weekday} from {rule.from_time} to {rule.to_time}
                         </li>
                       ))}
                     </ul>
-                  ) : <p className="mt-1 text-md text-gray-800 dark:text-gray-200">Not specified.</p>}
+                  ) : <p className="text-sm text-gray-700 dark:text-gray-300">Not specified.</p>}
                 </div>
-                <div className="mt-3">
-                  <h3 className="text-md font-medium text-gray-500 dark:text-gray-400">Specific Date Slots</h3>
+                <div className="mt-4">
+                  <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300 mb-2">Specific Date Slots</h3>
                   {currentProfileData.availability?.specific_slots && currentProfileData.availability.specific_slots.length > 0 ? (
-                    <ul className="list-disc list-inside mt-1 space-y-1">
+                    <ul className="list-disc list-inside space-y-1">
                       {currentProfileData.availability.specific_slots.map((slot, index) => (
-                        <li key={slot.id || index} className={`text-md ${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
+                        <li key={slot.id || index} className={`text-sm ${slot.slot_type === 'unavailable' ? 'text-red-600 dark:text-red-400' : 'text-green-600 dark:text-green-400'}`}>
                           {slot.date && isValid(parseISO(slot.date)) ? format(parseISO(slot.date), 'PPP') : 'Invalid Date'}
                           {slot.from_time && slot.to_time ? ` from ${slot.from_time} to ${slot.to_time}` : ' (All day)'}
                           {' '}({slot.slot_type})
                         </li>
                       ))}
                     </ul>
-                  ) : <p className="mt-1 text-md text-gray-800 dark:text-gray-200">No specific date slots defined.</p>}
+                  ) : <p className="text-sm text-gray-700 dark:text-gray-300">No specific date slots defined.</p>}
                 </div>
               </div>
             </div>
@@ -474,7 +493,6 @@ const ProfilePage = () => {
         ) : !isLoading && isEditing && currentProfileData && currentProfileData.id ? ( 
           // EDIT MODE
           <div className="md:flex md:space-x-6">
-            {/* Left Column: Profile Picture (display only) */}
             <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center md:items-start">
               {currentProfileData.profilePictureUrl ? (
                 <img 
@@ -484,41 +502,46 @@ const ProfilePage = () => {
                 />
               ) : (
                 <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
-                  No Picture
+                  <span className="material-icons text-5xl">person</span>
                 </div>
               )}
               <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center md:text-left">Profile picture can be updated via Gravatar or future upload feature.</p>
             </div>
 
-            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3"></div>
+            <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 self-stretch"></div>
             
-            {/* Right Column: Form Fields */}
             <div className="flex-grow">
               <form onSubmit={handleSubmit} className="space-y-6">
-                {/* Error display moved to top of page for edit mode */}
-                
-                <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name</label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
-                <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Last Name</label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} required /></div>
-                <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className={`mt-1 ${disabledInputStyles}`} /></div>
-                <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={`mt-1 ${baseInputStyles}`} /></div>
-                <div>
-                  <label htmlFor="emergencyContactDetails" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Emergency Contact Details</label>
-                  <textarea name="emergencyContactDetails" id="emergencyContactDetails" value={formData.emergencyContactDetails || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} placeholder="e.g., Name, Relation, Phone Number"/>
-                </div>
-                <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
-                <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} /></div>
-                <div>
-                  <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Preferences</label>
-                  <textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className={`mt-1 ${baseInputStyles}`} placeholder="Enter any preferences as free text (e.g., communication, interests)"/>
-                </div>
+                <section>
+                    <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Personal Information</h2>
+                    <div className="space-y-4">
+                        <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name <span className="text-red-500">*</span></label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className={baseInputStyles} required /></div>
+                        <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name <span className="text-red-500">*</span></label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className={baseInputStyles} required /></div>
+                        <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className={disabledInputStyles} /></div>
+                        <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={baseInputStyles} /></div>
+                        <div>
+                        <label htmlFor="emergencyContactDetails" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Emergency Contact Details</label>
+                        <textarea name="emergencyContactDetails" id="emergencyContactDetails" value={formData.emergencyContactDetails || ''} onChange={handleInputChange} rows={3} className={baseInputStyles} placeholder="e.g., Name, Relation, Phone Number"/>
+                        </div>
+                        <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className={baseInputStyles} /></div>
+                        <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className={baseInputStyles} /></div>
+                        <div>
+                        <label htmlFor="preferences" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Preferences</label>
+                        <textarea name="preferences" id="preferences" value={formData.preferences || ''} onChange={handleInputChange} rows={3} className={baseInputStyles} placeholder="Enter any preferences as free text (e.g., communication, interests)"/>
+                        </div>
+                    </div>
+                </section>
                 
                 <div className="pt-6 border-t border-gray-200 dark:border-gray-700">
-                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Edit Availability</h2>
+                  <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 inline-flex items-center">
+                    <span className="material-icons mr-2 text-indigo-600 dark:text-indigo-400">edit_calendar</span>
+                    Edit Availability
+                  </h2>
                   
                   <div className="space-y-3 mb-6">
                     <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">General Recurring Availability</h3>
                     {formData.availability.general_rules.map((rule, index) => (
-                      <div key={rule.id || index} className="p-3 border dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30">
+                      <div key={rule.id || index} className="p-3 border border-gray-300 dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30 shadow-sm">
                         <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                           <div>
                             <label htmlFor={`ga_weekday_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Weekday</label>
@@ -536,19 +559,19 @@ const ProfilePage = () => {
                           </div>
                         </div>
                         <button type="button" onClick={() => removeGeneralRule(rule.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
-                          <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                          <span className="material-icons text-sm">close</span>
                         </button>
                       </div>
                     ))}
-                    <button type="button" onClick={addGeneralRule} className="text-sm px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">
-                      + Add General Rule
+                    <button type="button" onClick={addGeneralRule} className="text-sm py-1.5 px-3 bg-green-600 hover:bg-green-700 text-white rounded-md shadow-sm inline-flex items-center">
+                      <span className="material-icons mr-1 text-sm">add</span>Add General Rule
                     </button>
                   </div>
                   
                   <div className="space-y-3">
                      <h3 className="text-lg font-medium text-gray-700 dark:text-gray-300">Specific Date Slots</h3>
                      {formData.availability.specific_slots.map((slot, index) => (
-                       <div key={slot.id || index} className="p-3 border dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30">
+                       <div key={slot.id || index} className="p-3 border border-gray-300 dark:border-gray-600 rounded-md space-y-2 relative bg-gray-50 dark:bg-gray-700/30 shadow-sm">
                          <div className="grid grid-cols-1 sm:grid-cols-4 gap-3 items-end">
                            <div>
                              <label htmlFor={`sd_date_${index}`} className="block text-xs font-medium text-gray-600 dark:text-gray-400 mb-0.5">Date</label>
@@ -570,19 +593,25 @@ const ProfilePage = () => {
                            </div>
                          </div>
                          <button type="button" onClick={() => removeSpecificSlot(slot.id)} className="absolute -top-2 -right-2 text-red-500 hover:text-red-700 bg-white dark:bg-gray-700 dark:hover:bg-gray-600 rounded-full p-0.5 leading-none shadow">
-                           <svg xmlns="http://www.w3.org/2000/svg" className="h-4 w-4" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M6 18L18 6M6 6l12 12" /></svg>
+                           <span className="material-icons text-sm">close</span>
                          </button>
                        </div>
                      ))}
-                     <button type="button" onClick={addSpecificSlot} className="text-sm px-3 py-1.5 bg-green-500 hover:bg-green-600 text-white rounded-md shadow-sm">
-                       + Add Specific Date Slot
+                     <button type="button" onClick={addSpecificSlot} className="text-sm py-1.5 px-3 bg-green-600 hover:bg-green-700 text-white rounded-md shadow-sm inline-flex items-center">
+                       <span className="material-icons mr-1 text-sm">add</span>Add Specific Date Slot
                      </button>
                   </div>
                 </div>
 
-                <div className="flex items-center justify-end space-x-3 pt-4">
-                  <button type="button" onClick={() => { setIsEditing(false); if (profile) initializeFormData(profile); setError(null); }} className="px-4 py-2 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 text-gray-700 dark:text-gray-200 font-medium border border-gray-300 dark:border-gray-500 rounded-md shadow-sm">Cancel</button>
-                  <button type="submit" disabled={isLoading} className="px-4 py-2 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50">
+                <div className="flex items-center justify-end space-x-3 pt-8 mt-6 border-t border-gray-200 dark:border-gray-700">
+                  <button type="button" onClick={() => { setIsEditing(false); if (profile) initializeFormData(profile); setError(null); }} 
+                    className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center justify-center">
+                    <span className="material-icons mr-2 text-base">cancel</span>
+                    Cancel
+                  </button>
+                  <button type="submit" disabled={isLoading} 
+                    className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center justify-center">
+                    <span className="material-icons mr-2 text-base">{isLoading ? 'sync' : 'save'}</span>
                     {isLoading ? 'Saving...' : 'Save Changes'}
                   </button>
                 </div>
@@ -590,12 +619,11 @@ const ProfilePage = () => {
             </div>
           </div>
         ) : null }
-        {/* Fallback for when profile is null but not loading and not editing - e.g. initial state or error */}
         {!isLoading && !isEditing && (!currentProfileData || !currentProfileData.id) && (
-            <div className="text-center p-4">Could not load profile information.</div>
+            <div className="text-center p-4 text-gray-700 dark:text-gray-300">Could not load profile information.</div>
         )}
       </div>
-    </div>
+    </main>
   );
 };
 
