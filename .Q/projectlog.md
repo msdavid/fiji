@@ -1,6 +1,39 @@
 # Project Log - Fiji
 
 ## Session (YYYY-MM-DD HH:MM)
+**Goal**: Change "Display Name" to "Full Name" in Users Report.
+
+**Summary**:
+Updated the Users Report to display a "Full Name" column, constructed from `firstName` and `lastName` fields, instead of relying solely on `displayName`. This provides a more consistent and explicit representation of user names.
+
+**Activities**:
+
+1.  **Backend Updates (`backend/routers/reports.py`)**:
+    *   Modified the `UserReportEntry` Pydantic model to include `firstName: Optional[str]` and `lastName: Optional[str]`.
+    *   Updated the `/api/reports/users-list` endpoint to fetch and populate `firstName` and `lastName` for each user from Firestore. The `displayName` field was kept for flexibility.
+    *   **Commit**: Part of `900152e`.
+
+2.  **Frontend Interface Update (`frontend/src/app/dashboard/reports/page.tsx`)**:
+    *   Updated the `UserReportEntry` TypeScript interface to include `firstName?: string | null` and `lastName?: string | null`.
+    *   **Commit**: Part of `900152e`.
+
+3.  **Frontend Component Update (`frontend/src/components/reports/UsersReportSection.tsx`)**:
+    *   Changed the first column's header from "Display Name" to "Full Name".
+    *   Implemented an `accessorFn` for the "Full Name" column to compute the value as `` `${row.firstName || ''} ${row.lastName || ''}`.trim() || row.displayName || 'N/A' ``.
+    *   The cell rendering logic was updated similarly.
+    *   Added a custom `fullNameFilterFn` to enable filtering on the combined full name.
+    *   Adjusted the CSV export logic to correctly derive the "Full Name" header and export the combined name value.
+    *   **Commit**: Part of `900152e`.
+
+**Overall Commit**:
+*   **Commit ID**: `900152e`
+*   **Commit Message**: "Refactor: Change Display Name to Full Name in Users Report. Updated the Users Report to display 'Full Name' (constructed from firstName and lastName) instead of 'Display Name'. Backend ('backend/routers/reports.py'): Added 'firstName' and 'lastName' fields to the 'UserReportEntry' Pydantic model. The '/api/reports/users-list' endpoint now populates these fields from user documents. 'displayName' is still included for flexibility. Frontend ('frontend/src/app/dashboard/reports/page.tsx'): Updated the 'UserReportEntry' TypeScript interface to include 'firstName' and 'lastName'. Frontend ('frontend/src/components/reports/UsersReportSection.tsx'): The first column in the users table is now 'Full Name'. Cell rendering logic combines 'firstName' and 'lastName', falling back to 'displayName' if the full name is not available. Implemented a custom 'fullNameFilterFn' for this column to allow filtering based on the combined full name. Updated CSV export to correctly include the 'Full Name' column. This change provides a more consistent and explicit representation of user names in the report."
+
+**Next Steps**:
+- Test the "Full Name" column thoroughly, including filtering, sorting, and CSV export, especially with users who might have missing `firstName`, `lastName`, or `displayName`.
+
+---
+## Session (YYYY-MM-DD HH:MM)
 **Goal**: Add a users table with filtering and export capabilities to the reports page.
 
 **Summary**:
@@ -20,6 +53,8 @@ Successfully added a new "Users Overview" section to the Reports Dashboard. This
     *   Constructs and returns a `UsersReport` containing a list of `UserReportEntry` objects.
     *   Handles potential string-to-datetime conversion for `createdAt`.
     *   Defaults user `status` to "active" if not present.
+    *   **Bug Fix (Commit `55dea40`)**: Corrected `AttributeError: module 'google.cloud.firestore' has no attribute 'FieldPath'` by changing import to `from google.cloud.firestore_v1.field_path import FieldPath`.
+    *   **Bug Fix (Commit `e0d7d8d`)**: Corrected logic to use `role_doc_snap.id` (which is `roleName`) as the role name instead of trying to access a non-existent `name` field from `role_data`.
 
 **Phase 2: Frontend Development**
 3.  **Updated Report Page (`frontend/src/app/dashboard/reports/page.tsx`)**:
@@ -32,18 +67,20 @@ Successfully added a new "Users Overview" section to the Reports Dashboard. This
     *   Receives `report: UsersReport | null`, `isLoading: boolean`, and `error?: string | null` as props.
     *   Uses `@tanstack/react-table` to display users.
     *   **Columns**: Display Name, Email, Roles (comma-separated), Status (styled with colored badges), Created At (formatted), User ID.
-    *   **Filtering**: Implemented global "fuzzy" text search across relevant fields (including array fields like roles).
+    *   **Filtering**: Implemented global "fuzzy" text search.
+    *   **Enhancement (Commit `4f919a6`)**: Added per-column filter inputs to table headers for most columns.
+    *   **Refactor (Commit `740b9e6`)**: Removed the "User ID" column from the table display and CSV export.
     *   **Sorting**: Enabled for all columns.
     *   **CSV Export**: Added a button to export the current table view (respecting filters) to `users_report.csv`.
     *   Handles loading, error, and "no data" states. Displays total user count.
 
 **Phase 3: Finalization**
 5.  **Committed Changes**:
-    *   **Commit ID**: `fe6cd2e`
-    *   **Commit Message**: "Feat: Add Users Report to Dashboard. This commit introduces a new Users Report section to the main Reports Dashboard. Backend: Added new Pydantic models 'UserReportEntry' and 'UsersReport' in 'backend/routers/reports.py'. Created a new API endpoint '/api/reports/users-list' that: Fetches all users from Firestore. Retrieves assigned role IDs for each user. Looks up role names based on these IDs. Returns a list of users with their ID, display name, email, assigned role names, status, and creation date. The endpoint is protected by 'admin' role and 'view_summary' privilege. Uses asyncio.gather for efficient batch fetching of role names. Frontend: Updated 'frontend/src/app/dashboard/reports/page.tsx': Added TypeScript interfaces for 'UserReportEntry' and 'UsersReport'. Included state management for the users report data and loading status. Modified the 'useEffect' hook to fetch data from the new '/api/reports/users-list' endpoint. Integrated a new 'UsersReportSection' component into the page layout. Created 'frontend/src/components/reports/UsersReportSection.tsx': Displays user data in a table using '@tanstack/react-table'. Columns: Display Name, Email, Roles, Status (with visual styling), Created At (formatted), and User ID. Implements global text filtering and column sorting. Provides a CSV export functionality for the users table. Handles loading, error, and no-data states. This feature enhances the reporting capabilities by providing administrators with a comprehensive overview of all users in the system."
+    *   Initial feature commit: `fe6cd2e`.
+    *   Subsequent fix/enhancement commits: `55dea40`, `e0d7d8d`, `4f919a6`, `740b9e6`.
 
 **Next Steps**:
-- Thoroughly test the new Users Report section, including filtering, sorting, CSV export, and behavior with various data scenarios (e.g., users with no roles, missing status).
+- Thoroughly test the Users Report section, including filtering (global and per-column), sorting, CSV export, and behavior with various data scenarios.
 - Review UI/UX for clarity and usability.
 
 ---

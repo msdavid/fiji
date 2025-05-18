@@ -63,14 +63,9 @@ const fuzzyFilter: FilterFn<any> = (row: Row<any>, columnId: string, value: any,
   if (Array.isArray(item)) {
     return item.some(subItem => String(subItem).toLowerCase().includes(String(value).toLowerCase()));
   }
-  // For custom cells like 'fullName', the value might be an object if accessorFn is used,
-  // or it might be the pre-formatted string if cell rendering does the formatting.
-  // If it's an object from accessorFn, you might need to access specific fields.
-  // For now, this handles strings, numbers, and arrays of strings/numbers.
   return false;
 };
 
-// Custom filter function for full name
 const fullNameFilterFn: FilterFn<UserReportEntry> = (row, columnId, filterValue) => {
     const { firstName, lastName, displayName } = row.original;
     const fn = firstName || '';
@@ -89,7 +84,7 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
   const columns = useMemo<ColumnDef<UserReportEntry>[]>(
     () => [
       {
-        id: 'fullName', // Custom ID for the column
+        id: 'fullName', 
         header: ({ column, table }) => (
           <div>
             <div onClick={column.getToggleSortingHandler()} className="cursor-pointer">
@@ -104,7 +99,7 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
             const fullName = `${firstName || ''} ${lastName || ''}`.trim();
             return fullName || displayName || 'N/A';
         },
-        filterFn: fullNameFilterFn, // Use custom filter for full name
+        filterFn: fullNameFilterFn, 
         enableColumnFilter: true,
       },
       {
@@ -156,25 +151,26 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
         },
         enableColumnFilter: true,
       },
-      {
-        accessorKey: 'createdAt',
-        header: ({ column, table }) => (
-          <div>
-            <div onClick={column.getToggleSortingHandler()} className="cursor-pointer">
-              Created At {column.getIsSorted() === 'asc' ? '🔼' : column.getIsSorted() === 'desc' ? '🔽' : ''}
-            </div>
-          </div>
-        ),
-        cell: info => {
-          const dateValue = info.getValue() as string | null;
-          if (dateValue) {
-            const dateObj = parseISO(dateValue);
-            return isValid(dateObj) ? format(dateObj, 'MMM dd, yyyy, HH:mm') : 'Invalid Date';
-          }
-          return 'N/A';
-        },
-        enableColumnFilter: false, 
-      },
+      // CreatedAt column removed
+      // {
+      //   accessorKey: 'createdAt',
+      //   header: ({ column, table }) => (
+      //     <div>
+      //       <div onClick={column.getToggleSortingHandler()} className="cursor-pointer">
+      //         Created At {column.getIsSorted() === 'asc' ? '🔼' : column.getIsSorted() === 'desc' ? '🔽' : ''}
+      //       </div>
+      //     </div>
+      //   ),
+      //   cell: info => {
+      //     const dateValue = info.getValue() as string | null;
+      //     if (dateValue) {
+      //       const dateObj = parseISO(dateValue);
+      //       return isValid(dateObj) ? format(dateObj, 'MMM dd, yyyy, HH:mm') : 'Invalid Date';
+      //     }
+      //     return 'N/A';
+      //   },
+      //   enableColumnFilter: false, 
+      // },
     ],
     []
   );
@@ -202,10 +198,12 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
   const exportToCsv = () => {
     if (!report?.data) return;
     
-    const activeColumns = columns.filter(col => col.id !== 'id' && (col as any).accessorKey !== 'id'); // Ensure 'id' column is excluded
+    const activeColumns = columns.filter(col => {
+        const key = (col as any).accessorKey || col.id;
+        return key !== 'id' && key !== 'createdAt'; // Exclude 'id' and 'createdAt'
+    });
 
     const csvHeaders = activeColumns.map(colDef => {
-        // For the custom 'fullName' column, use its id or a defined header string
         if (colDef.id === 'fullName') return 'Full Name';
         if (typeof colDef.header === 'string') return colDef.header;
         if ((colDef as any).accessorKey) return String((colDef as any).accessorKey); 
@@ -240,12 +238,9 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
             }
         }
         
-        const accessor = (colDef as any).accessorKey as keyof UserReportEntry; // Re-check accessor for specific formatting
+        const accessor = (colDef as any).accessorKey as keyof UserReportEntry; 
         if (accessor === 'assignedRoleNames' && Array.isArray(cellValue)) {
           cellValue = cellValue.join('; ');
-        } else if (accessor === 'createdAt' && typeof cellValue === 'string') {
-            const dateObj = parseISO(cellValue);
-            cellValue = isValid(dateObj) ? format(dateObj, 'yyyy-MM-dd HH:mm:ss') : 'Invalid Date';
         } else if (React.isValidElement(cellValue)) { 
             const getText = (element: React.ReactNode): string => {
                 if (typeof element === 'string') return element;
