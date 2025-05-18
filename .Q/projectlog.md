@@ -1,6 +1,40 @@
 # Project Log - Fiji
 
 ## Session (YYYY-MM-DD HH:MM)
+**Goal**: Implement User Deletion Functionality.
+
+**Summary**:
+Added a new endpoint `DELETE /users/{user_id}` to the backend for administrators to delete users. The implementation includes deleting the user from Firebase Authentication, their profile from Firestore, and any associated assignments.
+
+**Activities**:
+
+1.  **User Router Update (`backend/routers/users.py`)**:
+    *   Defined `ASSIGNMENTS_COLLECTION = "assignments"`.
+    *   Added a new `async def delete_user_by_admin(user_id: str, ...)` endpoint:
+        *   Protected by the `users:delete` RBAC permission.
+        *   Prevents an administrator from deleting their own account via this endpoint.
+        *   **Firebase Authentication Deletion**:
+            *   Checks if the user exists in Firebase Auth using `auth.get_user()`.
+            *   Deletes the user using `auth.delete_user(user_id)`.
+            *   Handles `auth.UserNotFoundError` if the user is already deleted from Auth.
+        *   **Firestore Profile Deletion**:
+            *   Deletes the user's document from the `users` collection.
+            *   Handles cases where the Firestore profile might not exist.
+        *   **Assignments Deletion**:
+            *   Queries the `assignments` collection for documents where `userId == user_id`.
+            *   Uses a Firestore batch write to delete all found assignments.
+            *   Logs errors but does not raise an HTTP exception for assignment deletion failures if primary user deletion succeeded.
+        *   Includes basic console logging for actions and errors.
+        *   Returns HTTP `204 No Content` on successful deletion.
+
+**Next Steps**:
+- Thoroughly test the user deletion endpoint, including edge cases (user not found, user with/without assignments, admin self-deletion attempt).
+- Implement a corresponding user interface in the frontend for administrators to trigger user deletion.
+- Consider and implement a strategy for handling other user-related data (e.g., `createdByUserId` fields on other documents, logs) – options include anonymization or preventing deletion if critical dependencies exist.
+- Enhance logging to use a structured logging framework.
+
+---
+## Session (YYYY-MM-DD HH:MM)
 **Goal**: Integrate Mailjet Email Service for User Invitations.
 
 **Summary**:
