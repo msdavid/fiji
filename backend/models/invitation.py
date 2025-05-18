@@ -5,7 +5,6 @@ from datetime import datetime
 class InvitationBase(BaseModel):
     email: EmailStr = Field(..., description="Email address of the invited user.")
     assignedRoleIds: Optional[List[str]] = Field(default_factory=list, description="List of role IDs to be assigned upon registration.")
-    # inviterMessage: Optional[str] = Field(None, max_length=500, description="Optional message from the inviter.") # Future consideration
 
 class InvitationCreate(InvitationBase):
     """Payload for creating a new invitation."""
@@ -25,14 +24,11 @@ class InvitationInDB(InvitationBase):
 class InvitationResponse(InvitationInDB):
     """
     Response model for an invitation.
-    For security, the token might be omitted in list views or after creation,
-    but included here for completeness if needed by admin for some reason (e.g. manual resend).
-    Typically, token is not exposed after creation via API list.
     """
-    pass # Inherits all fields from InvitationInDB
+    pass 
 
 class InvitationListResponse(BaseModel):
-    """Response model for listing invitations (omits token for security)."""
+    """Response model for listing invitations."""
     id: str
     email: EmailStr
     status: str
@@ -40,12 +36,15 @@ class InvitationListResponse(BaseModel):
     createdByUserId: str
     createdAt: datetime
     assignedRoleIds: Optional[List[str]] = Field(default_factory=list)
+    # New fields to be populated by the backend
+    creatorName: Optional[str] = Field(None, description="Name of the user who created the invitation.")
+    assignedRoleNames: Optional[List[str]] = Field(default_factory=list, description="Names of roles pre-assigned with this invitation.")
     
     model_config = ConfigDict(from_attributes=True)
 
 class InvitationValidateResponse(BaseModel):
     """Response when validating an invitation token."""
     isValid: bool
-    email: Optional[EmailStr] = None # Email associated with the token if valid
+    email: Optional[EmailStr] = None 
     message: str
-    assignedRoleIds: Optional[List[str]] = None # Roles to pre-fill on registration form
+    assignedRoleIds: Optional[List[str]] = None 

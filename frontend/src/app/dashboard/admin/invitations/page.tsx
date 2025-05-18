@@ -16,7 +16,7 @@ interface Invitation {
   createdByUserId: string; 
   assignedRoleIds?: string[];
   creatorName?: string; 
-  assignedRoleNames?: string[];
+  assignedRoleNames?: string[]; 
 }
 
 export default function AdminInvitationsPage() {
@@ -98,7 +98,8 @@ export default function AdminInvitationsPage() {
     const matchesSearch = searchTerm === '' || (
       inv.email.toLowerCase().includes(term) ||
       inv.id.toLowerCase().includes(term) ||
-      (inv.creatorName && inv.creatorName.toLowerCase().includes(term)) 
+      (inv.creatorName && inv.creatorName.toLowerCase().includes(term)) ||
+      (inv.assignedRoleNames && inv.assignedRoleNames.join(' ').toLowerCase().includes(term))
     );
     return matchesSearch; 
   });
@@ -152,17 +153,15 @@ export default function AdminInvitationsPage() {
         )}
       </header>
 
-      {/* Search and Filter Controls - No separate background box, elements use standard page flow */}
       <div className="mb-6 flex flex-col sm:flex-row gap-4 items-center">
         <div className="flex-grow w-full sm:w-auto">
             <label htmlFor="search-invitations" className="sr-only">Search Invitations</label>
             <input
             id="search-invitations"
             type="text"
-            placeholder="Search by email or ID..."
+            placeholder="Search by email, ID, creator, or roles..."
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            // Standard input styling, padding is part of the input's own classes (p-3)
             className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
             />
         </div>
@@ -172,7 +171,6 @@ export default function AdminInvitationsPage() {
                 id="filter-status"
                 value={filterStatus}
                 onChange={(e) => setFilterStatus(e.target.value as any)}
-                // Standard select styling, padding is part of the select's own classes (p-3)
                 className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white min-w-[180px]"
             >
                 <option value="all">All Statuses</option>
@@ -218,35 +216,58 @@ export default function AdminInvitationsPage() {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email Invited</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Expires</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Created</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Email</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider hidden md:table-cell">Expires</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider hidden lg:table-cell">Created</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider hidden md:table-cell">Invited By</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Roles</th>
+                  <th scope="col" className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredInvitations.map((inv) => (
                   <tr key={inv.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white">{inv.email}</td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`px-2.5 py-1 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[inv.status] || 'bg-gray-100 text-gray-800'}`}>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium text-gray-900 dark:text-white truncate max-w-xs" title={inv.email}>{inv.email}</td>
+                    <td className="px-4 py-4 whitespace-nowrap">
+                      <span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[inv.status] || 'bg-gray-100 text-gray-800'}`}>
                         {inv.status.charAt(0).toUpperCase() + inv.status.slice(1)}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {format(parseISO(inv.expiresAt), 'PPp')} ({formatDistanceToNowStrict(parseISO(inv.expiresAt), { addSuffix: true })})
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell" title={format(parseISO(inv.expiresAt), 'PPpp')}>
+                        {formatDistanceToNowStrict(parseISO(inv.expiresAt), { addSuffix: true })}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
-                        {format(parseISO(inv.createdAt), 'PPp')}
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 hidden lg:table-cell">
+                        {format(parseISO(inv.createdAt), 'PP')}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400 hidden md:table-cell truncate max-w-[150px]" title={inv.creatorName || inv.createdByUserId}>
+                        {inv.creatorName || inv.createdByUserId}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm text-gray-500 dark:text-gray-400">
+                      {(inv.assignedRoleNames && inv.assignedRoleNames.length > 0) 
+                        ? (
+                            <div className="flex flex-wrap gap-1 max-w-[200px]">
+                                {inv.assignedRoleNames.slice(0, 2).map(roleName => (
+                                    <span key={roleName} className="px-1.5 py-0.5 text-xs bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-200 rounded-md">{roleName}</span>
+                                ))}
+                                {inv.assignedRoleNames.length > 2 && (
+                                    <span className="px-1.5 py-0.5 text-xs bg-gray-300 dark:bg-gray-600 text-gray-600 dark:text-gray-300 rounded-md" title={inv.assignedRoleNames.slice(2).join(', ')}>
+                                        +{inv.assignedRoleNames.length - 2} more
+                                    </span>
+                                )}
+                            </div>
+                          )
+                        : <span className="italic text-xs">None</span>}
+                    </td>
+                    <td className="px-4 py-4 whitespace-nowrap text-sm font-medium">
                       {inv.status === 'pending' && canDeleteInvitations && (
                         <button 
                             onClick={() => handleRevokeInvitation(inv.id, inv.email)}
-                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200 inline-flex items-center"
+                            title="Revoke Invitation"
+                            className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200 inline-flex items-center p-1 rounded hover:bg-red-100 dark:hover:bg-red-800/50"
                         >
-                          <span className="material-icons mr-1 text-sm">cancel</span>Revoke
+                          <span className="material-icons text-base">cancel</span>
+                          {/* <span className="ml-1 hidden sm:inline">Revoke</span> */}
                         </button>
                       )}
                     </td>

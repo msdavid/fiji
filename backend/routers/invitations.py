@@ -1,13 +1,12 @@
 from fastapi import APIRouter, HTTPException, Depends, status, BackgroundTasks, Query
 from typing import List, Optional
 from firebase_admin import firestore, auth
-from datetime import datetime, timedelta, timezone # Added timezone
+from datetime import datetime, timedelta, timezone 
 
 from models.invitation import InvitationCreate, InvitationResponse, InvitationListResponse, InvitationValidateResponse
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
 from utils.token_generator import generate_secure_token
-# from utils.email_sender import send_invitation_email 
 
 admin_router = APIRouter(
     prefix="/admin/invitations", 
@@ -21,6 +20,7 @@ public_router = APIRouter(
 
 INVITATIONS_COLLECTION = "registrationInvitations"
 USERS_COLLECTION = "users"
+ROLES_COLLECTION = "roles" # Added for fetching role names
 
 async def send_invitation_email_placeholder(email_to: str, token: str, inviter_name: Optional[str]):
     registration_link = f"http://localhost:3000/register?token={token}" 
@@ -64,23 +64,21 @@ async def create_invitation(
         .where("status", "==", "pending")\
         .limit(1)
     
-    existing_invitations_snap = await existing_invitation_query.get() # Renamed for clarity
-    if existing_invitations_snap: # Check if the list is not empty
+    existing_invitations_snap = await existing_invitation_query.get() 
+    if existing_invitations_snap: 
         for inv_doc in existing_invitations_snap:
             inv = inv_doc.to_dict()
             expires_at_dt = inv.get("expiresAt")
-            # Ensure expires_at_dt is a datetime object and make it timezone-aware (UTC) for comparison
             if isinstance(expires_at_dt, datetime):
                 if expires_at_dt.tzinfo is None:
                     expires_at_dt = expires_at_dt.replace(tzinfo=timezone.utc)
-                if expires_at_dt > datetime.now(timezone.utc): # Compare timezone-aware datetimes
+                if expires_at_dt > datetime.now(timezone.utc): 
                     raise HTTPException(
                         status_code=status.HTTP_409_CONFLICT,
                         detail=f"A pending invitation already exists for '{invitation_data.email}' and has not expired yet."
                     )
 
     token = generate_secure_token(32)
-    # Store expires_at as UTC datetime object
     expires_at = datetime.now(timezone.utc) + timedelta(days=7) 
 
     invitation_doc_id = db.collection(INVITATIONS_COLLECTION).document().id
@@ -134,7 +132,7 @@ async def list_invitations(
             query = query.where("status", "==", status_filter)
         
         all_invitations_stream = query.stream()
-        invitations_list = []
+        invitations_list_processed = [] # Renamed to avoid confusion with model name
         
         current_offset = 0
         docs_processed_for_limit = 0
@@ -150,10 +148,32 @@ async def list_invitations(
                 
                 if 'createdByUserId' not in inv_data or not inv_data['createdByUserId']:
                     inv_data['createdByUserId'] = "unknown_creator" 
+                    inv_data['creatorName'] = "Unknown Creator"
                     print(f"Warning: Invitation document {doc.id} is missing 'createdByUserId'.")
+                else:
+                    creator_doc = await db.collection(USERS_COLLECTION).document(inv_data['createdByUserId']).get()
+                    if creator_doc.exists:
+                        creator_data = creator_doc.to_dict()
+                        first = creator_data.get('firstName', '')
+                        last = creator_data.get('lastName', '')
+                        inv_data['creatorName'] = f"{first} {last}".strip() or "Name N/A"
+                    else:
+                        inv_data['creatorName'] = "Creator Not Found"
                 
+                assigned_role_ids = inv_data.get("assignedRoleIds", [])
+                assigned_role_names = []
+                if isinstance(assigned_role_ids, list):
+                    for role_id in assigned_role_ids:
+                        role_doc = await db.collection(ROLES_COLLECTION).document(role_id).get()
+                        if role_doc.exists:
+                            role_data = role_doc.to_dict()
+                            assigned_role_names.append(role_data.get("roleName", role_id))
+                        else:
+                            assigned_role_names.append(f"{role_id} (not found)")
+                inv_data['assignedRoleNames'] = assigned_role_names
+
                 try:
-                    invitations_list.append(InvitationListResponse(**inv_data))
+                    invitations_list_processed.append(InvitationListResponse(**inv_data))
                 except Exception as pydantic_error:
                     print(f"Pydantic validation error for doc {doc.id}: {pydantic_error}. Data: {inv_data}")
                     continue 
@@ -162,7 +182,7 @@ async def list_invitations(
             else:
                 break 
                 
-        return invitations_list
+        return invitations_list_processed
     except Exception as e:
         print(f"Error listing invitations: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
@@ -205,10 +225,6 @@ async def validate_invitation_token(
     token: str = Query(..., description="The invitation token to validate."),
     db: firestore.AsyncClient = Depends(get_db)
 ):
-    """
-    Validates an invitation token.
-    Checks if the token exists, is pending, and has not expired.
-    """
     if not token:
         return InvitationValidateResponse(isValid=False, message="Token is required.")
 
@@ -218,7 +234,7 @@ async def validate_invitation_token(
     if not invitation_docs_snap:
         return InvitationValidateResponse(isValid=False, message="Invitation token not found.")
 
-    invitation_doc = invitation_docs_snap[0] # Get the first document
+    invitation_doc = invitation_docs_snap[0] 
     invitation_data = invitation_doc.to_dict()
 
     if invitation_data.get("status") != "pending":
@@ -226,21 +242,16 @@ async def validate_invitation_token(
 
     expires_at = invitation_data.get("expiresAt")
     if not isinstance(expires_at, datetime):
-        # This case should ideally not happen if data is saved correctly
         print(f"Warning: Invitation {invitation_doc.id} has invalid expiresAt field: {expires_at}")
         return InvitationValidateResponse(isValid=False, message="Invitation has an invalid expiration date format.")
 
-    # Ensure expires_at is timezone-aware (UTC) for comparison
     if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     
     if expires_at < datetime.now(timezone.utc):
-        # Optionally, update status to 'expired' in DB here or via a scheduled job
-        # For now, just return invalid
-        # await db.collection(INVITATIONS_COLLECTION).document(invitation_doc.id).update({"status": "expired", "updatedAt": firestore.SERVER_TIMESTAMP})
+        await db.collection(INVITATIONS_COLLECTION).document(invitation_doc.id).update({"status": "expired", "updatedAt": firestore.SERVER_TIMESTAMP})
         return InvitationValidateResponse(isValid=False, message="Invitation token has expired.")
 
-    # Token is valid, pending, and not expired
     return InvitationValidateResponse(
         isValid=True,
         message="Invitation token is valid.",
