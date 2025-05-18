@@ -1,225 +1,38 @@
-# Project Log - Fiji
+## Project Log - Fiji
 
-## Session (YYYY-MM-DD HH:MM)
-**Goal**: Implement User Deletion Functionality.
+**Date:** {{YYYY-MM-DD}} (auto-filled by system)
 
-**Summary**:
-Added a new endpoint `DELETE /users/{user_id}` to the backend for administrators to delete users. The implementation includes deleting the user from Firebase Authentication, their profile from Firestore, and any associated assignments.
+**Session:** {{Session ID}} (auto-filled by system)
 
-**Activities**:
+**User:** Mauro
 
-1.  **User Router Update (`backend/routers/users.py`)**:
-    *   Defined `ASSIGNMENTS_COLLECTION = "assignments"`.
-    *   Added a new `async def delete_user_by_admin(user_id: str, ...)` endpoint:
-        *   Protected by the `users:delete` RBAC permission.
-        *   Prevents an administrator from deleting their own account via this endpoint.
-        *   **Firebase Authentication Deletion**:
-            *   Checks if the user exists in Firebase Auth using `auth.get_user()`.
-            *   Deletes the user using `auth.delete_user(user_id)`.
-            *   Handles `auth.UserNotFoundError` if the user is already deleted from Auth.
-        *   **Firestore Profile Deletion**:
-            *   Deletes the user's document from the `users` collection.
-            *   Handles cases where the Firestore profile might not exist.
-        *   **Assignments Deletion**:
-            *   Queries the `assignments` collection for documents where `userId == user_id`.
-            *   Uses a Firestore batch write to delete all found assignments.
-            *   Logs errors but does not raise an HTTP exception for assignment deletion failures if primary user deletion succeeded.
-        *   Includes basic console logging for actions and errors.
-        *   Returns HTTP `204 No Content` on successful deletion.
+**Q Agent Activity:**
 
-**Next Steps**:
-- Thoroughly test the user deletion endpoint, including edge cases (user not found, user with/without assignments, admin self-deletion attempt).
-- Implement a corresponding user interface in the frontend for administrators to trigger user deletion.
-- Consider and implement a strategy for handling other user-related data (e.g., `createdByUserId` fields on other documents, logs) – options include anonymization or preventing deletion if critical dependencies exist.
-- Enhance logging to use a structured logging framework.
+### Sprint: Authentication Enhancements
 
----
-## Session (YYYY-MM-DD HH:MM)
-**Goal**: Integrate Mailjet Email Service for User Invitations.
+**Task: Implement "Forgot Password" Functionality**
 
-**Summary**:
-Modified the user invitation creation process to send actual invitation emails via the newly implemented Mailjet `EmailService`. This replaces the previous placeholder email simulation. The system now constructs and sends a formatted HTML email containing a unique registration link.
+*   **Objective:** Add a "Forgot Password" feature to the frontend login page, leveraging Firebase Authentication's password reset capabilities.
+*   **Files Modified:**
+    *   `frontend/src/app/login/page.tsx`:
+        *   Imported `sendPasswordResetEmail` from `firebase/auth`.
+        *   Added state variables (`resetEmail`, `resetMessage`, `resetError`, `showResetForm`) to manage the UI and logic for password reset.
+        *   Integrated a "Forgot your password?" link/button that toggles visibility between the login form and a new password reset form.
+        *   The password reset form collects the user's email.
+        *   Implemented `handlePasswordReset` async function:
+            *   Calls `sendPasswordResetEmail(auth, resetEmail)` to trigger Firebase's password reset email flow.
+            *   Provides user feedback (success or error messages) based on the outcome.
+            *   Includes error handling for common Firebase errors like `auth/user-not-found` and `auth/invalid-email`.
+        *   Added a "Back to Login" link on the reset form.
+        *   Styled the new elements to be consistent with the existing login page.
+*   **Backend Impact:** None. Password reset is handled client-side via Firebase.
+*   **Outcome:** The login page now includes a mechanism for users to request a password reset email through Firebase.
 
-**Activities**:
-
-1.  **Invitations Router Update (`backend/routers/invitations.py`)**:
-    *   Imported `EmailService` from `backend.services.email_service`.
-    *   Instantiated `EmailService` at the module level, with a fallback to disable email sending if service initialization fails (e.g., missing Mailjet credentials).
-    *   Added logic to read `FRONTEND_URL` from environment variables (defaulting to `http://localhost:3000`) to construct the registration link. Users need to set this in their `.env` file.
-    *   Replaced the `send_invitation_email_placeholder` function with `send_actual_invitation_email`.
-        *   This new async function takes the recipient's email, invitation token, inviter's name, and the `EmailService` instance.
-        *   It constructs the subject, HTML content (including the registration link), and plain text content for the invitation email.
-        *   It calls `email_service.send_email()` to dispatch the email via Mailjet.
-        *   Includes basic console logging for email sending success or failure.
-    *   Updated the `create_invitation` endpoint:
-        *   The `background_tasks.add_task` now calls `send_actual_invitation_email`, passing the necessary parameters and the `email_service` instance.
-
-**Configuration Reminder**:
-*   Users must ensure `MAIJET_API_KEY`, `MAIJET_API_SECRET`, and `EMAIL_SENDER` are correctly set in `backend/.env`.
-*   A new environment variable `FRONTEND_URL` (e.g., `FRONTEND_URL=http://localhost:3000`) must be added to `backend/.env` for constructing correct registration links in emails.
-*   Optionally, `EMAIL_SENDER_NAME` can be set in `.env`.
-
-**Next Steps**:
-- Thoroughly test the invitation creation flow to ensure emails are generated and sent correctly via Mailjet.
-- Monitor Mailjet dashboard for email delivery status and potential issues.
-- Consider more robust error handling for email sending failures (e.g., retry mechanisms, admin notifications, or flagging invitations that failed to send).
-- Implement email sending for other features like password resets and event confirmations.
+**Previously in this session:**
+*   Analyzed frontend login mechanism (`frontend/src/app/login/page.tsx` and `frontend/src/lib/firebaseConfig.ts`).
+*   Analyzed backend authentication router (`backend/routers/auth.py`) and token verification dependency (`backend/dependencies/auth.py`).
+*   Confirmed that the frontend handles direct authentication with Firebase, and the backend verifies Firebase ID tokens for API requests.
 
 ---
-## Session (YYYY-MM-DD HH:MM)
-**Goal**: Implement Mailjet Email Sending Service.
-
-**Summary**:
-Established the foundational architecture for sending emails via Mailjet. This involved adding the `mailjet-rest` library, creating a dedicated email service module in the backend, and configuring it to use API keys and sender details from environment variables. The service provides a flexible `send_email` function capable of handling various email types (HTML, text, attachments, CC, BCC).
-
-**Activities**:
-
-1.  **Dependency Management (`backend/pyproject.toml`)**:
-    *   Added `mailjet-rest>=1.3.5` (actually installed v1.4.0) to the project's dependencies.
-2.  **Installation**:
-    *   Successfully installed `mailjet-rest` into the backend virtual environment using `uv pip install mailjet-rest`.
-3.  **Email Service Creation (`backend/services/email_service.py`)**:
-    *   Created a new `EmailService` class.
-    *   The service initializes the Mailjet client (v3.1) using `MAIJET_API_KEY` and `MAIJET_API_SECRET` loaded from `.env`.
-    *   It uses `EMAIL_SENDER` for the "From" address and `EMAIL_SENDER_NAME` (defaults to "Fiji Platform") for the "From" name, also loaded from `.env`.
-    *   Implemented an `async def send_email(...)` method:
-        *   Accepts parameters: `to_email`, `to_name`, `subject`, `html_content`.
-        *   Optionally accepts: `text_content`, `custom_id`, `attachments`, `cc_emails`, `bcc_emails`.
-        *   Constructs the payload for Mailjet's Send API v3.1.
-        *   Includes basic error handling and console logging for API responses.
-    *   Added commented-out example usage (`main_test`) within the module for direct testing.
-4.  **Configuration**:
-    *   Relies on `python-dotenv` to load `MAIJET_API_KEY`, `MAIJET_API_SECRET`, `EMAIL_SENDER`, and optionally `EMAIL_SENDER_NAME` from the `backend/.env` file.
-
-**Next Steps**:
-- Integrate the `EmailService.send_email` method into actual application workflows, such as sending emails for new user invitations or event confirmations.
-- Implement robust logging for email sending activities.
-- Develop email templating capabilities if complex or varied email layouts are required.
-- Thoroughly test email sending with various scenarios and recipients using the Mailjet sandbox or a test account.
-
----
-## Session (YYYY-MM-DD HH:MM)
-**Goal**: Change "Display Name" to "Full Name" in Users Report.
-
-**Summary**:
-Updated the Users Report to display a "Full Name" column, constructed from `firstName` and `lastName` fields, instead of relying solely on `displayName`. This provides a more consistent and explicit representation of user names.
-
-**Activities**:
-
-1.  **Backend Updates (`backend/routers/reports.py`)**:
-    *   Modified the `UserReportEntry` Pydantic model to include `firstName: Optional[str]` and `lastName: Optional[str]`.
-    *   Updated the `/api/reports/users-list` endpoint to fetch and populate `firstName` and `lastName` for each user from Firestore. The `displayName` field was kept for flexibility.
-    *   **Commit**: Part of `900152e`.
-
-2.  **Frontend Interface Update (`frontend/src/app/dashboard/reports/page.tsx`)**:
-    *   Updated the `UserReportEntry` TypeScript interface to include `firstName?: string | null` and `lastName?: string | null`.
-    *   **Commit**: Part of `900152e`.
-
-3.  **Frontend Component Update (`frontend/src/components/reports/UsersReportSection.tsx`)**:
-    *   Changed the first column's header from "Display Name" to "Full Name".
-    *   Implemented an `accessorFn` for the "Full Name" column to compute the value as `` `${row.firstName || ''} ${row.lastName || ''}`.trim() || row.displayName || 'N/A' ``.
-    *   The cell rendering logic was updated similarly.
-    *   Added a custom `fullNameFilterFn` to enable filtering on the combined full name.
-    *   Adjusted the CSV export logic to correctly derive the "Full Name" header and export the combined name value.
-    *   **Commit**: Part of `900152e`.
-
-**Overall Commit**:
-*   **Commit ID**: `900152e`
-*   **Commit Message**: "Refactor: Change Display Name to Full Name in Users Report. Updated the Users Report to display 'Full Name' (constructed from firstName and lastName) instead of 'Display Name'. Backend ('backend/routers/reports.py'): Added 'firstName' and 'lastName' fields to the 'UserReportEntry' Pydantic model. The '/api/reports/users-list' endpoint now populates these fields from user documents. 'displayName' is still included for flexibility. Frontend ('frontend/src/app/dashboard/reports/page.tsx'): Updated the 'UserReportEntry' TypeScript interface to include 'firstName' and 'lastName'. Frontend ('frontend/src/components/reports/UsersReportSection.tsx'): The first column in the users table is now 'Full Name'. Cell rendering logic combines 'firstName' and 'lastName', falling back to 'displayName' if the full name is not available. Implemented a custom 'fullNameFilterFn' for this column to allow filtering based on the combined full name. Updated CSV export to correctly include the 'Full Name' column. This change provides a more consistent and explicit representation of user names in the report."
-
-**Next Steps**:
-- Test the "Full Name" column thoroughly, including filtering, sorting, and CSV export, especially with users who might have missing `firstName`, `lastName`, or `displayName`.
-
----
-## Session (YYYY-MM-DD HH:MM)
-**Goal**: Add a users table with filtering and export capabilities to the reports page.
-
-**Summary**:
-Successfully added a new "Users Overview" section to the Reports Dashboard. This involved creating a new backend endpoint to serve user data (including role names) and a new frontend component to display this data in a filterable, sortable, and exportable table.
-
-**Activities**:
-
-**Phase 1: Backend Development (`backend/routers/reports.py`)**
-1.  **Defined Pydantic Models**:
-    *   `UserReportEntry`: Represents a single user with fields: `id`, `displayName`, `email`, `assignedRoleNames` (list of strings), `status`, `createdAt`.
-    *   `UsersReport`: Contains `data: List[UserReportEntry]` and `totalUsers: int`.
-2.  **Created API Endpoint (`/api/reports/users-list`)**:
-    *   Protected by `require_permission("admin", "view_summary")`.
-    *   Fetches all users from the "users" collection, ordered by `createdAt` descending.
-    *   For each user, retrieves `assignedRoleIds`.
-    *   Efficiently fetches all unique role names in batches using `asyncio.gather` to avoid N+1 queries for role names.
-    *   Constructs and returns a `UsersReport` containing a list of `UserReportEntry` objects.
-    *   Handles potential string-to-datetime conversion for `createdAt`.
-    *   Defaults user `status` to "active" if not present.
-    *   **Bug Fix (Commit `55dea40`)**: Corrected `AttributeError: module 'google.cloud.firestore' has no attribute 'FieldPath'` by changing import to `from google.cloud.firestore_v1.field_path import FieldPath`.
-    *   **Bug Fix (Commit `e0d7d8d`)**: Corrected logic to use `role_doc_snap.id` (which is `roleName`) as the role name instead of trying to access a non-existent `name` field from `role_data`.
-
-**Phase 2: Frontend Development**
-3.  **Updated Report Page (`frontend/src/app/dashboard/reports/page.tsx`)**:
-    *   Defined corresponding TypeScript interfaces: `UserReportEntry`, `UsersReport`.
-    *   Added state variables: `usersReport` and `loadingUsersReport`.
-    *   Updated `useEffect` to fetch data from `/api/reports/users-list` and manage loading/error states.
-    *   Added a new `<UsersReportSection />` component to the JSX, passing the fetched data and loading state.
-    *   Adjusted overall loading logic and helper functions for managing loader states.
-4.  **Created New Component (`frontend/src/components/reports/UsersReportSection.tsx`)**:
-    *   Receives `report: UsersReport | null`, `isLoading: boolean`, and `error?: string | null` as props.
-    *   Uses `@tanstack/react-table` to display users.
-    *   **Columns**: Display Name, Email, Roles (comma-separated), Status (styled with colored badges), Created At (formatted), User ID.
-    *   **Filtering**: Implemented global "fuzzy" text search.
-    *   **Enhancement (Commit `4f919a6`)**: Added per-column filter inputs to table headers for most columns.
-    *   **Refactor (Commit `740b9e6`)**: Removed the "User ID" column from the table display and CSV export.
-    *   **Sorting**: Enabled for all columns.
-    *   **CSV Export**: Added a button to export the current table view (respecting filters) to `users_report.csv`.
-    *   Handles loading, error, and "no data" states. Displays total user count.
-
-**Phase 3: Finalization**
-5.  **Committed Changes**:
-    *   Initial feature commit: `fe6cd2e`.
-    *   Subsequent fix/enhancement commits: `55dea40`, `e0d7d8d`, `4f919a6`, `740b9e6`.
-
-**Next Steps**:
-- Thoroughly test the Users Report section, including filtering (global and per-column), sorting, CSV export, and behavior with various data scenarios.
-- Review UI/UX for clarity and usability.
-
----
-## Session (YYYY-MM-DD HH:MM)
-**Goal**: Debug runtime error in `DonationInsightsSection.tsx`.
-
-**Summary**:
-A runtime error "Error: dateString is undefined" was reported in `frontend/src/components/reports/DonationInsightsSection.tsx` at line 120, where `parseISO(dateValue)` was called. This indicated `dateValue` (obtained from `info.getValue()`) was undefined.
-
-**Activities**:
-1.  **File Path Correction**: Initially attempted to read `src/components/reports/DonationInsightsSection.tsx`, which failed. Corrected path to `frontend/src/components/reports/DonationInsightsSection.tsx`.
-2.  **Code Analysis**: Reviewed the provided code for `DonationInsightsSection.tsx`. The error occurred in the `cell` renderer for the `dateReceived` column definition.
-3.  **Bug Fix**: Modified the `cell` renderer for `dateReceived` to:
-    *   Get `dateValue` from `info.getValue()`.
-    *   Check if `dateValue` is a string and not empty before attempting `parseISO`.
-    *   If `dateValue` is invalid or not a string, display 'N/A'.
-    *   This prevents `parseISO` from being called with an undefined value.
-4.  **File Update**: Wrote the corrected code back to `frontend/src/components/reports/DonationInsightsSection.tsx`.
-5.  **Commit**: Staged all changes and committed them.
-    *   **Commit ID**: `984f9d8`
-    *   **Commit Message Used**: "Fix: Handle undefined dateValue in DonationInsightsSection. The 'dateReceived' field in ReportDonationEntry could sometimes be undefined, leading to a runtime error when parseISO was called with an undefined value. This commit modifies the cell renderer for the 'dateReceived' column in frontend/src/components/reports/DonationInsightsSection.tsx. It now checks if dateValue is a valid string before attempting to parse it. If dateValue is not a string or is empty, it defaults to displaying 'N/A', preventing the error and improving robustness."
-    *   **Actual Changes in Commit**:
-        *   **Backend (`backend/routers/reports.py`, `backend/uv.lock`)**:
-            *   Major refactoring of reporting endpoints, now prefixed with `/api/reports`.
-            *   New endpoints: `/admin-summary`, `/volunteer-activity`, `/event-performance`, `/donation-insights`.
-            *   New Pydantic models for structured report responses.
-            *   Updated permissions for report endpoints (requiring 'admin' role, 'view_summary' privilege).
-            *   Enhanced data fetching, filtering (by period/date range), and error handling for reports.
-            *   Updated `cryptography` (44.0.3 -> 45.0.2) and `pluggy` (1.5.0 -> 1.6.0).
-        *   **Frontend (`frontend/package.json`, `frontend/package-lock.json`, new files)**:
-            *   Added new dependencies: `@tanstack/react-table`, `chart.js`, `react-chartjs-2`.
-            *   Created new main reports page: `frontend/src/app/dashboard/reports/page.tsx`. This page fetches data from the new backend report endpoints and displays summary cards and sections for different reports.
-            *   Created new report section components:
-                *   `frontend/src/components/reports/DonationInsightsSection.tsx`: Displays donation breakdown (pie chart), monetary trends (line chart), and recent donations (table with CSV export). Includes the bug fix for `dateReceived`.
-                *   `frontend/src/components/reports/EventPerformanceSection.tsx`: Displays event participation (bar chart) and detailed table (with CSV export).
-                *   `frontend/src/components/reports/VolunteerActivitySection.tsx`: Displays top volunteers (bar chart) and activity details (table with CSV export).
-            *   Implemented loading states, error handling, and permission checks on the reports page.
-    *   **Note on Commit Message**: The commit message accurately described the specific bug fix but did not encompass the full scope of the extensive feature additions (new reporting dashboard and backend infrastructure) included in the same commit.
-
-**Next Steps**:
-- Monitor application for any further issues related to date handling or the new reporting features.
-- Consider amending the commit message of `984f9d8` if a more descriptive history is desired, or ensure future large commits have comprehensive messages.
-
----
+*(Log entries from previous sessions are below this line)*
+{{Previous .Q/projectlog.md content will be appended here by the system}}
