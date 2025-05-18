@@ -238,15 +238,6 @@ export default function DashboardNav() {
                       <span className="material-icons text-lg mr-2 text-gray-500 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">account_circle</span>
                       Your Profile
                     </Link>
-                    <Link 
-                      href="/dashboard/preferences" 
-                      className="group flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white" 
-                      role="menuitem"
-                      onClick={() => setIsDropdownOpen(false)}
-                    >
-                      <span className="material-icons text-lg mr-2 text-gray-500 dark:text-gray-400 group-hover:text-indigo-600 dark:group-hover:text-indigo-400">settings</span>
-                      Preferences
-                    </Link>
                   </div>
                   <div className="py-1 border-t border-gray-200 dark:border-gray-700" role="none">
                     <button 
