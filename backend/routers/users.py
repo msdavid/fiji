@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, status, Query
 from typing import List, Optional, Any, Dict, Set
 from firebase_admin import firestore, auth
-from google.cloud.firestore_v1.base_query import FieldFilter # For assignments query
+from google.cloud.firestore_v1.base_query import FieldFilter 
 import datetime 
 
 from models.user import (
@@ -11,7 +11,7 @@ from models.user import (
 )
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
-from utils.password_generator import generate_random_password # Import the new utility
+from utils.password_generator import generate_random_password
 
 router = APIRouter(
     prefix="/users",
@@ -20,7 +20,10 @@ router = APIRouter(
 
 USERS_COLLECTION = "users"
 ROLES_COLLECTION = "roles"
-ASSIGNMENTS_COLLECTION = "assignments" # Added for user deletion
+ASSIGNMENTS_COLLECTION = "assignments" 
+EVENTS_COLLECTION = "events" # Added for anonymizing createdByUserId
+
+USER_DELETED_PLACEHOLDER_ID = "deleted_user_placeholder" # Placeholder for anonymization
 
 def _sanitize_user_data_fields(user_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -77,11 +80,6 @@ async def admin_create_user(
     user_create_data: UserAdminCreatePayload,
     db: firestore.AsyncClient = Depends(get_db),
 ):
-    """
-    Allows an administrator to create a new user account.
-    A password will be auto-generated and returned in the response.
-    The new user should be prompted to change this password upon first login.
-    """
     try:
         try:
             auth.get_user_by_email(user_create_data.email)
@@ -402,22 +400,20 @@ async def update_user_by_admin(
 async def delete_user_by_admin(
     user_id: str,
     db: firestore.AsyncClient = Depends(get_db),
-    current_admin_user: RBACUser = Depends(get_current_user_with_rbac) # For logging, and to prevent self-deletion by mistake
+    current_admin_user: RBACUser = Depends(get_current_user_with_rbac) 
 ):
     if user_id == current_admin_user.uid:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Administrators cannot delete their own accounts via this endpoint.")
 
     # Step 1: Delete user from Firebase Authentication
     try:
-        auth.get_user(user_id) # Check if user exists in Firebase Auth before attempting delete
+        auth.get_user(user_id) 
         auth.delete_user(user_id)
         print(f"User {user_id} successfully deleted from Firebase Authentication.")
     except auth.UserNotFoundError:
         print(f"User {user_id} not found in Firebase Authentication. Proceeding to check Firestore.")
-        # If user not in Auth, they might still be in Firestore (e.g. failed previous creation/cleanup)
     except Exception as e:
         print(f"Error deleting user {user_id} from Firebase Authentication: {str(e)}")
-        # Depending on policy, you might stop here or proceed to clean up Firestore
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete user from authentication system: {str(e)}")
 
     # Step 2: Delete user profile from Firestore
@@ -431,8 +427,6 @@ async def delete_user_by_admin(
             print(f"User profile {user_id} not found in Firestore. No Firestore profile to delete.")
     except Exception as e:
         print(f"Error deleting user profile {user_id} from Firestore: {str(e)}")
-        # This is problematic as Auth user might be deleted but Firestore profile remains.
-        # Consider logging for manual cleanup.
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Failed to delete user profile from database: {str(e)}")
 
     # Step 3: Delete user's assignments
@@ -440,7 +434,7 @@ async def delete_user_by_admin(
         assignments_query = db.collection(ASSIGNMENTS_COLLECTION).where(filter=FieldFilter("userId", "==", user_id))
         assignments_snapshot = await assignments_query.get()
         
-        if assignments_snapshot: # Check if there are any documents to delete
+        if assignments_snapshot: 
             batch = db.batch()
             count = 0
             for doc_snap in assignments_snapshot:
@@ -453,16 +447,47 @@ async def delete_user_by_admin(
             
     except Exception as e:
         print(f"Error deleting assignments for user {user_id}: {str(e)}")
-        # Log this error. The primary user deletion (Auth & Firestore profile) might have succeeded.
-        # This step is for cleanup of related data.
-        # Not raising HTTPException here to allow main deletion to be considered successful if Auth/Firestore parts worked.
-        # Depending on strictness, one might choose to raise an error.
-        # For now, we log and proceed (as the 204 response will be sent if prior steps didn't fail hard).
+        # Log this error. Not raising HTTPException here.
 
-    # Note: Other related data (e.g., createdByUserId in events) are not handled here.
-    # This would require a more complex strategy (anonymization, preventing deletion if critical relations exist).
+    # Step 4: Anonymize createdByUserId in events
+    try:
+        events_query = db.collection(EVENTS_COLLECTION).where(filter=FieldFilter("createdByUserId", "==", user_id))
+        events_snapshot = await events_query.get()
 
-    return # Returns 204 No Content on success
+        if events_snapshot:
+            batch = db.batch()
+            count = 0
+            for event_doc_snap in events_snapshot:
+                batch.update(event_doc_snap.reference, {"createdByUserId": USER_DELETED_PLACEHOLDER_ID, "updatedAt": firestore.SERVER_TIMESTAMP})
+                count += 1
+            await batch.commit()
+            print(f"Successfully anonymized createdByUserId for {count} events created by user {user_id}.")
+        else:
+            print(f"No events found created by user {user_id} to anonymize.")
+    except Exception as e:
+        print(f"Error anonymizing events for user {user_id}: {str(e)}")
+        # Log this error. Not raising HTTPException here.
+        
+    # Step 5: Anonymize organizerUserId in events (if user was an organizer)
+    try:
+        organizer_events_query = db.collection(EVENTS_COLLECTION).where(filter=FieldFilter("organizerUserId", "==", user_id))
+        organizer_events_snapshot = await organizer_events_query.get()
+
+        if organizer_events_snapshot:
+            batch = db.batch()
+            count = 0
+            for event_doc_snap in organizer_events_snapshot:
+                # Decide on placeholder: null, or a specific string. Using null for now.
+                batch.update(event_doc_snap.reference, {"organizerUserId": None, "organizerFirstName": None, "organizerLastName": None, "organizerEmail": None, "updatedAt": firestore.SERVER_TIMESTAMP})
+                count += 1
+            await batch.commit()
+            print(f"Successfully anonymized organizerUserId for {count} events organized by user {user_id}.")
+        else:
+            print(f"No events found organized by user {user_id} to anonymize.")
+    except Exception as e:
+        print(f"Error anonymizing events organized by user {user_id}: {str(e)}")
+
+    return 
 
 
 # --- Endpoints for Assigning/Unassigning Roles to User ---
