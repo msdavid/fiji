@@ -35,6 +35,11 @@ interface EventWithSignupStatus {
   volunteerNames?: string[]; 
 }
 
+interface WorkingGroup {
+  id: string;
+  groupName: string; 
+}
+
 const EVENT_STATUSES = {
   ALL: 'all',
   DRAFT: 'draft',
@@ -70,13 +75,23 @@ const ensureDateString = (date: string | Date): string => {
   return date;
 };
 
-// Wrapper component for Tippy's child to correctly handle refs in React 19+
 const TippyContentWrapper = React.forwardRef<HTMLSpanElement, { children: React.ReactNode }>(
   ({ children }, ref) => {
     return <span ref={ref}>{children}</span>;
   }
 );
 TippyContentWrapper.displayName = 'TippyContentWrapper';
+
+function debounce<F extends (...args: any[]) => void>(func: F, waitFor: number) {
+  let timeout: ReturnType<typeof setTimeout> | null = null;
+  const debounced = (...args: Parameters<F>) => {
+    if (timeout !== null) {
+      clearTimeout(timeout);
+    }
+    timeout = setTimeout(() => func(...args), waitFor);
+  };
+  return debounced;
+}
 
 
 export default function EventsPage() {
@@ -89,7 +104,12 @@ export default function EventsPage() {
   const [statusFilter, setStatusFilter] = useState<string>(EVENT_STATUSES.ALL); 
   const [fromDateFilter, setFromDateFilter] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [daysRangeFilter, setDaysRangeFilter] = useState<string>('14'); 
+  const [searchTerm, setSearchTerm] = useState<string>('');
   const [currentTimeTick, setCurrentTimeTick] = useState(new Date()); 
+
+  const [workingGroupFilter, setWorkingGroupFilter] = useState<string>('all');
+  const [availableWorkingGroups, setAvailableWorkingGroups] = useState<WorkingGroup[]>([]);
+  const [isLoadingWorkingGroups, setIsLoadingWorkingGroups] = useState(true);
 
   const canCreateEvents = userProfile && (hasPrivilege ? hasPrivilege('events', 'create') : userProfile.isSysadmin);
 
@@ -98,18 +118,41 @@ export default function EventsPage() {
     return () => clearInterval(timer);
   }, []);
 
-  const fetchEvents = useCallback(async () => {
-    if (!idToken && !authLoading) { 
-        if (!authLoading && !user) { return; }
-        setError("Authentication token not available. Please try logging in again.");
-        setIsLoading(false);
-        return;
+  const fetchAvailableWorkingGroups = useCallback(async () => {
+    if (!idToken) return;
+    setIsLoadingWorkingGroups(true);
+    try {
+      const response: ApiResponse<WorkingGroup[]> = await apiClient({
+        path: '/working-groups?fields=id,groupName', 
+        token: idToken,
+        method: 'GET',
+      });
+      if (response.ok && response.data) {
+        setAvailableWorkingGroups(response.data);
+      } else {
+        console.error("Failed to fetch working groups:", response.error);
+      }
+    } catch (err) {
+      console.error("Error fetching working groups:", err);
+    } finally {
+      setIsLoadingWorkingGroups(false);
     }
-    if (!idToken && authLoading) { 
-        return;
-    }
-    if (!idToken) return; 
+  }, [idToken]);
 
+  useEffect(() => {
+    if (idToken) {
+      fetchAvailableWorkingGroups();
+    }
+  }, [idToken, fetchAvailableWorkingGroups]);
+
+
+  const fetchEvents = useCallback(async () => {
+    if (!idToken) { 
+        if (!authLoading && !user) { }
+        return;
+    }
+
+    // console.log("Fetching events with filters:", { statusFilter, fromDateFilter, daysRangeFilter, workingGroupFilter, searchTerm }); // DEBUG
     setIsLoading(true);
     setError(null);
 
@@ -120,6 +163,12 @@ export default function EventsPage() {
     if (!isNaN(days) && days > 0) {
         params.append('days_range', days.toString());
     }
+    if (workingGroupFilter && workingGroupFilter !== 'all') {
+      params.append('working_group_id', workingGroupFilter);
+    }
+    if (searchTerm.trim()) {
+      params.append('q', searchTerm.trim());
+    }
     
     try {
       const response: ApiResponse<EventWithSignupStatus[]> = await apiClient({
@@ -129,22 +178,28 @@ export default function EventsPage() {
       });
 
       if (response.ok && response.data) {
-        const eventsWithMockedNames = response.data.map(event => {
-          let mockNames: string[] = [];
-          const actualVolunteerCount = event.isCurrentUserSignedUp ? 1 : 0; 
-          if (actualVolunteerCount > 0) {
-            mockNames = event.isCurrentUserSignedUp && userProfile?.firstName 
-              ? [`${userProfile.firstName} ${userProfile.lastName || ''}`.trim()] 
-              : ['Demo User 1'];
-            if (actualVolunteerCount > 1) mockNames.push('Demo User 2'); 
-          }
-          return { 
-            ...event, 
-            currentVolunteerCount: actualVolunteerCount, 
-            volunteerNames: mockNames 
-          };
-        });
-        setEvents(eventsWithMockedNames);
+        // console.log("Raw data from backend:", response.data); // DEBUG: Check raw backend data
+        // Temporarily set events directly to see if mapping is an issue
+        setEvents(response.data); 
+        
+        // Original mapping (can be re-enabled after testing)
+        // const eventsWithMockedNames = response.data.map(event => {
+        //   let mockNames: string[] = [];
+        //   const actualVolunteerCount = event.isCurrentUserSignedUp ? 1 : 0; 
+        //   if (actualVolunteerCount > 0) {
+        //     mockNames = event.isCurrentUserSignedUp && userProfile?.firstName 
+        //       ? [`${userProfile.firstName} ${userProfile.lastName || ''}`.trim()] 
+        //       : ['Demo User 1'];
+        //     if (actualVolunteerCount > 1) mockNames.push('Demo User 2'); 
+        //   }
+        //   return { 
+        //     ...event, 
+        //     currentVolunteerCount: actualVolunteerCount, 
+        //     volunteerNames: mockNames 
+        //   };
+        // });
+        // setEvents(eventsWithMockedNames);
+
       } else {
         if (response.status === 401) { await logout(); }
         setError(response.error?.message || 'Failed to fetch events.');
@@ -154,15 +209,24 @@ export default function EventsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [idToken, authLoading, statusFilter, fromDateFilter, daysRangeFilter, logout, user, userProfile]);
+  }, [idToken, authLoading, statusFilter, fromDateFilter, daysRangeFilter, workingGroupFilter, searchTerm, logout, user, userProfile]);
+
+  const debouncedFetchEvents = useMemo(() => debounce(fetchEvents, 500), [fetchEvents]);
 
   useEffect(() => {
-    if (!authLoading && !user) { }
-    if (user && !userProfile && fetchUserProfile) fetchUserProfile();
-    if (idToken) { 
-        fetchEvents();
+    if (!authLoading && !user && !idToken) {
+      setIsLoading(false); 
+      return;
     }
-  }, [user, authLoading, userProfile, fetchUserProfile, idToken, fetchEvents]);
+    if (user && !userProfile && fetchUserProfile) {
+      fetchUserProfile();
+    }
+  
+    if (idToken) {
+      debouncedFetchEvents();
+    }
+  }, [idToken, authLoading, user, userProfile, fetchUserProfile, debouncedFetchEvents]); 
+
 
   const displayedEvents = useMemo(() => {
     const now = currentTimeTick;
@@ -181,13 +245,19 @@ export default function EventsPage() {
         dynamicStatus = 'completed'; 
       }
       
-      return { ...event, dynamicStatus };
+      // Simulate volunteerNames and currentVolunteerCount if not present from backend (for demo)
+      // In a real scenario, backend should provide this if needed for the list view.
+      const volunteerNames = event.volunteerNames || (event.isCurrentUserSignedUp && userProfile?.firstName ? [`${userProfile.firstName} ${userProfile.lastName || ''}`.trim()] : []);
+      const currentVolunteerCount = event.currentVolunteerCount ?? (event.isCurrentUserSignedUp ? 1 : 0);
+
+
+      return { ...event, dynamicStatus, volunteerNames, currentVolunteerCount };
     }).sort((a, b) => {
       const dateA = isValidDate(parseISO(ensureDateString(a.dateTime))) ? parseISO(ensureDateString(a.dateTime)) : new Date(0);
       const dateB = isValidDate(parseISO(ensureDateString(b.dateTime))) ? parseISO(ensureDateString(b.dateTime)) : new Date(0);
       return dateA.getTime() - dateB.getTime();
     });
-  }, [events, currentTimeTick]);
+  }, [events, currentTimeTick, userProfile]); // Added userProfile to dependencies of displayedEvents
 
 
   const handleSignup = async (eventId: string) => {
@@ -218,12 +288,19 @@ export default function EventsPage() {
     }
   };
 
-  const clearDateAndDaysFilters = () => {
+  const clearAllFilters = () => {
     setFromDateFilter(format(new Date(), 'yyyy-MM-dd'));
     setDaysRangeFilter('14'); 
+    setStatusFilter(EVENT_STATUSES.ALL);
+    setWorkingGroupFilter('all');
+    setSearchTerm(''); 
   };
 
   const actionIconWrapperClass = "w-7 h-7 flex items-center justify-center"; 
+  const filterInputBaseClass = "mt-1 block w-full pl-2 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50 h-9";
+  const filterIconButtonClass = "p-1.5 border border-transparent text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:focus:ring-offset-gray-800 h-9 flex items-center";
+  const filterResetButtonClass = "p-1.5 border border-gray-300 text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:border-gray-500 dark:focus:ring-offset-gray-800 h-9 flex items-center";
+
 
   return (
     <main className="max-w-7xl mx-auto py-6 px-2 sm:px-4 lg:px-6"> 
@@ -238,37 +315,70 @@ export default function EventsPage() {
         )}
       </div>
 
-      <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg shadow"> 
-        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-3 items-end"> 
+      <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg shadow space-y-3"> 
+        <div>
+          <label htmlFor="search-term" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Search Events</label>
+          <input
+            type="text"
+            id="search-term"
+            value={searchTerm}
+            onChange={(e) => setSearchTerm(e.target.value)}
+            placeholder="Search by name, description, venue..."
+            className={`${filterInputBaseClass} pr-2`} 
+          />
+        </div>
+        <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-3 items-end"> 
           <div>
             <label htmlFor="status-filter" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Status</label> 
             <select id="status-filter" value={statusFilter} onChange={e => setStatusFilter(e.target.value)}
-              className="mt-1 block w-full pl-2 pr-8 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white"> 
+              className={filterInputBaseClass}> 
               {Object.entries(statusDisplayMap).map(([value, label]) => (
                 <option key={value} value={value}>{label}</option>
               ))}
             </select>
           </div>
           <div>
-            <label htmlFor="from-date-filter" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">From Date</label>
-            <input type="date" id="from-date-filter" value={fromDateFilter} onChange={e => setFromDateFilter(e.target.value)}
-              className="mt-1 block w-full pl-2 pr-1 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" /> 
+            <label htmlFor="working-group-filter" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Working Group</label>
+            <select 
+              id="working-group-filter" 
+              value={workingGroupFilter} 
+              onChange={e => setWorkingGroupFilter(e.target.value)}
+              disabled={isLoadingWorkingGroups}
+              className={filterInputBaseClass}
+            >
+              <option value="all">All Working Groups</option>
+              {availableWorkingGroups.map(wg => (
+                <option key={wg.id} value={wg.id}>{wg.groupName}</option>
+              ))}
+            </select>
           </div>
           <div>
-            <label htmlFor="days-range-filter" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Date Range</label> 
-            <input type="number" id="days-range-filter" value={daysRangeFilter} onChange={e => setDaysRangeFilter(e.target.value)} min="1"
-              className="mt-1 block w-full pl-2 pr-1 py-1.5 text-sm border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white" /> 
+            <label htmlFor="from-date-filter" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">From Date</label>
+            <input type="date" id="from-date-filter" value={fromDateFilter} onChange={e => setFromDateFilter(e.target.value)}
+              className={`${filterInputBaseClass} pr-1`} /> 
           </div>
-          <div className="flex space-x-1.5"> 
-            <button onClick={fetchEvents} disabled={isLoading}
-              className="w-full sm:w-auto inline-flex items-center justify-center px-3 py-1.5 border border-transparent text-xs sm:text-sm font-medium rounded-md shadow-sm text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 dark:focus:ring-offset-gray-800"> 
-              <span className="material-icons mr-1 text-base sm:text-lg">{isLoading ? 'hourglass_empty' : 'refresh'}</span> 
-              {isLoading ? 'Loading...' : 'Apply'} 
+          <div>
+            <label htmlFor="days-range-filter" className="block text-xs sm:text-sm font-medium text-gray-700 dark:text-gray-300">Days</label> 
+            <input 
+              type="number" 
+              id="days-range-filter" 
+              value={daysRangeFilter} 
+              onChange={e => setDaysRangeFilter(e.target.value)} 
+              min="1"
+              className="mt-1 block w-16 px-1 py-1.5 text-sm text-center border-gray-300 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 rounded-md dark:bg-gray-700 dark:border-gray-600 dark:text-white disabled:opacity-50 h-9" 
+            /> 
+          </div>
+          <div className="flex space-x-1.5 items-center justify-end pt-4 sm:pt-0"> 
+            <button onClick={fetchEvents} 
+              disabled={isLoading || isLoadingWorkingGroups} 
+              title="Apply Filters"
+              className={filterIconButtonClass}> 
+              <span className="material-icons text-lg">{isLoading ? 'hourglass_empty' : 'refresh'}</span> 
             </button>
-            <button onClick={clearDateAndDaysFilters}
-              className="w-full sm:w-auto mt-1.5 sm:mt-0 inline-flex items-center justify-center px-3 py-1.5 border border-gray-300 text-xs sm:text-sm font-medium rounded-md shadow-sm text-gray-700 bg-white hover:bg-gray-50 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 dark:bg-gray-600 dark:text-gray-200 dark:hover:bg-gray-500 dark:border-gray-500 dark:focus:ring-offset-gray-800"> 
-                <span className="material-icons mr-1 text-base sm:text-lg">clear_all</span> 
-              Reset
+            <button onClick={clearAllFilters}
+              title="Reset All Filters"
+              className={filterResetButtonClass}> 
+                <span className="material-icons text-lg">clear_all</span> 
             </button>
           </div>
         </div>

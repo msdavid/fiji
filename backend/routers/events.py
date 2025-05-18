@@ -50,12 +50,12 @@ async def _get_working_group_names_map(db: firestore.AsyncClient, wg_ids: List[s
 
 @router.post(
     "",
-    response_model=EventResponse, # Restored response_model
+    response_model=EventResponse, 
     status_code=status.HTTP_201_CREATED,
     dependencies=[Depends(require_permission("events", "create"))]
 )
 async def create_event(
-    event_data: EventCreate, # Reverted to use Pydantic model directly
+    event_data: EventCreate, 
     db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
@@ -70,7 +70,7 @@ async def create_event(
         
         input_wg_ids = new_event_dict.get("workingGroupIds", [])
 
-        if not input_wg_ids: # This check is technically redundant due to Pydantic's min_length=1
+        if not input_wg_ids: 
              raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="workingGroupIds list cannot be empty.")
 
         wg_docs_to_check_refs = [db.collection(WORKING_GROUPS_COLLECTION).document(wg_id) for wg_id in input_wg_ids]
@@ -89,9 +89,6 @@ async def create_event(
                 wg_names_to_populate.append(wg_name)
 
         if not valid_wg_ids or len(valid_wg_ids) != len(input_wg_ids): 
-            # This ensures all provided IDs were valid and found.
-            # If you want to allow partial success (some IDs valid, some not), adjust this logic.
-            # For now, strict: all must be valid.
             invalid_ids = list(set(input_wg_ids) - set(valid_wg_ids))
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"One or more provided workingGroupIds are invalid or not found: {invalid_ids if invalid_ids else input_wg_ids}")
         
@@ -127,9 +124,8 @@ async def create_event(
 
     except HTTPException as http_exc:
         raise http_exc
-    except Exception as e: # Catches Pydantic validation errors as well if not caught by specific try-except
-        # If it's a Pydantic error, it might be more user-friendly to return its specific details
-        if "Pydantic validation error" in str(e) or "validation error" in str(e).lower(): # Basic check
+    except Exception as e: 
+        if "Pydantic validation error" in str(e) or "validation error" in str(e).lower(): 
              raise HTTPException(status_code=422, detail=str(e))
         import traceback
         traceback.print_exc()
@@ -221,9 +217,9 @@ async def update_event(
             response_data["organizerEmail"] = organizer_details.get("email")
 
         return EventResponse(**response_data)
-    except HTTPException as http_exc: # Catch specific HTTPExceptions first
+    except HTTPException as http_exc: 
         raise http_exc
-    except Exception as e: # Catch other errors, including Pydantic validation if not caught by FastAPI
+    except Exception as e: 
         if "Pydantic validation error" in str(e) or "validation error" in str(e).lower():
              raise HTTPException(status_code=422, detail=str(e))
         import traceback
@@ -235,6 +231,8 @@ async def list_events(
     db: firestore.AsyncClient = Depends(get_db), 
     current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac),
     status_filter: Optional[str] = Query(None, alias="status"),
+    working_group_id: Optional[str] = Query(None, alias="working_group_id"), 
+    q: Optional[str] = Query(None, alias="q", description="Search term for event name, description, venue"), 
     from_date: Optional[datetime.date] = Query(None, description="Filter events from this date (YYYY-MM-DD). Defaults to today if days_range is also provided or if no date filters are set."),
     days_range: Optional[int] = Query(14, description="Number of days from from_date to include in the filter (e.g., 1 for just from_date, 7 for a week). Defaults to 14. Max 90.", ge=1, le=90)
 ):
@@ -242,21 +240,31 @@ async def list_events(
         query = db.collection(EVENTS_COLLECTION)
         is_privileged_user = await is_sysadmin_check(current_rbac_user) 
 
+        user_wg_ids_for_auth_filter = []
         if not is_privileged_user and current_rbac_user:
             user_wg_assignments_query = db.collection(ASSIGNMENTS_COLLECTION) \
                 .where(filter=FieldFilter("userId", "==", current_rbac_user.uid)) \
                 .where(filter=FieldFilter("assignableType", "==", "working_group"))
             
-            user_wg_ids = [doc.to_dict()["assignableId"] async for doc in user_wg_assignments_query.stream()]
+            user_wg_ids_for_auth_filter = [doc.to_dict()["assignableId"] async for doc in user_wg_assignments_query.stream()]
 
-            if not user_wg_ids: return [] 
+            if not user_wg_ids_for_auth_filter: return [] 
             
-            if len(user_wg_ids) > MAX_FIRESTORE_IN_QUERY_LIMIT:
-                 user_wg_ids = user_wg_ids[:MAX_FIRESTORE_IN_QUERY_LIMIT]
+            if len(user_wg_ids_for_auth_filter) > MAX_FIRESTORE_IN_QUERY_LIMIT:
+                 user_wg_ids_for_auth_filter = user_wg_ids_for_auth_filter[:MAX_FIRESTORE_IN_QUERY_LIMIT]
+            
+            if working_group_id and working_group_id in user_wg_ids_for_auth_filter:
+                user_wg_ids_for_auth_filter = [working_group_id] 
+            elif working_group_id and working_group_id not in user_wg_ids_for_auth_filter:
+                return [] 
 
-            query = query.where(filter=FieldFilter("workingGroupIds", "array-contains-any", user_wg_ids))
+            query = query.where(filter=FieldFilter("workingGroupIds", "array-contains-any", user_wg_ids_for_auth_filter))
         
-        elif not current_rbac_user: return [] 
+        elif is_privileged_user and working_group_id: 
+            query = query.where(filter=FieldFilter("workingGroupIds", "array_contains", working_group_id)) # Corrected operator
+        
+        elif not current_rbac_user and not is_privileged_user: 
+            return [] 
 
         today = datetime.date.today()
         actual_from_date = from_date if from_date else today
@@ -267,9 +275,23 @@ async def list_events(
         to_datetime_utc = datetime.datetime.combine(actual_to_date, datetime.time.max, tzinfo=datetime.timezone.utc)
         
         if status_filter: query = query.where(filter=FieldFilter("status", "==", status_filter))
+        
+        query = query.order_by("dateTime", direction=firestore.Query.ASCENDING)
         query = query.where(filter=FieldFilter("dateTime", ">=", from_datetime_utc))
         query = query.where(filter=FieldFilter("dateTime", "<=", to_datetime_utc))
-        query = query.order_by("dateTime", direction=firestore.Query.ASCENDING)
+
+        if q:
+            query = query.where(filter=FieldFilter("eventName", ">=", q))
+            query = query.where(filter=FieldFilter("eventName", "<=", q + '\uf8ff'))
+            # For a more comprehensive search, you might need to fetch all events (after other filters)
+            # and then filter them in Python if Firestore's querying capabilities are insufficient.
+            # This is less efficient for large datasets.
+            # Example (client-side like filtering, but on server after initial query):
+            # initial_docs = await query.get()
+            # filtered_docs = [doc for doc in initial_docs if q.lower() in doc.to_dict().get("eventName", "").lower() or \
+            #                                              q.lower() in doc.to_dict().get("description", "").lower() or \
+            #                                              q.lower() in doc.to_dict().get("venue", "").lower()]
+            # For now, sticking to eventName prefix search.
 
         docs_snapshot = query.stream()
         user_assignments: Dict[str, str] = {}
@@ -280,8 +302,16 @@ async def list_events(
         async for doc in docs_snapshot: 
             event_data = doc.to_dict()
             
-            if not is_privileged_user and not event_data.get("workingGroupIds"):
-                 continue
+            # Post-query authorization refinement for non-sysadmin if WG filter was applied or for general visibility
+            if not is_privileged_user:
+                event_wgs = event_data.get("workingGroupIds", [])
+                # If a specific working_group_id was part of the auth filter, this event must match it.
+                # user_wg_ids_for_auth_filter would be [specific_wg_id] in that case.
+                if not any(wg_id in user_wg_ids_for_auth_filter for wg_id in event_wgs):
+                    # Check legacy field if primary is empty and a legacy WG ID might match
+                    legacy_wg = event_data.get("workingGroupId")
+                    if not (legacy_wg and legacy_wg in user_wg_ids_for_auth_filter):
+                        continue # Skip event if not in user's allowed WGs (after specific WG filter if applied)
 
             event_data['id'] = doc.id 
             temp_event_data_list.append(event_data)
