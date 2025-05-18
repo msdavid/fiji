@@ -1,6 +1,6 @@
 'use client';
 
-import React, { useMemo, useState } from 'react'; // Added useState
+import React, { useMemo, useState } from 'react'; 
 import {
   ColumnDef,
   flexRender,
@@ -11,9 +11,9 @@ import {
   SortingState,
   FilterFn,
   Row,
-  Column, // Added Column
-  Table, // Added Table
-  ColumnFiltersState, // Added ColumnFiltersState
+  Column, 
+  Table, 
+  ColumnFiltersState, 
 } from '@tanstack/react-table';
 import { format, parseISO, isValid } from 'date-fns';
 
@@ -24,7 +24,7 @@ interface UserReportEntry {
   email?: string | null;
   assignedRoleNames: string[];
   status?: string | null;
-  createdAt?: string | null; // Dates from backend are often ISO strings
+  createdAt?: string | null; 
 }
 
 interface UsersReport {
@@ -35,7 +35,7 @@ interface UsersReport {
 interface UsersReportSectionProps {
   report: UsersReport | null;
   isLoading: boolean;
-  error?: string | null; // Optional error prop
+  error?: string | null; 
 }
 
 // Generic filter component for column headers
@@ -47,7 +47,7 @@ function ColumnFilter({ column, table }: { column: Column<any, any>; table: Tabl
       type="text"
       value={(columnFilterValue ?? '') as string}
       onChange={e => column.setFilterValue(e.target.value)}
-      onClick={e => e.stopPropagation()} // Prevent sorting when clicking filter
+      onClick={e => e.stopPropagation()} 
       placeholder={`Filter...`}
       className="w-full text-sm border-gray-300 dark:border-gray-600 dark:bg-gray-700 dark:text-white rounded shadow-sm mt-1 p-1 focus:ring-indigo-500 focus:border-indigo-500"
     />
@@ -69,7 +69,7 @@ const fuzzyFilter: FilterFn<any> = (row: Row<any>, columnId: string, value: any,
 const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoading, error }) => {
   const [sorting, setSorting] = useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = useState('');
-  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]); // State for column filters
+  const [columnFilters, setColumnFilters] = useState<ColumnFiltersState>([]); 
 
   const columns = useMemo<ColumnDef<UserReportEntry>[]>(
     () => [
@@ -113,7 +113,7 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
           const roles = info.getValue() as string[];
           return roles && roles.length > 0 ? roles.join(', ') : 'No Roles';
         },
-        filterFn: 'fuzzy', // Use fuzzy for array searching
+        filterFn: 'fuzzy', 
         enableColumnFilter: true,
       },
       {
@@ -153,21 +153,22 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
           }
           return 'N/A';
         },
-        enableColumnFilter: false, // Disabled for date for simplicity
+        enableColumnFilter: false, 
       },
-      {
-        accessorKey: 'id',
-        header: ({ column, table }) => (
-            <div>
-              <div onClick={column.getToggleSortingHandler()} className="cursor-pointer">
-                User ID {column.getIsSorted() === 'asc' ? '🔼' : column.getIsSorted() === 'desc' ? '🔽' : ''}
-              </div>
-              {column.getCanFilter() ? <ColumnFilter column={column} table={table} /> : null}
-            </div>
-          ),
-        cell: info => info.getValue(),
-        enableColumnFilter: true,
-      },
+      // User ID column removed
+      // {
+      //   accessorKey: 'id',
+      //   header: ({ column, table }) => (
+      //       <div>
+      //         <div onClick={column.getToggleSortingHandler()} className="cursor-pointer">
+      //           User ID {column.getIsSorted() === 'asc' ? '🔼' : column.getIsSorted() === 'desc' ? '🔽' : ''}
+      //         </div>
+      //         {column.getCanFilter() ? <ColumnFilter column={column} table={table} /> : null}
+      //       </div>
+      //     ),
+      //   cell: info => info.getValue(),
+      //   enableColumnFilter: true,
+      // },
     ],
     []
   );
@@ -177,16 +178,16 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
   const table = useReactTable({
     data: tableData,
     columns,
-    filterFns: { fuzzy: fuzzyFilter }, // Ensure fuzzy is available if used by columns
+    filterFns: { fuzzy: fuzzyFilter }, 
     state: { 
         sorting, 
         globalFilter,
-        columnFilters, // Add columnFilters to state
+        columnFilters, 
     },
     onSortingChange: setSorting,
     onGlobalFilterChange: setGlobalFilter,
-    onColumnFiltersChange: setColumnFilters, // Add handler for column filters
-    globalFilterFn: fuzzyFilter, // Global filter also uses fuzzy
+    onColumnFiltersChange: setColumnFilters, 
+    globalFilterFn: fuzzyFilter, 
     getCoreRowModel: getCoreRowModel(),
     getSortedRowModel: getSortedRowModel(),
     getFilteredRowModel: getFilteredRowModel(),
@@ -195,29 +196,49 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
   const exportToCsv = () => {
     if (!report?.data) return;
     
-    const csvHeaders = table.getHeaderGroups().flatMap(hg => hg.headers).map(header => {
-        const colDef = header.column.columnDef;
-        // Attempt to get a string representation for the header
+    // Filter out the 'id' column from headers and data for CSV export
+    const activeColumns = columns.filter(col => col.accessorKey !== 'id');
+
+    const csvHeaders = activeColumns.map(colDef => {
         if (typeof colDef.header === 'string') return colDef.header;
-        if (colDef.accessorKey) return String(colDef.accessorKey); // Fallback to accessorKey
-        return header.id; // Fallback to header id
+        // For complex headers (like those with filter inputs), extract a simple name
+        if (colDef.accessorKey) return String(colDef.accessorKey); 
+        // Fallback if accessorKey is not directly on colDef (it should be for our simple cases)
+        // This part might need adjustment based on how headers are structured if they become more complex
+        const headerContext = { column: { getIsSorted: () => false, getToggleSortingHandler: () => {} }, table } as any;
+        const renderedHeader = typeof colDef.header === 'function' ? colDef.header(headerContext) : colDef.id;
+        if (typeof renderedHeader === 'string') return renderedHeader;
+        // If header is a React element, try to get a meaningful string (e.g., from a child or prop)
+        // This is a simplified example; robust extraction might be needed for complex React elements
+        if (React.isValidElement(renderedHeader) && renderedHeader.props.children && typeof renderedHeader.props.children[0] === 'string') {
+            return renderedHeader.props.children[0].trim();
+        }
+        return colDef.id || '';
     }).join(',');
 
-    const csvRows = table.getRowModel().rows.map(row => { // Use getRowModel() to respect filters
-      return table.getHeaderGroups().flatMap(hg => hg.headers).map(header => {
-        const cell = row.getVisibleCells().find(cell => cell.column.id === header.id);
-        let cellValue = cell ? flexRender(cell.column.columnDef.cell, cell.getContext()) : '';
+
+    const csvRows = table.getRowModel().rows.map(row => { 
+      return activeColumns.map(colDef => {
+        let cellValue: any;
+        const accessor = colDef.accessorKey as keyof UserReportEntry;
+        if (accessor) {
+          cellValue = row.original[accessor];
+        } else if (typeof colDef.cell === 'function') {
+          // Find the cell context for the current column to render it
+          const cellContext = row.getVisibleCells().find(c => c.column.id === colDef.id)?.getContext();
+          if (cellContext) {
+            cellValue = flexRender(colDef.cell, cellContext);
+          } else {
+            cellValue = ''; // Should not happen if column is in activeColumns
+          }
+        }
         
-        // Custom formatting for CSV for specific types if needed
-        const colDef = header.column.columnDef;
-        if (colDef.accessorKey === 'assignedRoleNames' && Array.isArray(row.original[colDef.accessorKey as keyof UserReportEntry])) {
-          cellValue = (row.original[colDef.accessorKey as keyof UserReportEntry] as string[]).join('; ');
-        } else if (colDef.accessorKey === 'createdAt' && typeof row.original[colDef.accessorKey as keyof UserReportEntry] === 'string') {
-            const dateStr = row.original[colDef.accessorKey as keyof UserReportEntry] as string;
-            const dateObj = parseISO(dateStr);
+        if (accessor === 'assignedRoleNames' && Array.isArray(cellValue)) {
+          cellValue = cellValue.join('; ');
+        } else if (accessor === 'createdAt' && typeof cellValue === 'string') {
+            const dateObj = parseISO(cellValue);
             cellValue = isValid(dateObj) ? format(dateObj, 'yyyy-MM-dd HH:mm:ss') : 'Invalid Date';
-        } else if (React.isValidElement(cellValue)) { // Handle React elements (like the status badge)
-            // Try to extract text content, might need more robust handling
+        } else if (React.isValidElement(cellValue)) { 
             const getText = (element: React.ReactNode): string => {
                 if (typeof element === 'string') return element;
                 if (typeof element === 'number') return String(element);
@@ -251,7 +272,6 @@ const UsersReportSection: React.FC<UsersReportSectionProps> = ({ report, isLoadi
   return (
     <div>
       <div className="mb-4 flex flex-col sm:flex-row justify-between items-center gap-4">
-        {/* Global filter can be kept or removed if column filters are sufficient */}
         <input
           type="text"
           value={globalFilter ?? ''}
