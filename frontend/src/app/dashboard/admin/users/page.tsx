@@ -5,10 +5,10 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO } from 'date-fns';
-import toast from 'react-hot-toast'; // Added for potential future use, though not directly used in this file update
+import toast from 'react-hot-toast'; 
 
 interface UserProfile {
-  uid: string; // Retained for potential internal use if needed, though 'id' is primary
+  uid: string; 
   id: string; 
   email: string;
   firstName?: string;
@@ -25,15 +25,14 @@ export default function AdminUserManagementPage() {
   const { user, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null); // Kept for fetchUsers error
+  const [error, setError] = useState<string | null>(null); 
   const [searchTerm, setSearchTerm] = useState('');
 
-  // Use adminUserProfile.id for checking against current user, as user.uid is Firebase UID
-  // and userProfile.id is our Firestore document ID (which should match Firebase UID)
   const currentAdminId = adminUserProfile?.id; 
 
   const canListUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'list') : false);
-  const canCreateUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'admin_create') : false); // Corrected to 'admin_create'
+  // Changed to check for 'invitations:create' for the "Invite New User" button
+  const canInviteUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('invitations', 'create') : false); 
   const canEditUsers = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'edit') : false);
   const canDeleteUsersGlobal = adminUserProfile && (hasPrivilege ? hasPrivilege('users', 'delete') : false);
 
@@ -41,7 +40,7 @@ export default function AdminUserManagementPage() {
   const fetchUsers = useCallback(async () => {
     if (!user || !canListUsers) { 
         if (user && !canListUsers && adminUserProfile) setError("You don't have permission to view users.");
-        else if (!user && !authLoading) setError("Authentication required to view users."); // More specific error
+        else if (!user && !authLoading) setError("Authentication required to view users."); 
         setIsLoading(false);
         return;
     }
@@ -50,21 +49,26 @@ export default function AdminUserManagementPage() {
     try {
       const token = await user.getIdToken();
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      // Fetching more users to better test pagination/search, adjust as needed
       const response = await fetch(`${backendUrl}/users?limit=200`, { 
         headers: { 'Authorization': `Bearer ${token}` },
       });
       if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to fetch users');
+        let errorDetail = `Failed to fetch users (status: ${response.status})`;
+        try {
+            const errorData = await response.json();
+            errorDetail = errorData.detail || errorDetail;
+        } catch (e) {
+            // response was not JSON, use default errorDetail
+        }
+        throw new Error(errorDetail);
       }
       const data: UserProfile[] = await response.json();
-      // Ensure 'id' field is consistently populated, preferring 'id' over 'uid' if both exist
       const processedData = data.map(u => ({ ...u, id: u.id || u.uid })); 
       setUsers(processedData);
     } catch (err: any) {
-      setError(err.message);
-      toast.error(`Error fetching users: ${err.message}`); // Also use toast for fetch errors
+      const errorMessage = err.message || "An unexpected error occurred while fetching users.";
+      setError(errorMessage);
+      toast.error(errorMessage); 
       console.error("Fetch users error:", err);
     } finally {
       setIsLoading(false);
@@ -76,15 +80,14 @@ export default function AdminUserManagementPage() {
       router.push('/login');
       return;
     }
-    if (user && !adminUserProfile && !authLoading) { // Ensure not to call if auth is still loading
+    if (user && !adminUserProfile && !authLoading) { 
         fetchUserProfile(); 
     }
-    // Fetch users only if adminUserProfile is loaded and has permission
     if (user && adminUserProfile && canListUsers) { 
         fetchUsers();
     } else if (user && adminUserProfile && !canListUsers && !authLoading) {
-        // If profile loaded but no permission, set error and stop loading
-        setError("You don't have permission to view users.");
+        const noPermissionError = "You don't have permission to view users.";
+        setError(noPermissionError);
         setIsLoading(false);
     }
   }, [user, authLoading, adminUserProfile, fetchUserProfile, router, fetchUsers, canListUsers]);
@@ -107,7 +110,7 @@ export default function AdminUserManagementPage() {
   };
 
 
-  if (authLoading || (user && !adminUserProfile)) { // Simplified loading condition
+  if (authLoading || (user && !adminUserProfile)) { 
     return (
       <main className="max-w-7xl mx-auto text-center flex flex-col items-center justify-center min-h-[calc(100vh-150px)]">
         <span className="material-icons text-6xl text-indigo-500 dark:text-indigo-400 animate-spin mb-4">sync</span>
@@ -116,14 +119,15 @@ export default function AdminUserManagementPage() {
     );
   }
   
-  // This check is important for when adminUserProfile is loaded but permissions are not granted.
   if (!canListUsers && adminUserProfile) { 
     return (
         <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
             <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8 text-center">
                 <span className="material-icons text-5xl text-red-500 dark:text-red-400 mb-4">lock</span>
                 <h1 className="text-2xl font-semibold text-gray-900 dark:text-white mb-3">Access Denied</h1>
-                <p className="text-gray-700 dark:text-gray-300 mb-6">You do not have permission to view this page.</p>
+                <p className="text-gray-700 dark:text-gray-300 mb-6">
+                  {error || "You do not have permission to view this page."}
+                </p>
                 <Link href="/dashboard" className="inline-flex items-center px-6 py-2 text-sm font-medium text-white bg-indigo-600 rounded-md hover:bg-indigo-700 shadow-sm">
                     <span className="material-icons mr-2 text-base">arrow_back</span>
                     Go to Dashboard
@@ -140,13 +144,13 @@ export default function AdminUserManagementPage() {
             <h1 className="text-3xl font-bold text-gray-900 dark:text-white">User Management</h1>
             <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">Manage all registered users in the system.</p>
         </div>
-        {canCreateUsers && ( // Privilege for creating users is 'users:admin_create'
+        {canInviteUsers && ( 
             <Link
-                href="/dashboard/admin/users/new" 
+                href="/dashboard/admin/invitations/new" // Changed link
                 className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
             >
-                <span className="material-icons mr-2 text-base">person_add</span>
-                Create New User
+                <span className="material-icons mr-2 text-base">person_add</span> {/* Icon can remain person_add or change to e.g., 'mail' or 'send' */}
+                Invite New User 
             </Link>
         )}
       </header>
@@ -161,9 +165,9 @@ export default function AdminUserManagementPage() {
         />
       </div>
 
-      {isLoading && users.length === 0 ? (
+      {isLoading && users.length === 0 && !error ? ( 
          <div className="text-center py-10 px-4 sm:px-6 lg:px-8"><p className="text-gray-500 dark:text-gray-400">Loading users list...</p></div>
-      ) : error && !isLoading ? ( // Show error only if not loading
+      ) : error && !isLoading ? ( 
         <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-md shadow text-center">
             <p className="text-red-700 dark:text-red-300">Error: {error}</p>
             <button 
@@ -181,13 +185,13 @@ export default function AdminUserManagementPage() {
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
             {users.length === 0 ? "There are no users in the system yet." : "No users match your current search criteria."}
           </p>
-          {users.length === 0 && canCreateUsers && (
+          {users.length === 0 && canInviteUsers && ( // Changed to canInviteUsers
              <Link 
-                href="/dashboard/admin/users/new" 
+                href="/dashboard/admin/invitations/new" // Changed link
                 className="mt-6 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
               >
                 <span className="material-icons mr-2 text-base">person_add</span>
-                Create First User
+                Invite First User 
             </Link>
           )}
         </div>
@@ -241,12 +245,12 @@ export default function AdminUserManagementPage() {
                       {userEntry.createdAt ? format(parseISO(userEntry.createdAt), 'PP') : 'N/A'}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
-                      {canEditUsers && userEntry.id !== currentAdminId && ( // Prevent editing self here too for consistency, though edit page might handle it
+                      {canEditUsers && userEntry.id !== currentAdminId && ( 
                         <Link href={`/dashboard/admin/users/${userEntry.id}/edit`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 inline-flex items-center">
                           <span className="material-icons mr-1 text-sm">edit</span>Edit
                         </Link>
                       )}
-                      {canDeleteUsersGlobal && userEntry.id !== currentAdminId && ( // Check against currentAdminId
+                      {canDeleteUsersGlobal && userEntry.id !== currentAdminId && ( 
                         <Link href={`/dashboard/admin/users/${userEntry.id}/delete`} className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200 inline-flex items-center">
                           <span className="material-icons mr-1 text-sm">delete</span>Delete
                         </Link>
