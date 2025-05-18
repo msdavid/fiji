@@ -1,38 +1,36 @@
 'use client';
 
 import { createContext, useContext, useEffect, useState, ReactNode, useCallback } from 'react';
-import { User } from 'firebase/auth'; 
+import { User, signOut } from 'firebase/auth'; // Import signOut
 import { auth } from '@/lib/firebaseConfig'; 
+import { useRouter } from 'next/navigation'; // Import useRouter
 
-interface UserProfileFromBackend { // Renamed to avoid confusion with internal UserProfile
-  id: string; // Changed from uid to id
+interface UserProfileFromBackend { 
+  id: string; 
   email: string | null;
   firstName?: string;
   lastName?: string;
   assignedRoleIds: string[]; 
-  assignedRoleNames?: string[]; // Added this as it's in UserResponse
+  assignedRoleNames?: string[]; 
   status?: string; 
-  // Fields from UserBase
   phone?: string;
   emergencyContactDetails?: string;
-  skills?: string[]; // Assuming backend sends as array now
-  qualifications?: string[]; // Assuming backend sends as array
+  skills?: string[]; 
+  qualifications?: string[]; 
   preferences?: string;
   profilePictureUrl?: string | null;
-  // availability?: UserAvailability; // Not strictly needed in AuthContext profile, but could be added
-
-  // New fields for RBAC
-  privileges: Record<string, string[]>; // e.g., {"events": ["create", "view"]}
+  privileges: Record<string, string[]>; 
   isSysadmin: boolean;
 }
 
 interface AuthContextType {
   user: User | null; 
   idToken: string | null; 
-  userProfile: UserProfileFromBackend | null; // Use the more detailed profile
+  userProfile: UserProfileFromBackend | null; 
   loading: boolean;
   error: Error | null;
   hasPrivilege: (resource: string, action: string) => boolean;
+  logout: () => Promise<void>; // Add logout function to context type
 }
 
 const defaultAuthContextValue: AuthContextType = {
@@ -42,6 +40,7 @@ const defaultAuthContextValue: AuthContextType = {
   loading: true,
   error: null,
   hasPrivilege: () => false, 
+  logout: async () => {}, // Default empty logout function
 };
 
 const AuthContext = createContext<AuthContextType>(defaultAuthContextValue);
@@ -52,6 +51,27 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userProfile, setUserProfile] = useState<UserProfileFromBackend | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const router = useRouter(); // Initialize router
+
+  const performLogout = useCallback(async (shouldRedirect: boolean = true) => {
+    try {
+      await signOut(auth);
+      // State updates (user, idToken, userProfile to null) will be handled by onIdTokenChanged
+    } catch (e) {
+      console.error("Error signing out: ", e);
+      setError(e instanceof Error ? e : new Error('Failed to sign out'));
+    } finally {
+      // Explicitly clear state here as well, as onIdTokenChanged might not fire immediately
+      // or if there's an issue with the listener.
+      setUser(null);
+      setIdToken(null);
+      setUserProfile(null);
+      setLoading(false); // Ensure loading is false after logout attempt
+      if (shouldRedirect) {
+        router.push('/login');
+      }
+    }
+  }, [router]);
 
   useEffect(() => {
     const unsubscribe = auth.onIdTokenChanged(
@@ -70,6 +90,9 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               const msg = "Backend URL (NEXT_PUBLIC_BACKEND_URL) is not configured.";
               console.error(msg);
               setError(new Error(msg));
+              // No user profile, but user might still be "authenticated" with Firebase.
+              // Consider if logout is appropriate here or just an error state.
+              // For now, we let them stay "logged in" with Firebase but without a profile.
               setUserProfile(null); 
               setLoading(false);
               return; 
@@ -91,63 +114,76 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 } catch (e) {
                   errorDetails += `: ${response.statusText}`;
                 }
+                
+                // If token is invalid/expired (401), logout and redirect
+                if (response.status === 401) {
+                  console.warn("Unauthorized (401) fetching user profile. Logging out.");
+                  await performLogout(); 
+                  // performLogout will set loading to false and redirect
+                  return; 
+                }
                 throw new Error(`Failed to fetch user profile. ${errorDetails}`);
               }
               
               const profileData = await response.json();
-              setUserProfile(profileData as UserProfileFromBackend); // Cast to the new detailed interface
+              setUserProfile(profileData as UserProfileFromBackend);
             } catch (profileError: any) {
               console.error("Error fetching user profile:", profileError.message);
               setError(new Error(`Profile fetch error: ${profileError.message}`));
               setUserProfile(null); 
+              // If profile fetch fails for reasons other than 401, user might still be auth'd with Firebase.
+              // Decide if this warrants a full logout. For now, keeping Firebase session.
             }
           } catch (tokenError: any) {
             console.error("Error getting ID token:", tokenError.message);
             setError(tokenError);
-            setIdToken(null); 
-            setUserProfile(null); 
+            // This error means Firebase itself had an issue with the token (e.g., user deleted, disabled mid-session)
+            // This is a critical auth issue, so logout.
+            await performLogout();
+            return;
           }
-        } else {
+        } else { // No currentUser
           setUser(null);
           setIdToken(null);
           setUserProfile(null);
+          // Only redirect if not already on login/register page to avoid redirect loops
+          // This part is tricky because onIdTokenChanged fires on initial load (currentUser is null)
+          // and also on explicit logout.
+          // The performLogout function handles redirection, so this might be redundant if logout is always explicit.
+          // However, if Firebase session expires "naturally" and currentUser becomes null, this redirect is needed.
+          if (router && typeof window !== 'undefined' && window.location.pathname !== '/login' && window.location.pathname !== '/register') {
+             router.push('/login');
+          }
         }
         setLoading(false);
       },
-      (authError) => { 
+      async (authError) => { // Error callback for onIdTokenChanged
         console.error("Auth ID token listener error:", authError.message);
         setError(authError);
-        setUser(null);
-        setIdToken(null);
-        setUserProfile(null);
-        setLoading(false);
+        // This indicates a fundamental issue with Firebase auth state. Logout.
+        await performLogout();
       }
     );
 
     return () => unsubscribe();
-  }, []); 
+  }, [performLogout, router]); // Added performLogout and router to dependency array
 
   const hasPrivilege = useCallback((resource: string, action: string): boolean => {
-    if (loading || !userProfile) { // Check against loading state of AuthContext
+    if (loading || !userProfile) { 
       return false; 
     }
-    
-    // Sysadmin has all privileges
     if (userProfile.isSysadmin) {
       return true;
     }
-    
-    // Check against the fetched privileges map
     const resourcePrivileges = userProfile.privileges?.[resource];
     if (resourcePrivileges && Array.isArray(resourcePrivileges) && resourcePrivileges.includes(action)) {
       return true;
     }
-    
     return false;
-  }, [userProfile, loading]); // Depend on userProfile and loading state
+  }, [userProfile, loading]); 
 
   return (
-    <AuthContext.Provider value={{ user, idToken, userProfile, loading, error, hasPrivilege }}>
+    <AuthContext.Provider value={{ user, idToken, userProfile, loading, error, hasPrivilege, logout: performLogout }}>
       {children}
     </AuthContext.Provider>
   );
