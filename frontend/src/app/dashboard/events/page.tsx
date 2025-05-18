@@ -5,6 +5,7 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO, isBefore, isAfter, isEqual } from 'date-fns';
+import toast from 'react-hot-toast'; // Import toast
 
 interface Event {
   id: string;
@@ -55,17 +56,20 @@ const EVENT_STATUS_LABELS: { [key: string]: string } = {
 
 export default function EventsPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile, fetchUserProfile } = useAuth();
+  const { user, loading: authLoading, userProfile, fetchUserProfile, hasPermission } = useAuth(); // Added hasPermission
   const [events, setEvents] = useState<Event[]>([]);
   const [isLoadingEvents, setIsLoadingEvents] = useState(true);
-  const [error, setError] = useState<string | null>(null);
+  // Removed page-level error state: const [error, setError] = useState<string | null>(null);
+  const [actionInProgress, setActionInProgress] = useState<{[eventId: string]: boolean}>({});
 
   const [searchTerm, setSearchTerm] = useState('');
   const [statusFilter, setStatusFilter] = useState(EVENT_STATUSES.ALL);
   const [currentTimeTick, setCurrentTimeTick] = useState(new Date());
 
-  const isSysAdminUser = userProfile?.assignedRoleIds?.includes('sysadmin');
-  const canCreateEvents = isSysAdminUser; 
+  // Updated canCreateEvents logic
+  const canCreateEvents = useMemo(() => {
+    return hasPermission('events', 'create');
+  }, [hasPermission]);
 
   useEffect(() => {
     const timerId = setInterval(() => {
@@ -78,7 +82,7 @@ export default function EventsPage() {
     if (!user) return;
 
     setIsLoadingEvents(true);
-    setError(null);
+    // setError(null); // Removed
     try {
       const token = await user.getIdToken();
       if (!token) {
@@ -103,12 +107,13 @@ export default function EventsPage() {
       const data: Event[] = await response.json();
       setEvents(data);
     } catch (err: any) {
-      setError(err.message || 'An unexpected error occurred while fetching events.');
+      // setError(err.message || 'An unexpected error occurred while fetching events.'); // Removed
+      toast.error(err.message || 'An unexpected error occurred while fetching events.');
       console.error("Fetch events error:", err);
     } finally {
       setIsLoadingEvents(false);
     }
-  }, [user]);
+  }, [user]); // Removed setError from dependencies
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -118,7 +123,7 @@ export default function EventsPage() {
     if (user && !userProfile) {
         fetchUserProfile();
     }
-    if (user && userProfile) {
+    if (user && userProfile) { // Ensure userProfile is loaded before fetching events, for RBAC check
       fetchEvents(statusFilter);
     }
   }, [user, authLoading, router, userProfile, fetchUserProfile, fetchEvents, statusFilter]);
@@ -162,6 +167,73 @@ export default function EventsPage() {
     });
   }, [events, searchTerm, currentTimeTick]);
 
+  const handleSignUp = async (eventId: string, eventName: string) => {
+    if (!user) return;
+    setActionInProgress(prev => ({...prev, [eventId]: true}));
+    // setError(null); // Removed
+    const loadingToastId = toast.loading(`Signing up for ${eventName}...`);
+    try {
+      const token = await user.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/events/${eventId}/signup`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to sign up for event.');
+      }
+      setEvents(prevEvents => prevEvents.map(e => 
+        e.id === eventId 
+        ? { ...e, isCurrentUserSignedUp: true, currentUserAssignmentStatus: 'confirmed' } 
+        : e
+      ));
+      toast.success(`Successfully signed up for ${eventName}!`, { id: loadingToastId });
+    } catch (err: any) {
+      // setError(err.message); // Removed
+      toast.error(err.message || `Failed to sign up for ${eventName}.`, { id: loadingToastId });
+      console.error("Sign up error:", err);
+    } finally {
+      setActionInProgress(prev => ({...prev, [eventId]: false}));
+    }
+  };
+
+  const handleWithdraw = async (eventId: string, eventName: string) => {
+    if (!user) return;
+    setActionInProgress(prev => ({...prev, [eventId]: true}));
+    // setError(null); // Removed
+    const loadingToastId = toast.loading(`Withdrawing from ${eventName}...`);
+    try {
+      const token = await user.getIdToken();
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/events/${eventId}/signup`, {
+        method: 'DELETE',
+        headers: {
+          'Authorization': `Bearer ${token}`,
+        },
+      });
+      if (!response.ok) {
+        const errorData = await response.json().catch(() => ({})); 
+        throw new Error(errorData.detail || 'Failed to withdraw from event.');
+      }
+      setEvents(prevEvents => prevEvents.map(e => 
+        e.id === eventId 
+        ? { ...e, isCurrentUserSignedUp: false, currentUserAssignmentStatus: undefined } 
+        : e
+      ));
+      toast.success(`Successfully withdrew from ${eventName}.`, { id: loadingToastId });
+    } catch (err: any) {
+      // setError(err.message); // Removed
+      toast.error(err.message || `Failed to withdraw from ${eventName}.`, { id: loadingToastId });
+      console.error("Withdraw error:", err);
+    } finally {
+      setActionInProgress(prev => ({...prev, [eventId]: false}));
+    }
+  };
+
 
   if (authLoading || isLoadingEvents || (!userProfile && user)) {
     return (
@@ -190,7 +262,6 @@ export default function EventsPage() {
         )}
       </div>
 
-      {/* Removed styled container div. The grid for inputs is now directly on the page background. */}
       <div className="mb-6 grid grid-cols-1 md:grid-cols-2 gap-4">
         <div>
           <label htmlFor="search-events" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
@@ -222,13 +293,9 @@ export default function EventsPage() {
         </div>
       </div>
 
-      {error && (
-        <div className="mb-4 p-4 text-sm text-red-700 bg-red-100 rounded-lg dark:bg-red-200 dark:text-red-800" role="alert">
-          {error}
-        </div>
-      )}
+      {/* Removed page-level error display block */}
 
-      {displayedEvents.length === 0 && !isLoadingEvents && !error && (
+      {displayedEvents.length === 0 && !isLoadingEvents && ( // Removed !error check as errors are now toasts
         <div className="text-center py-10 bg-white dark:bg-gray-900 shadow-lg rounded-lg flex flex-col items-center justify-center min-h-[200px]">
           <span className="material-icons text-6xl text-gray-400 dark:text-gray-500 mb-4">
             event_busy 
@@ -259,6 +326,8 @@ export default function EventsPage() {
             } else if (event.displayStatus === EVENT_STATUSES.CANCELLED) {
               statusClass = 'bg-red-100 text-red-800 dark:bg-red-700 dark:text-red-100';
             }
+            
+            const isActionForThisEventInProgress = actionInProgress[event.id];
 
             return (
               <div key={event.id} className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col group hover:shadow-xl transition-shadow duration-200 ease-in-out">
@@ -295,19 +364,60 @@ export default function EventsPage() {
                       </div>
                     </div>
                   </div>
-                  <div className="p-4 sm:p-6 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-700">
-                    <div className="flex justify-between items-center">
-                      <div>
-                        <p className="text-xs text-gray-500 dark:text-gray-500">
-                          By: {event.creatorFirstName || ''} {event.creatorLastName || event.createdByUserId.substring(0,8)}
-                        </p>
-                        <p className="text-xs text-gray-500 dark:text-gray-500">
-                          On: {format(parseISO(event.createdAt), 'PP')}
-                        </p>
-                      </div>
+                </Link> 
+                
+                <div className="p-4 sm:p-6 pt-3 sm:pt-4 border-t border-gray-200 dark:border-gray-700">
+                  <div className="flex justify-between items-center mb-2">
+                    <div>
+                      <p className="text-xs text-gray-500 dark:text-gray-500">
+                        By: {event.creatorFirstName || ''} {event.creatorLastName || event.createdByUserId.substring(0,8)}
+                      </p>
+                      <p className="text-xs text-gray-500 dark:text-gray-500">
+                        On: {format(parseISO(event.createdAt), 'PP')}
+                      </p>
+                    </div>
+                    <div className="flex flex-col items-end space-y-2">
+                      {event.isCurrentUserSignedUp ? (
+                        <>
+                          <p className="text-xs font-medium text-green-600 dark:text-green-400 capitalize">
+                            Status: {event.currentUserAssignmentStatus?.replace(/_/g, ' ') || 'Signed Up'}
+                          </p>
+                          <button
+                            onClick={(e) => { e.stopPropagation(); handleWithdraw(event.id, event.eventName); }}
+                            disabled={isActionForThisEventInProgress || event.displayStatus === EVENT_STATUSES.COMPLETED || event.displayStatus === EVENT_STATUSES.CANCELLED || event.displayStatus === EVENT_STATUSES.ONGOING}
+                            className={`py-1.5 px-3 text-xs font-medium rounded-md shadow-sm inline-flex items-center transition-colors duration-150
+                                        ${isActionForThisEventInProgress || event.displayStatus === EVENT_STATUSES.COMPLETED || event.displayStatus === EVENT_STATUSES.CANCELLED || event.displayStatus === EVENT_STATUSES.ONGOING
+                                          ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                          : 'bg-red-500 hover:bg-red-600 dark:bg-red-600 dark:hover:bg-red-700 text-white'}`}
+                          >
+                            {isActionForThisEventInProgress ? (
+                              <span className="material-icons text-sm animate-spin mr-1">sync</span>
+                            ) : (
+                              <span className="material-icons text-sm mr-1">event_busy</span>
+                            )}
+                            Withdraw
+                          </button>
+                        </>
+                      ) : event.status === EVENT_STATUSES.OPEN_FOR_SIGNUP && event.displayStatus !== EVENT_STATUSES.COMPLETED && event.displayStatus !== EVENT_STATUSES.CANCELLED ? (
+                        <button
+                          onClick={(e) => { e.stopPropagation(); handleSignUp(event.id, event.eventName); }}
+                          disabled={isActionForThisEventInProgress}
+                          className={`py-1.5 px-3 text-xs font-medium rounded-md shadow-sm inline-flex items-center transition-colors duration-150
+                                      ${isActionForThisEventInProgress 
+                                        ? 'bg-gray-300 dark:bg-gray-600 text-gray-500 dark:text-gray-400 cursor-not-allowed'
+                                        : 'bg-green-500 hover:bg-green-600 dark:bg-green-600 dark:hover:bg-green-700 text-white'}`}
+                        >
+                          {isActionForThisEventInProgress ? (
+                            <span className="material-icons text-sm animate-spin mr-1">sync</span>
+                          ) : (
+                            <span className="material-icons text-sm mr-1">how_to_reg</span>
+                          )}
+                          Sign Up
+                        </button>
+                      ) : null}
                     </div>
                   </div>
-                </Link>
+                </div>
               </div>
             );
           })}

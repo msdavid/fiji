@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import DashboardNav from '@/components/dashboard/DashboardNav';
+import { Toaster } from 'react-hot-toast'; // Import Toaster
 
 export default function DashboardLayout({
   children,
@@ -47,6 +48,8 @@ export default function DashboardLayout({
   }
 
   if (!user) {
+    // This case should ideally be covered by the useEffect redirect,
+    // but it's a fallback.
     return (
       <div className="flex items-center justify-center min-h-screen bg-gray-100 dark:bg-gray-900 text-gray-800 dark:text-gray-200">
         <div>Redirecting to login...</div>
@@ -57,9 +60,37 @@ export default function DashboardLayout({
   return (
     <div className="min-h-screen bg-gray-100 dark:bg-gray-800">
       <DashboardNav />
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6"> {/* Added max-w-6xl and mx-auto */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 lg:px-8 py-6">
         {children}
       </main>
+      <Toaster 
+        position="top-right"
+        toastOptions={{
+          duration: 5000,
+          style: {
+            background: '#333', // Dark background for toasts
+            color: '#fff',       // Light text for toasts
+          },
+          success: {
+            style: {
+              background: '#28a745', // Green for success
+            },
+            iconTheme: {
+              primary: '#fff',
+              secondary: '#28a745',
+            }
+          },
+          error: {
+            style: {
+              background: '#dc3545', // Red for error
+            },
+            iconTheme: {
+              primary: '#fff',
+              secondary: '#dc3545',
+            }
+          },
+        }}
+      />
     </div>
   );
 }
