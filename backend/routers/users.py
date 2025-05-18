@@ -21,9 +21,9 @@ router = APIRouter(
 USERS_COLLECTION = "users"
 ROLES_COLLECTION = "roles"
 ASSIGNMENTS_COLLECTION = "assignments" 
-EVENTS_COLLECTION = "events" # Added for anonymizing createdByUserId
+EVENTS_COLLECTION = "events" 
 
-USER_DELETED_PLACEHOLDER_ID = "deleted_user_placeholder" # Placeholder for anonymization
+USER_DELETED_PLACEHOLDER_ID = "deleted_user_placeholder" 
 
 def _sanitize_user_data_fields(user_data: Dict[str, Any]) -> Dict[str, Any]:
     """
@@ -172,7 +172,7 @@ async def admin_create_user(
 async def list_users(
     db: firestore.AsyncClient = Depends(get_db),
     offset: int = 0,
-    limit: int = Query(default=20, le=100),
+    limit: int = Query(default=20, le=200), # Increased limit validation to 200
     roleId: Optional[str] = Query(None, description="Filter users by assigned role ID (exact match on roleName).") 
 ):
     try:
@@ -180,7 +180,7 @@ async def list_users(
         query = users_ref.order_by("lastName").order_by("firstName")
         if roleId:
             query = query.where("assignedRoleIds", "array_contains", roleId)
-        query = query.limit(limit).offset(offset)
+        query = query.limit(limit).offset(offset) 
         docs_snapshot = query.stream()
         users_list = []
         async for doc in docs_snapshot:
@@ -477,7 +477,6 @@ async def delete_user_by_admin(
             batch = db.batch()
             count = 0
             for event_doc_snap in organizer_events_snapshot:
-                # Decide on placeholder: null, or a specific string. Using null for now.
                 batch.update(event_doc_snap.reference, {"organizerUserId": None, "organizerFirstName": None, "organizerLastName": None, "organizerEmail": None, "updatedAt": firestore.SERVER_TIMESTAMP})
                 count += 1
             await batch.commit()
