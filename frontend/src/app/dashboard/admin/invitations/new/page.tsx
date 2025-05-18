@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import apiClient from '@/lib/apiClient';
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 
 interface Role {
   id: string; 
@@ -26,7 +26,7 @@ interface InvitationCreateResponse {
 
 export default function CreateInvitationPage() {
   const router = useRouter();
-  const { user: adminAuthUser, idToken, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const { user: adminAuthUser, idToken, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege, logout } = useAuth(); // Added logout
 
   const [email, setEmail] = useState('');
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
@@ -43,28 +43,28 @@ export default function CreateInvitationPage() {
     if (!adminAuthUser || !idToken || !canCreateInvitations) {
         return;
     }
-    try {
-        const rolesData = await apiClient<Role[]>({
-            path: '/roles',
-            token: idToken,
-            method: 'GET',
-        });
-        setAllRoles(rolesData);
-    } catch (err: any) {
-        console.error("Fetch all roles error:", err);
-        setPageError(prev => prev ? `${prev}\nFailed to load roles.` : 'Failed to load roles for pre-assignment.');
+    
+    const result: ApiResponse<Role[]> = await apiClient<Role[]>({
+        path: '/roles',
+        token: idToken,
+        method: 'GET',
+    });
+
+    if (result.ok && result.data) {
+        setAllRoles(result.data);
+    } else {
+        console.error("Fetch all roles error:", result.error);
+        if (result.status === 401) {
+            await logout();
+            return;
+        }
+        setPageError(prev => prev ? `${prev}\\nFailed to load roles.` : result.error?.message || 'Failed to load roles for pre-assignment.');
     }
-  }, [adminAuthUser, idToken, canCreateInvitations]);
+  }, [adminAuthUser, idToken, canCreateInvitations, logout]); // Added logout
 
   useEffect(() => {
-    if (!authLoading && !adminAuthUser) {
-      router.push('/login');
-      return;
-    }
-    if (adminAuthUser && !adminUserProfile) {
-        fetchUserProfile();
-        return; 
-    }
+    if (!authLoading && !adminAuthUser) { /* router.push('/login'); // Handled by layout/context */ return; }
+    if (adminAuthUser && !adminUserProfile && fetchUserProfile) { fetchUserProfile(); return; }
     if (adminAuthUser && adminUserProfile) {
         if (!canCreateInvitations) {
             setPageError("You don't have permission to create user invitations.");
@@ -76,49 +76,47 @@ export default function CreateInvitationPage() {
 
   const handleRoleChange = (roleId: string, checked: boolean) => {
     setSelectedRoleIds(prev => {
-        if (checked) {
-            return prev.includes(roleId) ? prev : [...prev, roleId];
-        } else {
-            return prev.filter(id => id !== roleId);
-        }
+        if (checked) { return prev.includes(roleId) ? prev : [...prev, roleId]; } 
+        else { return prev.filter(id => id !== roleId); }
     });
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!canCreateInvitations || !idToken) {
-        setSubmitError("Cannot submit: Insufficient permissions or not authenticated.");
-        return;
+        setSubmitError("Cannot submit: Insufficient permissions or not authenticated."); return;
     }
     if (!email.trim() || !/^\S+@\S+\.\S+$/.test(email.trim())) {
-        setSubmitError("A valid email address is required.");
-        return;
+        setSubmitError("A valid email address is required."); return;
     }
 
-    setIsSubmitting(true);
-    setSubmitError(null);
-    setSubmitSuccess(null);
+    setIsSubmitting(true); setSubmitError(null); setSubmitSuccess(null);
 
     const payload: InvitationCreatePayload = {
       email: email.trim(),
       assignedRoleIds: selectedRoleIds.length > 0 ? selectedRoleIds : undefined,
     };
 
-    try {
-      await apiClient<InvitationCreateResponse>({ 
-        path: '/admin/invitations/', 
-        token: idToken,
-        method: 'POST',
-        data: payload,
-      });
+    const result: ApiResponse<InvitationCreateResponse> = await apiClient<InvitationCreateResponse>({ 
+      path: '/admin/invitations/', 
+      token: idToken,
+      method: 'POST',
+      data: payload,
+    });
+    
+    setIsSubmitting(false);
+
+    if (result.ok) {
       setSubmitSuccess(`Invitation successfully sent to ${payload.email}.`);
       setEmail(''); 
       setSelectedRoleIds([]);
-    } catch (err: any) {
-      setSubmitError(err.response?.data?.detail || err.message || 'Failed to send invitation.');
-      console.error("Create invitation error:", err);
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      console.error("Create invitation error:", result.error);
+      if (result.status === 401) {
+        await logout();
+        return;
+      }
+      setSubmitError(result.error?.message || 'Failed to send invitation.');
     }
   };
 
@@ -172,13 +170,8 @@ export default function CreateInvitationPage() {
               Email Address to Invite <span className="text-red-500">*</span>
             </label>
             <input
-              type="email"
-              name="email"
-              id="email"
-              value={email}
-              onChange={(e) => setEmail(e.target.value)}
-              required
-              placeholder="recipient@example.com"
+              type="email" name="email" id="email" value={email} onChange={(e) => setEmail(e.target.value)}
+              required placeholder="recipient@example.com"
               className="mt-1 block w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
             />
           </div>
@@ -192,8 +185,7 @@ export default function CreateInvitationPage() {
                     {displayableRoles.map(role => (
                         <label key={role.id} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
                             <input
-                            type="checkbox"
-                            checked={selectedRoleIds.includes(role.id)}
+                            type="checkbox" checked={selectedRoleIds.includes(role.id)}
                             onChange={(e) => handleRoleChange(role.id, e.target.checked)}
                             className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 dark:bg-gray-600 dark:checked:bg-indigo-500"
                             />
@@ -225,30 +217,13 @@ export default function CreateInvitationPage() {
 
           <div className="flex justify-end space-x-3 pt-4 border-t border-gray-200 dark:border-gray-700 mt-6">
             <Link href="/dashboard/admin/invitations" passHref> 
-              <button
-                  type="button"
-                  className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
-              >
-                  <span className="material-icons text-base mr-2">cancel</span>
-                  Cancel
+              <button type="button" className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center">
+                  <span className="material-icons text-base mr-2">cancel</span> Cancel
               </button>
             </Link>
-            <button
-              type="submit"
-              disabled={isSubmitting || !canCreateInvitations}
-              className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center"
-            >
-              {isSubmitting ? (
-                <>
-                  <span className="material-icons animate-spin text-base mr-2">sync</span>
-                  Sending Invitation...
-                </>
-              ) : (
-                <>
-                  <span className="material-icons text-base mr-2">send</span>
-                  Send Invitation
-                </>
-              )}
+            <button type="submit" disabled={isSubmitting || !canCreateInvitations} className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center">
+              {isSubmitting ? ( <><span className="material-icons animate-spin text-base mr-2">sync</span> Sending Invitation...</> ) 
+                           : ( <><span className="material-icons text-base mr-2">send</span> Send Invitation</> )}
             </button>
           </div>
         </form>

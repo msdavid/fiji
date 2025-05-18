@@ -4,7 +4,7 @@ import React, { useState, useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import apiClient from '@/lib/apiClient';
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import { format } from 'date-fns';
 
 type DonationType = 'monetary' | 'in_kind' | 'time_contribution';
@@ -34,7 +34,7 @@ const initialFormData: NewDonationFormData = {
 };
 
 const NewDonationPage = () => {
-  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege, logout } = useAuth(); // Added logout
   const router = useRouter();
 
   const [formData, setFormData] = useState<NewDonationFormData>(initialFormData);
@@ -46,10 +46,10 @@ const NewDonationPage = () => {
 
   useEffect(() => {
     if (!authLoading && !user) {
-      router.push('/login');
+      // router.push('/login'); // Handled by AuthContext/DashboardLayout
       return;
     }
-    if (user && !userProfile) {
+    if (user && !userProfile && fetchUserProfile) { // Check if fetchUserProfile exists
         fetchUserProfile();
     }
     if (!authLoading && user && userProfile && !canCreateDonations) {
@@ -99,35 +99,37 @@ const NewDonationPage = () => {
     } else {
       payload.amount = null; 
       payload.currency = null; 
-      if (!formData.description.trim()) { 
-        setError("Description is required.");
-        setIsSubmitting(false);
-        return;
-      }
     }
+
     if (!formData.description.trim()) { 
         setError("Description is required.");
         setIsSubmitting(false);
         return;
     }
     
-    try {
-      await apiClient({
-        path: '/donations',
-        token: idToken,
-        method: 'POST',
-        data: payload,
-      });
+    const result: ApiResponse<any> = await apiClient({ // Assuming any response for POST
+      path: '/donations',
+      token: idToken,
+      method: 'POST',
+      data: payload,
+    });
+
+    setIsSubmitting(false);
+
+    if (result.ok) {
       setSuccessMessage('Donation recorded successfully! Redirecting...');
       setFormData(initialFormData); 
       setTimeout(() => {
         router.push('/dashboard/donations');
       }, 1500);
-    } catch (err: any) {
-      console.error('Failed to record donation:', err);
-      setError(err.response?.data?.detail || err.message || 'Failed to record donation.');
-    } finally {
-      setIsSubmitting(false);
+    } else {
+      console.error('Failed to record donation:', result.error);
+      if (result.status === 401) {
+        await logout();
+        // No local error state set for 401 as logout is initiated
+        return; 
+      }
+      setError(result.error?.message || 'Failed to record donation.');
     }
   };
   

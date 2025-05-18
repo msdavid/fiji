@@ -3,7 +3,7 @@
 import React, { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import apiClient from '@/lib/apiClient';
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import { format, parseISO } from 'date-fns';
 
 interface Donation {
@@ -23,7 +23,7 @@ interface Donation {
 }
 
 const DonationsPage = () => {
-  const { user, idToken, loading: authLoading, hasPrivilege, userProfile } = useAuth();
+  const { user, idToken, loading: authLoading, hasPrivilege, userProfile, logout } = useAuth();
   const [donations, setDonations] = useState<Donation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -39,21 +39,29 @@ const DonationsPage = () => {
     }
     setIsLoading(true);
     setError(null);
-    try {
-      const data = await apiClient<Donation[]>({
-        path: '/donations',
-        token: idToken,
-        method: 'GET',
-        params: { limit: 100, sort_by: 'donationDate', sort_order: 'desc' }
-      });
-      setDonations(data);
-    } catch (err: any) {
-      console.error('Failed to fetch donations:', err);
-      setError(err.response?.data?.detail || err.message || 'Failed to load donations.');
-    } finally {
+
+    const result: ApiResponse<Donation[]> = await apiClient<Donation[]>({
+      path: '/donations',
+      token: idToken,
+      method: 'GET',
+    });
+
+    if (result.ok && result.data) {
+      setDonations(result.data);
       setIsLoading(false);
+    } else {
+      console.error('Failed to fetch donations:', result.error);
+      if (result.status === 401) {
+        console.warn("DonationsPage: Unauthorized (401) fetching donations. Logging out.");
+        await logout(); 
+        // setIsLoading(false) is not called here as component should unmount/redirect
+        return; 
+      } else {
+        setError(result.error?.message || 'Failed to load donations.');
+        setIsLoading(false);
+      }
     }
-  }, [idToken, canViewDonations, user, userProfile]);
+  }, [idToken, canViewDonations, user, userProfile, logout]);
 
   useEffect(() => {
     if (!authLoading) {
@@ -92,12 +100,12 @@ const DonationsPage = () => {
     <main className="max-w-7xl mx-auto">
       <header className="mb-8 pt-8">
         <div className="flex justify-between items-center"> 
-            <div> {/* Removed padding from this div */}
+            <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Donations</h1>
                 <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">View and manage all recorded donations.</p>
             </div>
             {canCreateDonations && (
-            <div> {/* Removed padding from this div */}
+            <div>
               <Link href="/dashboard/donations/new">
                   <button className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm inline-flex items-center text-sm">
                       <span className="material-icons mr-2 text-base">add_circle_outline</span>
@@ -108,21 +116,10 @@ const DonationsPage = () => {
             )}
         </div>
       </header>
-
-      {/* Placeholder for Search/Filter bar - to be implemented if needed */}
-      {/* 
-      <div className="mb-6 bg-white dark:bg-gray-900 rounded-lg shadow-md px-4 py-4">
-        <input
-          type="text"
-          placeholder="Search donations..."
-          className="w-full p-3 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-800 dark:text-white"
-        />
-      </div> 
-      */}
       
       {isLoading && donations.length === 0 ? (
          <div className="text-center py-10 px-4 sm:px-6 lg:px-8"><p className="text-gray-500 dark:text-gray-400">Loading donations list...</p></div>
-      ) : error && donations.length === 0 ? (
+      ) : error && donations.length === 0 ? ( 
         <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-md shadow text-center">
             <p className="text-red-700 dark:text-red-300">Error: {error}</p>
             <button 

@@ -2,10 +2,7 @@
 
 import { useState, useEffect, Suspense } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-// createUserWithEmailAndPassword and auth will be removed as backend handles Firebase Auth creation
-// import { createUserWithEmailAndPassword } from 'firebase/auth';
-// import { auth } from '@/lib/firebaseConfig'; 
-import { apiClient } from '@/lib/apiClient'; 
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import Link from 'next/link';
 
 interface TokenValidationResponse {
@@ -35,7 +32,6 @@ function RegistrationFormComponent() {
   const [confirmPassword, setConfirmPassword] = useState('');
   const [firstName, setFirstName] = useState('');
   const [lastName, setLastName] = useState('');
-  const [preassignedRoleIds, setPreassignedRoleIds] = useState<string[] | undefined>(undefined);
   
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -59,9 +55,9 @@ function RegistrationFormComponent() {
 
   useEffect(() => {
     if (!initialToken) {
-      if (tokenStatus !== 'not_found') { 
-        setTokenStatus('loading');
-        setTokenValidationMessage('Validating invitation token...');
+      if (tokenStatus !== 'not_found' && !searchParams.get('token')) { 
+        setTokenStatus('not_found');
+        setTokenValidationMessage('Invalid or missing registration token.');
       }
       return;
     }
@@ -79,39 +75,35 @@ function RegistrationFormComponent() {
 
     const validateToken = async () => {
       try {
-        const responseData = await apiClient<TokenValidationResponse>({ // Corrected usage
+        const result: ApiResponse<TokenValidationResponse> = await apiClient<TokenValidationResponse>({
           path: `/invitations/validate?token=${initialToken}`,
-          method: 'GET', 
+          method: 'GET',
         });
-        
-        if (responseData.isValid) { // Use responseData directly
+
+        if (result.ok && result.data && result.data.isValid) {
           setTokenStatus('valid');
-          if (responseData.email) {
-            setEmail(responseData.email); 
-          }
-          if (responseData.assignedRoleIds) {
-            setPreassignedRoleIds(responseData.assignedRoleIds);
-          }
-          setTokenValidationMessage(responseData.message || 'Token is valid. Please complete your registration.');
+          setEmail(result.data.email || ''); 
+          setTokenValidationMessage(result.data.message || 'Token is valid. Please complete your registration.');
         } else {
           setTokenStatus('invalid');
-          setTokenValidationMessage(responseData.message || 'This invitation token is not valid or has expired.');
+          let message = 'This invitation token is not valid or has expired.';
+          if (result.data && result.data.message && !result.data.isValid) {
+            message = result.data.message;
+          } else if (result.error && result.error.message) {
+            message = result.error.message;
+          }
+          setTokenValidationMessage(message);
+          if (result.error) console.error("Token validation API client error details:", result.error);
         }
-      } catch (err: any) {
+      } catch (unexpectedError: any) {
         setTokenStatus('invalid');
-        // apiClient now throws an error object that might have 'data' or 'message'
-        const detail = err.data?.detail || err.message;
-        if (detail) {
-          setTokenValidationMessage(`Error validating token: ${detail}`);
-        } else {
-          setTokenValidationMessage('Error validating token. Please try again or contact support.');
-        }
-        console.error("Token validation error:", err);
+        setTokenValidationMessage('An unexpected error occurred during token validation. Please contact support.');
+        console.error("Unexpected error in validateToken:", unexpectedError);
       }
     };
 
     validateToken();
-  }, [initialToken, backendConfigured]);
+  }, [initialToken, backendConfigured, searchParams]);
 
 
   const handleRegister = async (event: React.FormEvent) => {
@@ -147,25 +139,35 @@ function RegistrationFormComponent() {
     };
 
     try {
-      await apiClient({ // Corrected usage
+      const result: ApiResponse<any> = await apiClient({
         path: `/auth/register-with-invitation`, 
         method: 'POST',
         data: registrationPayload 
       });
 
-      setSuccessMessage('Registration successful! You can now log in.');
-      setTimeout(() => {
-        router.push('/login');
-      }, 3000);
-
-    } catch (err: any) {
-      const detail = err.data?.detail || err.message;
-      if (detail) {
-         setError(`Registration failed: ${detail}`);
+      if (result.ok) {
+        setSuccessMessage('Registration successful! You can now log in.');
+        setTimeout(() => {
+          router.push('/login');
+        }, 3000);
       } else {
-        setError('Registration failed. An unexpected error occurred.');
+        const uiErrorMessage = result.error?.message || 'Registration failed. An unexpected error occurred.';
+        setError(`Registration failed: ${uiErrorMessage}`);
+        
+        console.error("--- Registration Submission Error Details ---");
+        if (result.error) {
+            console.error("Full result.error object:", result.error);
+            console.error("result.error.message:", result.error.message);
+            console.error("result.error.status:", result.error.status);
+            console.error("result.error.details (stringified):", JSON.stringify(result.error.details, null, 2));
+        } else {
+            console.error("result.error was null or undefined. Full result object:", result);
+        }
+        console.error("--- End of Registration Submission Error Details ---");
       }
-      console.error("Registration submission error:", err);
+    } catch (unexpectedError: any) { 
+      setError('Registration failed. An unexpected critical error occurred.');
+      console.error("Critical registration submission error (exception caught):", unexpectedError);
     } finally {
       setLoading(false);
     }
@@ -203,7 +205,7 @@ function RegistrationFormComponent() {
         {showForm && (
           <form className="bg-white dark:bg-gray-800 py-8 px-4 shadow sm:rounded-lg sm:px-10 space-y-6" onSubmit={handleRegister}>
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              {tokenValidationMessage} 
+              {tokenStatus === 'valid' && tokenValidationMessage ? tokenValidationMessage : 'Please complete the form below.'}
             </p>
             <div>
               <label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300">First Name <span className="text-red-500">*</span></label>
@@ -243,10 +245,10 @@ function RegistrationFormComponent() {
             )}
 
             <div>
-              <button type="submit" disabled={loading}
+              <button type="submit" disabled={loading || !!successMessage}
                 className="group relative w-full flex justify-center py-2 px-4 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50"
               >
-                {loading ? 'Registering...' : 'Complete Registration'}
+                {loading ? 'Registering...' : (successMessage ? 'Redirecting...' : 'Complete Registration')}
               </button>
             </div>
           </form>

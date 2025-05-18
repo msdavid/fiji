@@ -4,7 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
-import apiClient from '@/lib/apiClient';
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import { format, parseISO, formatDistanceToNowStrict } from 'date-fns';
 
 interface Invitation {
@@ -21,7 +21,7 @@ interface Invitation {
 
 export default function AdminInvitationsPage() {
   const router = useRouter();
-  const { user: adminAuthUser, idToken, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const { user: adminAuthUser, idToken, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege, logout } = useAuth(); // Added logout
   
   const [invitations, setInvitations] = useState<Invitation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
@@ -41,31 +41,35 @@ export default function AdminInvitationsPage() {
       return;
     }
     setIsLoading(true); setError(null); setActionError(null);
-    try {
-      const queryParams = new URLSearchParams();
-      if (filterStatus !== 'all') {
-        queryParams.append('status', filterStatus);
-      }
-      
-      const pathWithParams = `/admin/invitations/?${queryParams.toString()}`; 
-
-      const response = await apiClient<Invitation[]>({
-        path: pathWithParams, 
-        token: idToken,
-        method: 'GET',
-      });
-      setInvitations(response);
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Failed to fetch invitations.');
-      console.error("Fetch invitations error:", err);
-    } finally {
-      setIsLoading(false);
+    
+    const queryParams = new URLSearchParams();
+    if (filterStatus !== 'all') {
+      queryParams.append('status', filterStatus);
     }
-  }, [adminAuthUser, idToken, canListInvitations, filterStatus]); 
+    const pathWithParams = `/admin/invitations/?${queryParams.toString()}`; 
+
+    const result: ApiResponse<Invitation[]> = await apiClient<Invitation[]>({
+      path: pathWithParams, 
+      token: idToken,
+      method: 'GET',
+    });
+
+    setIsLoading(false);
+    if (result.ok && result.data) {
+      setInvitations(result.data);
+    } else {
+      console.error("Fetch invitations error:", result.error);
+      if (result.status === 401) {
+        await logout();
+        return;
+      }
+      setError(result.error?.message || 'Failed to fetch invitations.');
+    }
+  }, [adminAuthUser, idToken, canListInvitations, filterStatus, logout]); // Added logout
 
   useEffect(() => {
-    if (!authLoading && !adminAuthUser) router.push('/login');
-    if (adminAuthUser && !adminUserProfile) fetchUserProfile();
+    if (!authLoading && !adminAuthUser) { /* router.push('/login'); // Handled by layout/context */ }
+    if (adminAuthUser && !adminUserProfile && fetchUserProfile) fetchUserProfile();
     if (adminAuthUser && adminUserProfile && idToken) {
         fetchInvitations();
     }
@@ -80,16 +84,22 @@ export default function AdminInvitationsPage() {
         return;
     }
     setActionError(null);
-    try {
-        await apiClient({
-            path: `/admin/invitations/${invitationId}`, 
-            token: idToken,
-            method: 'DELETE',
-        });
+
+    const result: ApiResponse<any> = await apiClient({ // Expect any or no content for DELETE
+        path: `/admin/invitations/${invitationId}`, 
+        token: idToken,
+        method: 'DELETE',
+    });
+
+    if (result.ok) {
         await fetchInvitations(); 
-    } catch (err: any) {
-        setActionError(err.response?.data?.detail || err.message || 'Failed to revoke invitation.');
-        console.error("Revoke invitation error:", err);
+    } else {
+        console.error("Revoke invitation error:", result.error);
+        if (result.status === 401) {
+            await logout();
+            return;
+        }
+        setActionError(result.error?.message || 'Failed to revoke invitation.');
     }
   };
 
@@ -267,7 +277,6 @@ export default function AdminInvitationsPage() {
                             className="text-red-600 hover:text-red-800 dark:text-red-400 dark:hover:text-red-200 inline-flex items-center p-1 rounded hover:bg-red-100 dark:hover:bg-red-800/50"
                         >
                           <span className="material-icons text-base">cancel</span>
-                          {/* <span className="ml-1 hidden sm:inline">Revoke</span> */}
                         </button>
                       )}
                     </td>

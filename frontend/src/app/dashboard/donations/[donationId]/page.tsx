@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import apiClient from '@/lib/apiClient';
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import { format, parseISO } from 'date-fns';
 
 interface Donation {
@@ -25,7 +25,6 @@ interface Donation {
   updatedAt: string; // ISO datetime string
 }
 
-// Consistent DetailItem component (similar to Event/User Profile pages)
 const DetailItem = ({ icon, label, value, isPreformatted = false, valueClassName }: { icon: string; label: string; value: React.ReactNode; isPreformatted?: boolean; valueClassName?: string; }) => {
   if (!value && typeof value !== 'number' && typeof value !== 'boolean') return null;
   
@@ -61,12 +60,12 @@ const DonationDetailPage = () => {
   const router = useRouter();
   const donationId = params.donationId as string;
 
-  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth(); // Added userProfile, fetchUserProfile
+  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege, logout } = useAuth(); // Added logout
   const [donation, setDonation] = useState<Donation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const canViewDonation = userProfile && (hasPrivilege ? hasPrivilege('donations', 'view') : userProfile.assignedRoleIds?.includes('sysadmin')); // Adjusted for userProfile
+  const canViewDonation = userProfile && (hasPrivilege ? hasPrivilege('donations', 'view') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canEditDonation = userProfile && (hasPrivilege ? hasPrivilege('donations', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
 
 
@@ -76,7 +75,7 @@ const DonationDetailPage = () => {
       return;
     }
 
-    if (!authLoading && user && userProfile && !canViewDonation) { // Check userProfile before canViewDonation
+    if (!authLoading && user && userProfile && !canViewDonation) {
       setError("You don't have permission to view this donation.");
       setIsLoading(false);
       return;
@@ -85,50 +84,54 @@ const DonationDetailPage = () => {
     setIsLoading(true);
     setError(null);
 
-    try {
-      const data = await apiClient<Donation>({
-        path: `/donations/${donationId}`,
-        token: idToken,
-        method: 'GET',
-      });
-      setDonation(data);
-    } catch (err: any) {
-      console.error('Failed to fetch donation details:', err);
-      if (err.response?.status === 404) {
+    const result: ApiResponse<Donation> = await apiClient<Donation>({
+      path: `/donations/${donationId}`,
+      token: idToken,
+      method: 'GET',
+    });
+
+    setIsLoading(false); // Set loading false after API call
+
+    if (result.ok && result.data) {
+      setDonation(result.data);
+    } else {
+      console.error('Failed to fetch donation details:', result.error);
+      if (result.status === 401) {
+        await logout();
+        return; 
+      } else if (result.status === 404) {
         setError(`Donation with ID "${donationId}" not found.`);
       } else {
-        setError(err.response?.data?.detail || err.message || 'Failed to load donation details.');
+        setError(result.error?.message || 'Failed to load donation details.');
       }
-    } finally {
-      setIsLoading(false);
     }
-  }, [idToken, donationId, authLoading, user, userProfile, canViewDonation]); // Added userProfile to dependencies
+  }, [idToken, donationId, authLoading, user, userProfile, canViewDonation, logout]); // Added logout
 
   useEffect(() => {
     if (!authLoading && !user) {
-        router.push('/login'); // Redirect if not logged in
+        // router.push('/login'); // Handled by AuthContext/DashboardLayout
         return;
     }
-    if (user && !userProfile) { // Fetch profile if user exists but profile doesn't
+    if (user && !userProfile && fetchUserProfile) { 
         fetchUserProfile();
     }
-    if (user && userProfile && idToken) { // Fetch details once user, profile, and token are available
+    if (user && userProfile && idToken) { 
         fetchDonationDetails();
     }
   }, [authLoading, user, userProfile, fetchUserProfile, idToken, router, fetchDonationDetails]);
 
 
-  const getDonationTitle = (donation: Donation | null): string => {
-    if (!donation) return "Donation Details";
-    switch (donation.donationType) {
+  const getDonationTitle = (donationData: Donation | null): string => { // Renamed parameter
+    if (!donationData) return "Donation Details";
+    switch (donationData.donationType) {
         case 'monetary':
-            return `Monetary Donation from ${donation.donorName}`;
+            return `Monetary Donation from ${donationData.donorName}`;
         case 'in_kind':
-            return `In-Kind Donation from ${donation.donorName}`;
+            return `In-Kind Donation from ${donationData.donorName}`;
         case 'time_contribution':
-            return `Time Contribution from ${donation.donorName}`;
+            return `Time Contribution from ${donationData.donorName}`;
         default:
-            return `Donation from ${donation.donorName}`;
+            return `Donation from ${donationData.donorName}`;
     }
   };
 
@@ -142,7 +145,7 @@ const DonationDetailPage = () => {
   };
 
 
-  if (authLoading || isLoading || (user && !userProfile && !error)) { // Show loading if auth, data, or profile is loading (and no error yet)
+  if (authLoading || isLoading || (user && !userProfile && !error)) { 
     return (
       <div className="flex justify-center items-center min-h-screen bg-gray-100 dark:bg-gray-800">
         <div className="text-center p-6">
@@ -156,7 +159,6 @@ const DonationDetailPage = () => {
     );
   }
   
-  // Error, Access Denied, or Not Found states
   if (error || (!isLoading && !donation) || (userProfile && !canViewDonation)) {
     const displayError = error || (userProfile && !canViewDonation ? "Access Denied. You do not have permission to view this donation." : "Donation not found.");
     const icon = error || (userProfile && !canViewDonation) ? "lock" : "search_off";
@@ -181,7 +183,6 @@ const DonationDetailPage = () => {
     );
   }
 
-  // This should not be reached if logic above is correct, but as a fallback.
   if (!donation) { 
     return (
         <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center">
@@ -202,7 +203,6 @@ const DonationDetailPage = () => {
 
       <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg overflow-hidden">
         <div className="p-6 sm:p-8">
-          {/* Header Section */}
           <div className="flex flex-col sm:flex-row justify-between items-start sm:items-center mb-6 pb-6 border-b border-gray-200 dark:border-gray-700"> 
             <div className="flex items-center space-x-4">
               <div className="flex-shrink-0 w-16 h-16 rounded-full bg-indigo-100 dark:bg-indigo-800 flex items-center justify-center">
@@ -223,7 +223,6 @@ const DonationDetailPage = () => {
             )}
           </div>
 
-          {/* Donor Information Section */}
           <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Donor Information</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8">
             <DetailItem icon="person" label="Donor Name" value={donation.donorName} />
@@ -231,7 +230,6 @@ const DonationDetailPage = () => {
             <DetailItem icon="phone" label="Donor Phone" value={donation.donorPhone} />
           </div>
 
-          {/* Donation Specifics Section */}
           <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">Donation Specifics</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-6">
             <DetailItem icon="event_note" label="Donation Date" value={format(parseISO(donation.donationDate), 'PPP')} />
@@ -262,7 +260,6 @@ const DonationDetailPage = () => {
               </div>
           )}
           
-          {/* Administrative Details Section */}
           <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">Administrative Details</h2>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <DetailItem 
@@ -271,7 +268,6 @@ const DonationDetailPage = () => {
                 value={`${donation.recordedByUserFirstName || ''} ${donation.recordedByUserLastName || ''}`.trim() || donation.recordedByUserId} 
             />
             <DetailItem icon="update" label="Last Updated" value={format(parseISO(donation.updatedAt), 'PPP p')} />
-            {/* Created At is in header */}
           </div>
         </div>
       </div>

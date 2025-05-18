@@ -4,7 +4,7 @@ import React, { useState, useEffect, useCallback } from 'react';
 import { useParams, useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import apiClient from '@/lib/apiClient';
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import { format, parseISO } from 'date-fns';
 
 interface DonationFormData {
@@ -31,7 +31,7 @@ export default function EditDonationPage() {
   const router = useRouter();
   const donationId = params.donationId as string;
 
-  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege, logout } = useAuth(); // Added logout
 
   const [formData, setFormData] = useState<DonationFormData>({
     donorName: '',
@@ -48,48 +48,55 @@ export default function EditDonationPage() {
   const [isLoading, setIsLoading] = useState(true);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [isDeleting, setIsDeleting] = useState(false);
-  const [error, setError] = useState<string | null>(null); // General page load error
-  const [submitError, setSubmitError] = useState<string | null>(null); // Form submission error
-  const [successMessage, setSuccessMessage] = useState<string | null>(null); // Form submission success
+  const [error, setError] = useState<string | null>(null); 
+  const [submitError, setSubmitError] = useState<string | null>(null); 
+  const [successMessage, setSuccessMessage] = useState<string | null>(null); 
 
   const canEditDonation = userProfile && (hasPrivilege ? hasPrivilege('donations', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canDeleteDonation = userProfile && (hasPrivilege ? hasPrivilege('donations', 'delete') : userProfile.assignedRoleIds?.includes('sysadmin'));
 
   const fetchDonationDetails = useCallback(async () => {
-    if (!idToken || !donationId ) { // Removed canEditDonation from initial fetch blocking
+    if (!idToken || !donationId ) {
       setIsLoading(false);
       return;
     }
     setIsLoading(true); setError(null);
-    try {
-      const donationData = await apiClient<Donation>({
-        path: `/donations/${donationId}`,
-        token: idToken,
-        method: 'GET',
-      });
-      setOriginalDonation(donationData);
+    
+    const result = await apiClient<Donation>({
+      path: `/donations/${donationId}`,
+      token: idToken,
+      method: 'GET',
+    });
+
+    setIsLoading(false);
+
+    if (result.ok && result.data) {
+      setOriginalDonation(result.data);
       setFormData({
-        donorName: donationData.donorName,
-        donorEmail: donationData.donorEmail || null,
-        donorPhone: donationData.donorPhone || null,
-        donationType: donationData.donationType,
-        amount: donationData.amount || null,
-        currency: donationData.currency || 'USD',
-        description: donationData.description,
-        donationDate: donationData.donationDate ? format(parseISO(donationData.donationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
-        notes: donationData.notes || null,
+        donorName: result.data.donorName,
+        donorEmail: result.data.donorEmail || null,
+        donorPhone: result.data.donorPhone || null,
+        donationType: result.data.donationType,
+        amount: result.data.amount || null,
+        currency: result.data.currency || 'USD',
+        description: result.data.description,
+        donationDate: result.data.donationDate ? format(parseISO(result.data.donationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
+        notes: result.data.notes || null,
       });
-    } catch (err: any) {
-      setError(err.response?.data?.detail || err.message || 'Failed to fetch donation details.');
-    } finally {
-      setIsLoading(false);
+    } else {
+      console.error('Failed to fetch donation details:', result.error);
+      if (result.status === 401) {
+        await logout();
+        return;
+      }
+      setError(result.error?.message || 'Failed to fetch donation details.');
     }
-  }, [idToken, donationId]);
+  }, [idToken, donationId, logout]); // Added logout
 
   useEffect(() => {
-    if (!authLoading && !user) router.push('/login');
-    if (user && !userProfile) fetchUserProfile();
-    if (user && userProfile && idToken && donationId) { // Ensure userProfile is loaded before fetching
+    if (!authLoading && !user) { /* router.push('/login'); // Handled by layout/context */ }
+    if (user && !userProfile && fetchUserProfile) fetchUserProfile();
+    if (user && userProfile && idToken && donationId) { 
       fetchDonationDetails();
     }
   }, [user, authLoading, userProfile, fetchUserProfile, idToken, donationId, router, fetchDonationDetails]);
@@ -119,101 +126,111 @@ export default function EditDonationPage() {
       return;
     }
     if (!formData.donorName.trim()) {
-        setSubmitError("Donor Name cannot be empty.");
-        return;
+        setSubmitError("Donor Name cannot be empty."); return;
     }
     if (formData.donationType === 'monetary' && (formData.amount == null || formData.amount <= 0)) {
-        setSubmitError("Amount must be a positive number for monetary donations.");
-        return;
+        setSubmitError("Amount must be a positive number for monetary donations."); return;
     }
     if (formData.donationType === 'monetary' && !formData.currency?.trim()) {
-        setSubmitError("Currency is required for monetary donations.");
-        return;
+        setSubmitError("Currency is required for monetary donations."); return;
     }
     if (!formData.description.trim()) {
-        setSubmitError("Description cannot be empty.");
-        return;
+        setSubmitError("Description cannot be empty."); return;
     }
 
-    setIsSubmitting(true);
-    setSubmitError(null);
-    setSuccessMessage(null);
+    setIsSubmitting(true); setSubmitError(null); setSuccessMessage(null);
 
-    try {
-      if (!idToken) throw new Error("Authentication token not available.");
+    if (!idToken) {
+        setSubmitError("Authentication token not available.");
+        setIsSubmitting(false); return;
+    }
       
-      const payload: Partial<DonationFormData> = {};
-      (Object.keys(formData) as Array<keyof DonationFormData>).forEach(key => {
-        let formVal = formData[key];
-        let originalVal = originalDonation[key];
-        if (key === 'donorEmail' || key === 'donorPhone' || key === 'notes' || key === 'currency' || key === 'amount') {
-            if (formVal === '') formVal = null;
-            if (originalVal === '') originalVal = null;
-        }
-        if (key === 'donationDate' && originalDonation.donationDate) {
-            originalVal = format(parseISO(originalDonation.donationDate), 'yyyy-MM-dd');
-        }
-        if (formVal !== originalVal) {
-          // @ts-ignore
-          payload[key] = formVal;
-        }
-      });
-      
-      if (formData.donationType === 'monetary' && originalDonation.donationType !== 'monetary') {
-        payload.amount = formData.amount;
-        payload.currency = formData.currency;
+    const payload: Partial<DonationFormData> = {};
+    (Object.keys(formData) as Array<keyof DonationFormData>).forEach(key => {
+      let formVal = formData[key];
+      let originalVal = originalDonation[key];
+      if (key === 'donorEmail' || key === 'donorPhone' || key === 'notes' || key === 'currency' || key === 'amount') {
+          if (formVal === '') formVal = null;
+          if (originalVal === '') originalVal = null;
       }
-      if (formData.donationType !== 'monetary' && originalDonation.donationType === 'monetary') {
-        payload.amount = null;
-        payload.currency = null;
+      if (key === 'donationDate' && originalDonation.donationDate) {
+          originalVal = format(parseISO(originalDonation.donationDate), 'yyyy-MM-dd');
       }
+      if (formVal !== originalVal) {
+        // @ts-ignore
+        payload[key] = formVal;
+      }
+    });
+    
+    if (formData.donationType === 'monetary' && originalDonation.donationType !== 'monetary') {
+      payload.amount = formData.amount;
+      payload.currency = formData.currency;
+    }
+    if (formData.donationType !== 'monetary' && originalDonation.donationType === 'monetary') {
+      payload.amount = null;
+      payload.currency = null;
+    }
 
-      if (Object.keys(payload).length === 0) {
-        setSubmitError("No changes detected to submit.");
-        setIsSubmitting(false);
-        return;
-      }
+    if (Object.keys(payload).length === 0) {
+      setSubmitError("No changes detected to submit.");
+      setIsSubmitting(false); return;
+    }
       
-      await apiClient({
-        path: `/donations/${donationId}`,
-        token: idToken,
-        method: 'PUT',
-        data: payload,
-      });
+    const result: ApiResponse<any> = await apiClient({
+      path: `/donations/${donationId}`,
+      token: idToken,
+      method: 'PUT',
+      data: payload,
+    });
+    
+    setIsSubmitting(false);
+
+    if (result.ok) {
       setSuccessMessage('Donation updated successfully!');
+      fetchDonationDetails(); // Re-fetch to update originalDonation state for further edits
       setTimeout(() => {
-        router.push(`/dashboard/donations/${donationId}`);
-      }, 1500);
-    } catch (err: any) {
-      setSubmitError(err.response?.data?.detail || err.message || 'Failed to update donation.');
-    } finally {
-      setIsSubmitting(false);
+        // router.push(`/dashboard/donations/${donationId}`); // Stay on page or redirect as preferred
+        setSuccessMessage(null); // Clear success message after a delay
+      }, 3000);
+    } else {
+      console.error('Failed to update donation:', result.error);
+      if (result.status === 401) {
+        await logout(); return;
+      }
+      setSubmitError(result.error?.message || 'Failed to update donation.');
     }
   };
 
   const handleDeleteDonation = async () => {
     if (!canDeleteDonation || !originalDonation) {
-        setSubmitError("Cannot delete: Insufficient permissions or donation data missing."); // Use submitError for consistency
-        return;
+        setSubmitError("Cannot delete: Insufficient permissions or donation data missing."); return;
     }
     if (!confirm(`Are you sure you want to delete this donation from "${originalDonation.donorName}"? This action cannot be undone.`)) return;
 
-    setIsDeleting(true);
-    setSubmitError(null); // Clear submit error before attempting delete
-    setSuccessMessage(null);
-    try {
-        if (!idToken) throw new Error("Authentication token not available.");
-        await apiClient({
-            path: `/donations/${donationId}`,
-            token: idToken,
-            method: 'DELETE',
-        });
-        alert('Donation deleted successfully!'); // Simple alert for now
+    setIsDeleting(true); setSubmitError(null); setSuccessMessage(null);
+    
+    if (!idToken) {
+        setSubmitError("Authentication token not available.");
+        setIsDeleting(false); return;
+    }
+
+    const result: ApiResponse<any> = await apiClient({
+        path: `/donations/${donationId}`,
+        token: idToken,
+        method: 'DELETE',
+    });
+
+    setIsDeleting(false);
+
+    if (result.ok) {
+        alert('Donation deleted successfully!'); 
         router.push('/dashboard/donations');
-    } catch (err: any) {
-        setSubmitError(err.response?.data?.detail || err.message || 'Failed to delete donation.'); // Use submitError
-    } finally {
-        setIsDeleting(false);
+    } else {
+        console.error('Failed to delete donation:', result.error);
+        if (result.status === 401) {
+            await logout(); return;
+        }
+        setSubmitError(result.error?.message || 'Failed to delete donation.');
     }
   };
 
@@ -231,7 +248,6 @@ export default function EditDonationPage() {
     );
   }
   
-  // Page-level error (e.g., failed to fetch initial data) or access denied
   if (error || (userProfile && !canEditDonation && !isLoading) || (!isLoading && !originalDonation && !error)) {
     const displayError = error || (userProfile && !canEditDonation ? "Access Denied. You do not have permission to edit this donation." : "Donation not found for editing.");
     const isAccessDenied = userProfile && !canEditDonation;
@@ -254,7 +270,6 @@ export default function EditDonationPage() {
     );
   }
   
-  // This should ideally not be reached if the above covers all states
   if (!originalDonation) {
       return <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8 text-center"><p>Donation data is unavailable.</p></main>;
   }
@@ -277,7 +292,7 @@ export default function EditDonationPage() {
             <span className="font-medium">Success!</span> {successMessage}
             </div>
         )}
-        {submitError && ( // Changed from deleteError to submitError for general form errors
+        {submitError && ( 
             <div className="mb-6 p-4 text-sm text-red-700 bg-red-100 dark:bg-red-700 dark:text-red-100 rounded-lg shadow-md" role="alert">
             <span className="font-medium">Error:</span> {submitError}
             </div>
@@ -286,7 +301,6 @@ export default function EditDonationPage() {
         {canEditDonation && (
             <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
                 <form onSubmit={handleSubmit} className="space-y-6">
-                    {/* Donor Information Section */}
                     <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
                         <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Donor Information</h2>
                         <div className="space-y-4">
@@ -305,7 +319,6 @@ export default function EditDonationPage() {
                         </div>
                     </div>
 
-                    {/* Donation Details Section */}
                     <div className="pt-6 space-y-4">
                         <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Donation Details</h2>
                         <div>
@@ -342,7 +355,6 @@ export default function EditDonationPage() {
                         </div>
                     </div>
                     
-                    {/* Action Buttons */}
                     <div className="flex flex-col sm:flex-row justify-between items-center pt-8 mt-4 border-t border-gray-200 dark:border-gray-700 space-y-4 sm:space-y-0">
                         <div>
                             {canDeleteDonation && (

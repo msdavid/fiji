@@ -1,8 +1,8 @@
 'use client';
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useCallback } from 'react'; // Added useCallback
 import { useAuth } from '@/context/AuthContext';
-import apiClient from '@/lib/apiClient';
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import Link from 'next/link';
 import { format, parseISO, isFuture, isValid } from 'date-fns';
 
@@ -31,121 +31,141 @@ interface QuickLinkItem {
   privilege?: { resource: string; action: string }; 
 }
 
-// Interface for the expected structure from /api/reports/volunteer-activity
 interface VolunteerActivityEntry {
   userId: string;
   totalHours: number;
-  // other fields like displayName, eventCount might be present but not strictly needed here
 }
 interface VolunteerActivityReport {
   data: VolunteerActivityEntry[];
-  totalHoursOverall?: number; // This is overall system total, not per user from this field
+  totalHoursOverall?: number;
   totalVolunteers?: number;
 }
 
 
 export default function DashboardPage() {
-  const { user, idToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege } = useAuth();
+  const { user, idToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege, logout } = useAuth(); // Added logout
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<Assignment[]>([]);
   const [activeWorkingGroups, setActiveWorkingGroups] = useState<Assignment[]>([]);
   const [userTotalHours, setUserTotalHours] = useState<number | null>(null);
   const [loadingData, setLoadingData] = useState(true);
-  const [loadingStats, setLoadingStats] = useState(false);
-  const [error, setError] = useState<string | null>(null);
+  const [loadingStats, setLoadingStats] = useState(false); // Keep this for the stats section
+  const [error, setError] = useState<string | null>(null); // For non-401 errors
 
-  useEffect(() => {
+  const fetchData = useCallback(async () => {
     if (!idToken || !user) {
-      if (!authContextLoading) {
-        setLoadingData(false);
-      }
+      if (!authContextLoading) setLoadingData(false);
       return;
     }
 
-    const fetchData = async () => {
-      setLoadingData(true);
-      setError(null);
-      try {
-        if (authUserProfile && authUserProfile.uid === user.uid) { 
-            setProfile({
-                id: authUserProfile.uid, 
-                firstName: authUserProfile.firstName,
-                lastName: authUserProfile.lastName,
-                email: authUserProfile.email || undefined,
-                assignedRoleNames: authUserProfile.assignedRoleNames || authUserProfile.assignedRoleIds, 
-            });
-        } else {
-            const userProfileData = await apiClient<UserProfile>({ 
-              method: 'GET',
-              path: '/users/me',
-              token: idToken,
-            });
-            setProfile(userProfileData);
-        }
-        
-        const eventAssignmentsData = await apiClient<Assignment[]>({
+    setLoadingData(true);
+    setError(null);
+    let criticalErrorOccurred = false;
+
+    // 1. Fetch User Profile (if not already from authUserProfile)
+    if (authUserProfile && authUserProfile.id === user.uid) { // Use id from UserProfileFromBackend
+        setProfile({
+            id: authUserProfile.id, 
+            firstName: authUserProfile.firstName,
+            lastName: authUserProfile.lastName,
+            email: authUserProfile.email || undefined,
+            assignedRoleNames: authUserProfile.assignedRoleNames || [], 
+        });
+    } else {
+        const profileResult = await apiClient<UserProfile>({ 
           method: 'GET',
-          path: '/assignments?user_id=me&assignableType=event', 
+          path: '/users/me',
           token: idToken,
         });
-        
-        const futureEventAssignments = eventAssignmentsData.filter(a => {
-          if (!a.assignableStartDate || !isValid(parseISO(a.assignableStartDate))) {
-            return ['confirmed', 'pending_confirmation', 'interested'].includes(a.status);
-          }
-          return isFuture(parseISO(a.assignableStartDate)) || format(parseISO(a.assignableStartDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
-        });
-        futureEventAssignments.sort((a, b) => {
-            if (!a.assignableStartDate) return 1;
-            if (!b.assignableStartDate) return -1;
-            return parseISO(a.assignableStartDate).getTime() - parseISO(b.assignableStartDate).getTime();
-        });
-        setUpcomingEvents(futureEventAssignments);
-
-        const wgAssignmentsData = await apiClient<Assignment[]>({
-          method: 'GET',
-          path: '/assignments?user_id=me&assignableType=workingGroup', 
-          token: idToken,
-        });
-        setActiveWorkingGroups(wgAssignmentsData.filter(a => a.status === 'active'));
-
-        setLoadingStats(true);
-        setUserTotalHours(null); // Reset before fetching
-        try {
-            const report = await apiClient<VolunteerActivityReport>({
-                method: 'GET',
-                path: '/api/reports/volunteer-activity', // Updated path
-                token: idToken,
-            });
-            
-            // Find the current user's entry in the report data
-            const currentUserEntry = report.data.find(entry => entry.userId === user.uid);
-            if (currentUserEntry) {
-                setUserTotalHours(currentUserEntry.totalHours);
-            } else {
-                // If user has no activity, or if endpoint was restricted and returned empty/error handled by apiClient
-                // This might happen if the user is not an admin and the endpoint requires admin privileges
-                // Or if the user simply has no recorded hours.
-                setUserTotalHours(0); // Default to 0 if not found or not accessible
-            }
-        } catch (statsErr: any) {
-            console.error('Failed to load volunteer activity stats:', statsErr);
-            // If the endpoint is permission-restricted and user is not admin, this catch will likely be hit.
-            setUserTotalHours(0); // Default to 0 on error for now
-        } finally {
-            setLoadingStats(false);
+        if (!profileResult.ok) {
+          console.error('Failed to load user profile:', profileResult.error);
+          if (profileResult.status === 401) { await logout(); criticalErrorOccurred = true; } 
+          else { setError(profileResult.error?.message || 'Failed to load profile.'); }
+        } else if (profileResult.data) {
+          setProfile(profileResult.data);
         }
+    }
+    if (criticalErrorOccurred) { setLoadingData(false); return; }
 
-      } catch (err: any) {
-        console.error('Failed to load dashboard data:', err);
-        setError(err.message || 'Failed to load dashboard data.');
-      } finally {
-        setLoadingData(false);
-      }
-    };
 
-    fetchData();
-  }, [idToken, user, authContextLoading, authUserProfile]);
+    // 2. Fetch Event Assignments
+    const eventAssignmentsResult = await apiClient<Assignment[]>({
+      method: 'GET',
+      path: '/assignments?user_id=me&assignableType=event', 
+      token: idToken,
+    });
+    if (!eventAssignmentsResult.ok) {
+      console.error('Failed to load event assignments:', eventAssignmentsResult.error);
+      if (eventAssignmentsResult.status === 401) { await logout(); criticalErrorOccurred = true; }
+      else { setError(prev => prev || eventAssignmentsResult.error?.message || 'Failed to load event assignments.'); }
+    } else if (eventAssignmentsResult.data) {
+      const futureEventAssignments = eventAssignmentsResult.data.filter(a => {
+        if (!a.assignableStartDate || !isValid(parseISO(a.assignableStartDate))) {
+          return ['confirmed', 'pending_confirmation', 'interested'].includes(a.status);
+        }
+        return isFuture(parseISO(a.assignableStartDate)) || format(parseISO(a.assignableStartDate), 'yyyy-MM-dd') === format(new Date(), 'yyyy-MM-dd');
+      });
+      futureEventAssignments.sort((a, b) => {
+          if (!a.assignableStartDate) return 1;
+          if (!b.assignableStartDate) return -1;
+          return parseISO(a.assignableStartDate).getTime() - parseISO(b.assignableStartDate).getTime();
+      });
+      setUpcomingEvents(futureEventAssignments);
+    }
+    if (criticalErrorOccurred) { setLoadingData(false); return; }
+
+    // 3. Fetch Working Group Assignments
+    const wgAssignmentsResult = await apiClient<Assignment[]>({
+      method: 'GET',
+      path: '/assignments?user_id=me&assignableType=workingGroup', 
+      token: idToken,
+    });
+    if (!wgAssignmentsResult.ok) {
+      console.error('Failed to load working group assignments:', wgAssignmentsResult.error);
+      if (wgAssignmentsResult.status === 401) { await logout(); criticalErrorOccurred = true; }
+      else { setError(prev => prev || wgAssignmentsResult.error?.message || 'Failed to load working group assignments.'); }
+    } else if (wgAssignmentsResult.data) {
+      setActiveWorkingGroups(wgAssignmentsResult.data.filter(a => a.status === 'active'));
+    }
+    if (criticalErrorOccurred) { setLoadingData(false); return; }
+
+    // 4. Fetch Volunteer Activity Stats (nested, keep its own loading)
+    setLoadingStats(true);
+    setUserTotalHours(null); 
+    const reportResult = await apiClient<VolunteerActivityReport>({
+        method: 'GET',
+        path: '/api/reports/volunteer-activity',
+        token: idToken,
+    });
+    if (!reportResult.ok) {
+        console.error('Failed to load volunteer activity stats:', reportResult.error);
+        // If stats fail with 401, it's less critical than main data, don't necessarily logout entire page
+        // unless this endpoint is vital for dashboard function. For now, just show 0.
+        if (reportResult.status === 401) {
+            console.warn("DashboardPage: Unauthorized (401) fetching volunteer stats. User might not have permission for this report.");
+            // Consider if logout is appropriate or if this is a permissions issue for this specific report
+        }
+        setUserTotalHours(0); 
+    } else if (reportResult.data) {
+        const currentUserEntry = reportResult.data.data.find(entry => entry.userId === user.uid);
+        setUserTotalHours(currentUserEntry ? currentUserEntry.totalHours : 0);
+    } else {
+        setUserTotalHours(0); // Default if data is null even if ok
+    }
+    setLoadingStats(false);
+
+    setLoadingData(false); // All main data loaded or handled
+  }, [idToken, user, authContextLoading, authUserProfile, logout]); // Added logout
+
+  useEffect(() => {
+    if (!authContextLoading && user) { // Only fetch if user is determined and present
+      fetchData();
+    } else if (!authContextLoading && !user) { // No user after auth check
+      setLoadingData(false); // Stop loading as there's no user to fetch data for
+      // Redirect is handled by AuthContext/DashboardLayout
+    }
+  }, [authContextLoading, user, fetchData]);
+
 
   const allQuickLinks: QuickLinkItem[] = [
     { href: '/dashboard/events/new', label: 'Create New Event', icon: 'add_circle_outline', privilege: { resource: 'events', action: 'create' } },
@@ -161,37 +181,48 @@ export default function DashboardPage() {
     !link.privilege || hasPrivilege(link.privilege.resource, link.privilege.action)
   );
 
-  if (authContextLoading || (loadingData && !profile && !authUserProfile)) {
+  // Combined loading state for initial render. AuthContext handles its own loading for redirect.
+  // If authContextLoading is true, DashboardLayout shows its own loader.
+  // This loader is for when auth is done, but page-specific data is still loading.
+  if (!authContextLoading && loadingData && !error) { 
     return (
       <div className="flex justify-center items-center min-h-[calc(100vh-10rem)]">
         <div className="flex items-center space-x-2 text-gray-500 dark:text-gray-400">
           <span className="material-icons animate-spin text-xl">sync</span>
-          <span>Loading dashboard...</span>
+          <span>Loading dashboard data...</span>
         </div>
       </div>
     );
   }
-
+  
+  // If an error occurred (and it wasn't a 401 that triggered logout)
   if (error) {
     return (
-      <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6">
+      <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 mt-8">
         <h2 className="text-xl font-semibold text-red-600 dark:text-red-400">Error</h2>
         <p className="mt-2 text-gray-600 dark:text-gray-300">{error}</p>
+        <button onClick={fetchData} className="mt-4 py-2 px-4 bg-indigo-500 text-white rounded hover:bg-indigo-600">Retry</button>
       </div>
     );
   }
   
-  const displayProfile = profile || (authUserProfile ? {
-      id: authUserProfile.uid, 
+  // If auth is done, data loading is done, no user (should be handled by layout redirect, but as a fallback)
+  if (!authContextLoading && !user) {
+      return null; // Layout should redirect
+  }
+
+  const displayProfileToRender = profile || (authUserProfile ? { // Renamed to avoid conflict
+      id: authUserProfile.id,  // Use id from UserProfileFromBackend
       firstName: authUserProfile.firstName,
       lastName: authUserProfile.lastName,
       email: authUserProfile.email || undefined,
-      assignedRoleNames: authUserProfile.assignedRoleNames || authUserProfile.assignedRoleIds, 
+      assignedRoleNames: authUserProfile.assignedRoleNames || [], 
   } : null);
 
-  const displayName = displayProfile?.firstName ? `${displayProfile.firstName} ${displayProfile.lastName || ''}` : user?.displayName || user?.email;
-  const rolesString = Array.isArray(displayProfile?.assignedRoleNames) ? displayProfile.assignedRoleNames.join(', ') : 
-                      (authUserProfile?.isSysadmin ? 'System Administrator' : 'User');
+  const displayName = displayProfileToRender?.firstName ? `${displayProfileToRender.firstName} ${displayProfileToRender.lastName || ''}` : user?.displayName || user?.email;
+  const rolesString = Array.isArray(displayProfileToRender?.assignedRoleNames) && displayProfileToRender.assignedRoleNames.length > 0 
+                      ? displayProfileToRender.assignedRoleNames.join(', ') 
+                      : (authUserProfile?.isSysadmin ? 'System Administrator' : 'User');
 
 
   return (

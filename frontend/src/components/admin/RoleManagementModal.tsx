@@ -1,14 +1,14 @@
 "use client";
 
-import React, { useState, useEffect } from 'react'; // Removed useContext
-import apiClient from '@/lib/apiClient';
-import { useAuth } from '@/context/AuthContext'; // Import useAuth
+import React, { useState, useEffect } from 'react'; 
+import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
+import { useAuth } from '@/context/AuthContext'; 
 
 interface Role {
-  roleId: string; // This is the roleName (e.g., "sysadmin", "editor")
+  roleId: string; 
   roleName: string;
   description?: string;
-  privileges: Record<string, string[]>; // Assuming privileges structure, adjust if different
+  privileges: Record<string, string[]>; 
   isSystemRole: boolean;
 }
 
@@ -33,38 +33,41 @@ const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
   onClose,
   onRolesUpdated,
 }) => {
-  const { idToken, userProfile } = useAuth(); // Use the useAuth hook
+  const { idToken, userProfile, logout } = useAuth(); // Added logout
 
   const [availableRoles, setAvailableRoles] = useState<Role[]>([]);
   const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
   const [isLoading, setIsLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
-  // Determine if the current admin user can actually manage roles (e.g., has 'sysadmin' role)
-  // This is a safeguard, though the page opening this modal should already be protected.
-  const canAdminManageRoles = userProfile?.assignedRoleIds?.includes('sysadmin');
+  const canAdminManageRoles = userProfile?.isSysadmin || userProfile?.assignedRoleIds?.includes('sysadmin'); // Check isSysadmin too
 
   useEffect(() => {
     if (isOpen && idToken && canAdminManageRoles) {
-      setIsLoading(true);
-      setError(null);
-      apiClient<Role[]>({ path: '/roles', token: idToken })
-        .then(data => {
-          // Filter out system roles that are not 'sysadmin'
-          // Or, if 'sysadmin' should not be assignable here, filter it too.
-          // Current logic: allow assigning 'sysadmin', filter other non-assignable system roles.
-          setAvailableRoles(data.filter(role => !role.isSystemRole || role.roleName === 'sysadmin'));
-        })
-        .catch(err => {
-          console.error("Failed to fetch roles:", err);
-          setError(err.data?.detail || err.message || "Failed to load available roles.");
-        })
-        .finally(() => setIsLoading(false));
+      const fetchRoles = async () => {
+        setIsLoading(true);
+        setError(null);
+        const result: ApiResponse<Role[]> = await apiClient<Role[]>({ path: '/roles', token: idToken });
+
+        if (result.ok && result.data) {
+          setAvailableRoles(result.data.filter(role => !role.isSystemRole || role.roleName === 'sysadmin'));
+        } else {
+          console.error("Failed to fetch roles:", result.error);
+          if (result.status === 401) {
+            await logout();
+            // onClose(); // Optionally close modal on logout
+            return; // Stop further processing
+          }
+          setError(result.error?.message || "Failed to load available roles.");
+        }
+        setIsLoading(false);
+      };
+      fetchRoles();
     } else if (isOpen && !canAdminManageRoles) {
         setError("You do not have permission to manage roles.");
         setIsLoading(false);
     }
-  }, [isOpen, idToken, canAdminManageRoles]);
+  }, [isOpen, idToken, canAdminManageRoles, logout]); // Added logout
 
   useEffect(() => {
     if (user) {
@@ -87,21 +90,27 @@ const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
     }
     setIsLoading(true);
     setError(null);
-    try {
-      // The backend endpoint expects role IDs (which are roleNames in our case)
-      await apiClient({
-        method: 'PUT',
-        path: `/users/${user.uid}/roles`, 
-        token: idToken,
-        data: { assignedRoleIds: selectedRoleIds },
-      });
+
+    const result: ApiResponse<any> = await apiClient({ // Assuming any response or no content
+      method: 'PUT',
+      path: `/users/${user.uid}/roles`, 
+      token: idToken,
+      data: { assignedRoleIds: selectedRoleIds },
+    });
+
+    setIsLoading(false); // Set loading false after API call, before checking result
+
+    if (result.ok) {
       onRolesUpdated(user.uid, selectedRoleIds);
       onClose(); 
-    } catch (err: any) {
-      console.error("Failed to update user roles:", err);
-      setError(err.data?.detail || err.message || "Failed to update roles.");
-    } finally {
-      setIsLoading(false);
+    } else {
+      console.error("Failed to update user roles:", result.error);
+      if (result.status === 401) {
+        await logout();
+        // onClose(); // Optionally close modal on logout
+        return; // Stop further processing
+      }
+      setError(result.error?.message || "Failed to update roles.");
     }
   };
 
@@ -123,7 +132,7 @@ const RoleManagementModal: React.FC<RoleManagementModalProps> = ({
                   <div key={role.roleId} className="flex items-center p-2 hover:bg-gray-50 dark:hover:bg-gray-700 rounded">
                     <input
                       type="checkbox"
-                      id={`role-${role.roleId}-${user.uid}`} // Ensure unique ID if multiple modals could exist (though unlikely here)
+                      id={`role-${role.roleId}-${user.uid}`} 
                       value={role.roleId}
                       checked={selectedRoleIds.includes(role.roleId)}
                       onChange={() => handleRoleChange(role.roleId)}
