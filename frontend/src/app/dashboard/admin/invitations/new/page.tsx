@@ -106,7 +106,7 @@ export default function CreateInvitationPage() {
 
     try {
       await apiClient<InvitationCreateResponse>({ 
-        path: '/admin/invitations/', // Updated path to match admin_router prefix and endpoint
+        path: '/admin/invitations/', 
         token: idToken,
         method: 'POST',
         data: payload,
@@ -147,6 +147,8 @@ export default function CreateInvitationPage() {
     );
   }
 
+  const displayableRoles = allRoles.filter(role => role.id !== 'sysadmin');
+
   return (
     <main className="max-w-xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
@@ -181,13 +183,13 @@ export default function CreateInvitationPage() {
             />
           </div>
 
-          {allRoles.length > 0 && (
+          {displayableRoles.length > 0 && (
             <div>
                 <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                     Pre-assign Roles (Optional)
                 </label>
                 <div className="space-y-2 max-h-60 overflow-y-auto p-3 border border-gray-200 dark:border-gray-700 rounded-md">
-                    {allRoles.map(role => (
+                    {displayableRoles.map(role => (
                         <label key={role.id} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
                             <input
                             type="checkbox"
