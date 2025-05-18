@@ -25,9 +25,12 @@ import {
   FilterFn,
   Row,
 } from '@tanstack/react-table';
-import { format, isValid, parseISO } from 'date-fns'; // Import isValid and parseISO
+import { format, isValid, parseISO } from 'date-fns'; 
 
 // Interfaces (matching those in page.tsx)
+// Note: The ReportDonationEntry interface here should ideally match the actual data structure
+// coming from the backend (which is DonationResponse).
+// For clarity, we'll adjust accessorKeys below to match backend fields.
 interface DonationTypeSummary {
   type: string;
   count: number;
@@ -35,24 +38,26 @@ interface DonationTypeSummary {
 }
 
 interface MonetaryDonationTrendEntry {
-  period: string; // "YYYY-MM"
+  period: string; 
   totalAmount: number;
   count: number;
 }
 
+// This interface is used by the table, but data comes from DonationResponse model
+// which has 'donorName' and 'donationDate'.
 interface ReportDonationEntry {
   id: string;
-  donorDisplayName?: string | null;
+  donorName?: string | null; // Corresponds to donorName from backend
   type: string;
   amount?: number | null;
   description?: string | null;
-  dateReceived: string; // ISO string or YYYY-MM-DD
+  donationDate: string; // Corresponds to donationDate from backend
 }
 
 interface DonationInsightsReport {
   breakdownByType: DonationTypeSummary[];
   monetaryTrend: MonetaryDonationTrendEntry[];
-  recentDonations: ReportDonationEntry[];
+  recentDonations: ReportDonationEntry[]; // This list contains objects matching ReportDonationEntry
   totalMonetaryAmountOverall: number;
   totalDonationsCountOverall: number;
 }
@@ -84,11 +89,11 @@ const getChartColors = (isDark: boolean) => ({
     text: isDark ? '#FFFFFF' : '#374151',
     ticks: isDark ? '#D1D5DB' : '#4B5563',
     pieSliceColors: [
-        isDark ? 'rgba(99, 102, 241, 0.7)' : 'rgba(99, 102, 241, 0.9)',   // Indigo
-        isDark ? 'rgba(22, 163, 74, 0.7)' : 'rgba(22, 163, 74, 0.9)',    // Green
-        isDark ? 'rgba(234, 179, 8, 0.7)' : 'rgba(234, 179, 8, 0.9)',     // Yellow
-        isDark ? 'rgba(244, 63, 94, 0.7)' : 'rgba(244, 63, 94, 0.9)',     // Rose
-        isDark ? 'rgba(59, 130, 246, 0.7)' : 'rgba(59, 130, 246, 0.9)',   // Blue
+        isDark ? 'rgba(99, 102, 241, 0.7)' : 'rgba(99, 102, 241, 0.9)',   
+        isDark ? 'rgba(22, 163, 74, 0.7)' : 'rgba(22, 163, 74, 0.9)',    
+        isDark ? 'rgba(234, 179, 8, 0.7)' : 'rgba(234, 179, 8, 0.9)',     
+        isDark ? 'rgba(244, 63, 94, 0.7)' : 'rgba(244, 63, 94, 0.9)',     
+        isDark ? 'rgba(59, 130, 246, 0.7)' : 'rgba(59, 130, 246, 0.9)',   
     ],
     lineChartBorder: isDark ? 'rgba(79, 70, 229, 1)' : 'rgba(79, 70, 229, 1)',
     lineChartBackground: isDark ? 'rgba(79, 70, 229, 0.5)' : 'rgba(79, 70, 229, 0.5)',
@@ -101,7 +106,6 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
   const [isDarkMode, setIsDarkMode] = React.useState(false);
 
   React.useEffect(() => {
-    // Ensure this runs client-side only
     if (typeof window !== 'undefined') {
         setIsDarkMode(document.documentElement.classList.contains('dark'));
     }
@@ -112,24 +116,25 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
   const columns = useMemo<ColumnDef<ReportDonationEntry>[]>(
     () => [
       {
-        accessorKey: 'dateReceived',
+        accessorKey: 'donationDate', // Changed from 'dateReceived' to match backend field
         header: 'Date',
         cell: info => {
-          const dateValue = info.getValue(); // Get value, could be undefined
-
-          // Check if dateValue is a string and not empty
+          const dateValue = info.getValue(); 
           if (typeof dateValue === 'string' && dateValue.trim() !== '') {
-            let dateObj = parseISO(dateValue); // Try ISO format first
+            let dateObj = parseISO(dateValue); 
             if (!isValid(dateObj)) {
-              // If ISO parsing fails, try new Date() for formats like YYYY-MM-DD
               dateObj = new Date(dateValue);
             }
             return isValid(dateObj) ? format(dateObj, 'MMM dd, yyyy') : 'Invalid Date';
           }
-          return 'N/A'; // Return 'N/A' if dateValue is not a valid string
+          return 'N/A'; 
         }
       },
-      { accessorKey: 'donorDisplayName', header: 'Donor', cell: info => info.getValue() || 'Anonymous' },
+      { 
+        accessorKey: 'donorName', // Changed from 'donorDisplayName' to match backend field
+        header: 'Donor', 
+        cell: info => info.getValue() || 'Anonymous' 
+      },
       { accessorKey: 'type', header: 'Type', cell: info => info.getValue() },
       { 
         accessorKey: 'amount', 
@@ -137,7 +142,7 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
         cell: info => {
           const type = info.row.original.type;
           const amount = info.getValue() as number | null;
-          if (type === 'monetary' && amount != null) { // Match backend 'monetary'
+          if (type === 'monetary' && amount != null) { 
             return `$${amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
           }
           return info.row.original.description || 'N/A';
@@ -210,10 +215,8 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
   const exportToCsv = () => {
     if (!report?.recentDonations) return;
     const csvHeaders = columns.map(colDef => {
-        // For complex headers or those returning JSX, provide a string representation
         if (typeof colDef.header === 'function') {
-            // This is a simplified way; ideally, header definitions would have a 'meta.csvHeader' or similar
-            return colDef.accessorKey || ''; // Fallback to accessorKey
+            return (colDef as any).accessorKey || ''; 
         }
         return colDef.header as string;
     }).join(',');
@@ -221,18 +224,14 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
     const csvRows = table.getRowModel().rows.map(row => {
         return columns.map(colDef => {
             let cellValue: any;
-            if (colDef.accessorKey) {
-                 cellValue = row.original[colDef.accessorKey as keyof ReportDonationEntry];
+            const accessor = (colDef as any).accessorKey as keyof ReportDonationEntry;
+            if (accessor) {
+                 cellValue = row.original[accessor];
             } else if (typeof colDef.cell === 'function') {
-                // If no accessorKey, try to render cell (might be complex) or use a specific export value
-                // This part might need more robust handling for complex cells
-                cellValue = flexRender(colDef.cell, { row } as any); // Simplified context
+                cellValue = flexRender(colDef.cell, { row } as any); 
             }
 
-
-            if (colDef.accessorKey === 'dateReceived') {
-                // Use the already robust parsing logic from the cell renderer if possible,
-                // or ensure similar robustness here.
+            if (accessor === 'donationDate') { // Changed from 'dateReceived'
                 if (typeof cellValue === 'string' && cellValue.trim() !== '') {
                     let dateObj = parseISO(cellValue);
                     if (!isValid(dateObj)) {
@@ -242,9 +241,9 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
                 } else {
                     cellValue = 'N/A';
                 }
-            } else if (colDef.accessorKey === 'amount' && row.original.type === 'monetary') {
+            } else if (accessor === 'amount' && row.original.type === 'monetary') {
                 cellValue = (cellValue as number | null)?.toString() ?? '';
-            } else if (colDef.accessorKey === 'amount') { // For non-monetary, use description
+            } else if (accessor === 'amount') { 
                 cellValue = row.original.description || '';
             }
             return `"${String(cellValue ?? '').replace(/"/g, '""')}"`;
