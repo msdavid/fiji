@@ -45,11 +45,22 @@ class RoleUpdate(BaseModel):
 class RoleResponse(RoleBase): # Inherits roleName, description, privileges from RoleBase
     """
     Model for returning role data in API responses.
-    'roleName' (inherited) is the document ID. 'roleId' is included for explicit ID representation.
+    'roleName' (inherited) is the document ID. 'id' is included for explicit ID representation.
     """
-    roleId: str = Field(..., description="Unique ID of the role (this will be the same as roleName).")
+    id: str = Field(..., description="Unique ID of the role (this will be the same as roleName).")
     isSystemRole: bool = Field(default=False, description="Indicates if the role is a system-defined role.")
     createdAt: datetime.datetime = Field(..., description="Timestamp of when the role was created.")
     updatedAt: datetime.datetime = Field(..., description="Timestamp of when the role was last updated.")
 
     model_config = ConfigDict(from_attributes=True)
+
+    # If roleName is the document ID from Firestore and you want it to populate 'id'
+    # and also be available as 'roleName', Pydantic v2 handles this well if the input data
+    # for RoleResponse has 'roleName' and you want 'id' to be an alias or copy.
+    # If the input data (e.g., Firestore document snapshot) has '.id' for the document ID
+    # and also 'roleName' in its fields, then 'id' would map from '.id' and 'roleName' from its field.
+    # Given the current structure, 'roleName' is the ID.
+    # We need to ensure 'id' gets populated correctly from 'roleName' in the router if not automatic.
+    # Pydantic's from_attributes=True will try to map fields. If the input object has 'roleName',
+    # and RoleResponse has 'id', we might need a resolver or ensure the input dict has 'id' populated.
+    # For now, let's assume the router logic will handle populating 'id' with the document's ID (roleName).

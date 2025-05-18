@@ -42,7 +42,7 @@ async def create_role(role_data: RoleCreate, db: firestore.AsyncClient = Depends
         created_role_doc = await doc_ref.get()
         if created_role_doc.exists:
             response_data = created_role_doc.to_dict()
-            response_data['roleId'] = created_role_doc.id
+            response_data['id'] = created_role_doc.id # Changed 'roleId' to 'id'
             return RoleResponse(**response_data)
         else:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve role after creation.")
@@ -62,13 +62,13 @@ async def get_all_roles(db: firestore.AsyncClient = Depends(get_db)):
     try:
         roles_list = []
         docs_stream = db.collection(ROLES_COLLECTION).stream()
-        async for doc in docs_stream: # Changed to async for
+        async for doc in docs_stream: 
             role_dict = doc.to_dict()
-            role_dict['roleId'] = doc.id
+            role_dict['id'] = doc.id # Changed 'roleId' to 'id'
             roles_list.append(RoleResponse(**role_dict))
         return roles_list
     except Exception as e:
-        print(f"Error getting all roles: {e}") # This will now print the original error if it's not the iteration issue
+        print(f"Error getting all roles: {e}") 
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred while fetching roles: {str(e)}")
 
 
@@ -82,7 +82,7 @@ async def get_role_by_name(role_name: str, db: firestore.AsyncClient = Depends(g
         role_doc = await doc_ref.get()
         if role_doc.exists:
             response_data = role_doc.to_dict()
-            response_data['roleId'] = role_doc.id
+            response_data['id'] = role_doc.id # Changed 'roleId' to 'id'
             return RoleResponse(**response_data)
         else:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Role '{role_name}' not found")
@@ -121,7 +121,7 @@ async def update_role(role_name: str, role_update_data: RoleUpdate, db: firestor
 
         updated_role_doc = await doc_ref.get()
         response_data = updated_role_doc.to_dict()
-        response_data['roleId'] = updated_role_doc.id
+        response_data['id'] = updated_role_doc.id # Changed 'roleId' to 'id'
         return RoleResponse(**response_data)
 
     except HTTPException:
@@ -150,7 +150,7 @@ async def delete_role(role_name: str, db: firestore.AsyncClient = Depends(get_db
         users_with_role_query = db.collection(USERS_COLLECTION).where("assignedRoleIds", "array-contains", role_name).limit(1).stream()
         
         user_assigned = False
-        async for _ in users_with_role_query: # Iterate to check if any document is returned
+        async for _ in users_with_role_query: 
             user_assigned = True
             break
         
