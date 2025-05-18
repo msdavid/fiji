@@ -49,6 +49,7 @@ class RoleResponse(RoleBase): # Inherits roleName, description, privileges from 
     """
     id: str = Field(..., description="Unique ID of the role (this will be the same as roleName).")
     isSystemRole: bool = Field(default=False, description="Indicates if the role is a system-defined role.")
+    userCount: Optional[int] = Field(None, description="Number of users assigned to this role.") # Added userCount
     createdAt: datetime.datetime = Field(..., description="Timestamp of when the role was created.")
     updatedAt: datetime.datetime = Field(..., description="Timestamp of when the role was last updated.")
 

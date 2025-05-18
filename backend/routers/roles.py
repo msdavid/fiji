@@ -4,7 +4,7 @@ from firebase_admin import firestore # For firestore.SERVER_TIMESTAMP and type h
 
 # Use direct imports from subdirectories of 'backend'
 from dependencies.database import get_db
-from dependencies.rbac import require_permission # Import the new RBAC dependency
+from dependencies.rbac import require_permission 
 from models.role import RoleCreate, RoleUpdate, RoleResponse
 
 router = APIRouter(
@@ -13,7 +13,7 @@ router = APIRouter(
 )
 
 ROLES_COLLECTION = "roles"
-USERS_COLLECTION = "users" # For checking role assignments
+USERS_COLLECTION = "users" 
 
 @router.post(
     "/",
@@ -33,7 +33,7 @@ async def create_role(role_data: RoleCreate, db: firestore.AsyncClient = Depends
             raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail=f"Role with name '{role_data.roleName}' already exists.")
 
         new_role_dict = role_data.model_dump()
-        new_role_dict["isSystemRole"] = False # API-created roles are not system roles
+        new_role_dict["isSystemRole"] = False 
         new_role_dict["createdAt"] = firestore.SERVER_TIMESTAMP
         new_role_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
 
@@ -42,7 +42,9 @@ async def create_role(role_data: RoleCreate, db: firestore.AsyncClient = Depends
         created_role_doc = await doc_ref.get()
         if created_role_doc.exists:
             response_data = created_role_doc.to_dict()
-            response_data['id'] = created_role_doc.id # Changed 'roleId' to 'id'
+            response_data['id'] = created_role_doc.id 
+            # For a newly created role, userCount will be 0
+            response_data['userCount'] = 0
             return RoleResponse(**response_data)
         else:
             raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve role after creation.")
@@ -58,14 +60,29 @@ async def create_role(role_data: RoleCreate, db: firestore.AsyncClient = Depends
 async def get_all_roles(db: firestore.AsyncClient = Depends(get_db)):
     """
     Get all roles. Requires 'roles:list' permission.
+    Includes the count of users assigned to each role.
     """
     try:
         roles_list = []
-        docs_stream = db.collection(ROLES_COLLECTION).stream()
-        async for doc in docs_stream: 
-            role_dict = doc.to_dict()
-            role_dict['id'] = doc.id # Changed 'roleId' to 'id'
+        roles_docs_stream = db.collection(ROLES_COLLECTION).stream()
+        
+        async for role_doc in roles_docs_stream: 
+            role_dict = role_doc.to_dict()
+            role_id = role_doc.id # This is the roleName
+            role_dict['id'] = role_id
+            
+            # Query users collection to count users assigned to this role
+            # The role_id (which is roleName) is stored in the user's assignedRoleIds array
+            users_with_role_query = db.collection(USERS_COLLECTION).where("assignedRoleIds", "array_contains", role_id)
+            # To get just the count efficiently, we can stream and count, or use a count aggregate if available and preferred.
+            # Streaming and counting manually:
+            count = 0
+            async for _ in users_with_role_query.stream(): # Iterate over the stream to count
+                count += 1
+            role_dict['userCount'] = count
+            
             roles_list.append(RoleResponse(**role_dict))
+            
         return roles_list
     except Exception as e:
         print(f"Error getting all roles: {e}") 
@@ -76,13 +93,22 @@ async def get_all_roles(db: firestore.AsyncClient = Depends(get_db)):
 async def get_role_by_name(role_name: str, db: firestore.AsyncClient = Depends(get_db)):
     """
     Get a specific role by its name (which is its ID). Requires 'roles:view' permission.
+    Includes the count of users assigned to this role.
     """
     try:
         doc_ref = db.collection(ROLES_COLLECTION).document(role_name)
         role_doc = await doc_ref.get()
         if role_doc.exists:
             response_data = role_doc.to_dict()
-            response_data['id'] = role_doc.id # Changed 'roleId' to 'id'
+            response_data['id'] = role_doc.id 
+
+            # Calculate userCount for this specific role
+            users_with_role_query = db.collection(USERS_COLLECTION).where("assignedRoleIds", "array_contains", role_name)
+            count = 0
+            async for _ in users_with_role_query.stream():
+                count += 1
+            response_data['userCount'] = count
+            
             return RoleResponse(**response_data)
         else:
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Role '{role_name}' not found")
@@ -97,7 +123,7 @@ async def get_role_by_name(role_name: str, db: firestore.AsyncClient = Depends(g
 async def update_role(role_name: str, role_update_data: RoleUpdate, db: firestore.AsyncClient = Depends(get_db)):
     """
     Update an existing role by its name (ID). 'roleName' itself cannot be changed.
-    Requires 'roles:edit' permission.
+    Requires 'roles:edit' permission. User count is re-fetched for the response.
     """
     try:
         doc_ref = db.collection(ROLES_COLLECTION).document(role_name)
@@ -121,7 +147,15 @@ async def update_role(role_name: str, role_update_data: RoleUpdate, db: firestor
 
         updated_role_doc = await doc_ref.get()
         response_data = updated_role_doc.to_dict()
-        response_data['id'] = updated_role_doc.id # Changed 'roleId' to 'id'
+        response_data['id'] = updated_role_doc.id 
+
+        # Re-calculate userCount for the updated role response
+        users_with_role_query = db.collection(USERS_COLLECTION).where("assignedRoleIds", "array_contains", role_name)
+        count = 0
+        async for _ in users_with_role_query.stream():
+            count += 1
+        response_data['userCount'] = count
+        
         return RoleResponse(**response_data)
 
     except HTTPException:
@@ -146,8 +180,7 @@ async def delete_role(role_name: str, db: firestore.AsyncClient = Depends(get_db
         if role_doc.to_dict().get("isSystemRole"):
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=f"System role '{role_name}' cannot be deleted.")
 
-        # Check if the role is assigned to any users
-        users_with_role_query = db.collection(USERS_COLLECTION).where("assignedRoleIds", "array-contains", role_name).limit(1).stream()
+        users_with_role_query = db.collection(USERS_COLLECTION).where("assignedRoleIds", "array_contains", role_name).limit(1).stream() 
         
         user_assigned = False
         async for _ in users_with_role_query: 

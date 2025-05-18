@@ -64,24 +64,40 @@ async def _get_role_names(db: firestore.AsyncClient, role_ids: List[str]) -> Lis
 async def list_users(
     db: firestore.AsyncClient = Depends(get_db),
     offset: int = 0,
-    limit: int = Query(default=20, le=100) 
+    limit: int = Query(default=20, le=100),
+    roleId: Optional[str] = Query(None, description="Filter users by assigned role ID (exact match on roleName).") 
 ):
     try:
         users_ref = db.collection(USERS_COLLECTION)
-        # Basic pagination and ordering
-        query = users_ref.order_by("lastName").order_by("firstName").limit(limit).offset(offset)
+        
+        query = users_ref.order_by("lastName").order_by("firstName")
+
+        if roleId:
+            query = query.where("assignedRoleIds", "array_contains", roleId) # Corrected operator to "array_contains"
+        
+        query = query.limit(limit).offset(offset)
+        
         docs_snapshot = query.stream()
         
         users_list = []
         async for doc in docs_snapshot:
             user_data = doc.to_dict()
-            user_data['id'] = doc.id
+            user_data['id'] = doc.id 
             
             user_data = _sanitize_user_data_fields(user_data) 
             
             user_data["assignedRoleNames"] = await _get_role_names(db, user_data.get("assignedRoleIds", []))
             
-            users_list.append(UserListResponse(**user_data))
+            users_list.append(UserListResponse(
+                id=user_data['id'],
+                email=user_data.get('email', 'N/A'),
+                firstName=user_data.get('firstName'),
+                lastName=user_data.get('lastName'),
+                status=user_data.get('status', 'unknown'),
+                assignedRoleIds=user_data.get('assignedRoleIds', []), 
+                assignedRoleNames=user_data.get('assignedRoleNames', []),
+                createdAt=user_data.get('createdAt', datetime.datetime.now(datetime.timezone.utc)) 
+            ))
             
         return users_list
     except Exception as e:
@@ -100,7 +116,6 @@ async def search_users(
     users_list = []
 
     try:
-        # This is a very basic search. For production, consider Firestore native indexing or a dedicated search service.
         all_users_snapshot = await db.collection(USERS_COLLECTION).get()
 
         for doc in all_users_snapshot:
@@ -121,7 +136,7 @@ async def search_users(
                     email=user_data.get("email") 
                 ))
             
-            if len(users_list) >= 20: # Limit results for performance
+            if len(users_list) >= 20: 
                 break
         
         return users_list
@@ -132,7 +147,7 @@ async def search_users(
 
 @router.get("/me", response_model=UserResponse)
 async def read_users_me(
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac), # This now contains privileges
+    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac), 
     db: firestore.AsyncClient = Depends(get_db)
 ):
     user_doc_snap = await db.collection(USERS_COLLECTION).document(current_rbac_user.uid).get()
@@ -140,15 +155,12 @@ async def read_users_me(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Current user not found in Firestore")
     
     user_data = user_doc_snap.to_dict()
-    user_data['id'] = user_doc_snap.id # Ensure 'id' field is present for Pydantic model
+    user_data['id'] = user_doc_snap.id 
     
     user_data = _sanitize_user_data_fields(user_data) 
     
-    # Get role names
     user_data["assignedRoleNames"] = await _get_role_names(db, user_data.get("assignedRoleIds", []))
     
-    # Add privileges and isSysadmin from RBACUser to the response data
-    # Convert sets of privileges to lists for JSON serialization compatibility with Pydantic model
     user_data["privileges"] = {resource: list(actions) for resource, actions in current_rbac_user.privileges.items()}
     user_data["isSysadmin"] = current_rbac_user.is_sysadmin
     
@@ -162,7 +174,6 @@ async def update_users_me(
 ):
     user_ref = db.collection(USERS_COLLECTION).document(current_rbac_user.uid)
     
-    # Exclude fields that users should not update for themselves directly via this endpoint
     update_dict = user_update_data.model_dump(exclude_unset=True, exclude={"assignedRoleIds", "status", "email"}) 
     
     if not update_dict:
@@ -179,7 +190,6 @@ async def update_users_me(
         response_data = _sanitize_user_data_fields(response_data) 
         
         response_data["assignedRoleNames"] = await _get_role_names(db, response_data.get("assignedRoleIds", []))
-        # Re-add privileges and isSysadmin for the response after update
         response_data["privileges"] = {resource: list(actions) for resource, actions in current_rbac_user.privileges.items()}
         response_data["isSysadmin"] = current_rbac_user.is_sysadmin
 
@@ -190,14 +200,6 @@ async def update_users_me(
 
 @router.get("/{user_id}", response_model=UserResponse, dependencies=[Depends(require_permission("users", "view"))])
 async def get_user(user_id: str, db: firestore.AsyncClient = Depends(get_db)):
-    # Note: This endpoint currently doesn't return the target user's specific privileges,
-    # only the calling user's context would have that via RBACUser.
-    # If we need to show target user's privileges, we'd need to compute them here similarly to get_current_user_with_rbac.
-    # For now, UserResponse model expects 'privileges', so we might need to adjust or provide empty.
-    # Let's assume for now this endpoint is primarily for user data, not their full privilege set.
-    # The UserResponse model now requires 'privileges' and 'isSysadmin'.
-    # We need to calculate these for the target user.
-
     user_doc_snap = await db.collection(USERS_COLLECTION).document(user_id).get()
     if not user_doc_snap.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{user_id}' not found")
@@ -209,17 +211,16 @@ async def get_user(user_id: str, db: firestore.AsyncClient = Depends(get_db)):
     
     user_data["assignedRoleNames"] = await _get_role_names(db, user_data.get("assignedRoleIds", []))
 
-    # Calculate privileges and isSysadmin for the target user
     target_user_assigned_roles = user_data.get("assignedRoleIds", [])
     target_is_sysadmin = "sysadmin" in target_user_assigned_roles
     target_privileges: Dict[str, Set[str]] = {}
 
     if not target_is_sysadmin and target_user_assigned_roles:
-        for role_id in target_user_assigned_roles:
-            role_doc_ref = db.collection(ROLES_COLLECTION).document(role_id)
+        for role_id_val in target_user_assigned_roles: 
+            role_doc_ref = db.collection(ROLES_COLLECTION).document(role_id_val)
             role_doc = await role_doc_ref.get()
             if role_doc.exists:
-                role_data_for_priv = role_doc.to_dict() # Renamed to avoid conflict
+                role_data_for_priv = role_doc.to_dict() 
                 privs_for_role = role_data_for_priv.get("privileges", {})
                 for resource, actions in privs_for_role.items():
                     if not isinstance(actions, list): continue
@@ -238,22 +239,21 @@ async def update_user_by_admin(
     user_id: str,
     user_update_data: UserUpdate, 
     db: firestore.AsyncClient = Depends(get_db),
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac) # To get current admin's context if needed
+    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac) 
 ):
     user_ref = db.collection(USERS_COLLECTION).document(user_id)
-    user_doc_snap = await user_ref.get() # Renamed from user_doc to user_doc_snap
+    user_doc_snap = await user_ref.get() 
     if not user_doc_snap.exists:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{user_id}' not found")
 
     update_dict = user_update_data.model_dump(exclude_unset=True)
     
-    # Prevent email change by admin through this endpoint; should be a separate process if allowed
-    if "email" in update_dict and update_dict["email"] != user_doc_snap.to_dict().get("email"):
-        # Log this attempt or handle as per policy, for now, just removing it from update
+    current_user_data = user_doc_snap.to_dict()
+    if "email" in update_dict and update_dict["email"] != current_user_data.get("email"):
         print(f"Admin {current_rbac_user.uid} attempt to change email for user {user_id} was ignored.")
         del update_dict["email"] 
 
-    if not update_dict: # If only email was provided and then removed, dict might be empty
+    if not update_dict: 
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No valid update data provided.")
 
     update_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
@@ -268,13 +268,12 @@ async def update_user_by_admin(
         
         response_data["assignedRoleNames"] = await _get_role_names(db, response_data.get("assignedRoleIds", []))
 
-        # Recalculate privileges and isSysadmin for the response
         target_user_assigned_roles = response_data.get("assignedRoleIds", [])
         target_is_sysadmin = "sysadmin" in target_user_assigned_roles
         target_privileges: Dict[str, Set[str]] = {}
         if not target_is_sysadmin and target_user_assigned_roles:
-            for role_id in target_user_assigned_roles:
-                role_doc_ref = db.collection(ROLES_COLLECTION).document(role_id)
+            for role_id_val in target_user_assigned_roles: 
+                role_doc_ref = db.collection(ROLES_COLLECTION).document(role_id_val)
                 role_doc = await role_doc_ref.get()
                 if role_doc.exists:
                     role_data_for_priv = role_doc.to_dict()
@@ -291,3 +290,72 @@ async def update_user_by_admin(
         return UserResponse(**response_data)
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=str(e))
+
+# --- New Endpoints for Assigning/Unassigning Roles ---
+
+@router.post(
+    "/{user_id}/roles/{role_id_to_assign}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission("roles", "manage_assignments"))] 
+)
+async def assign_role_to_user(
+    user_id: str,
+    role_id_to_assign: str, 
+    db: firestore.AsyncClient = Depends(get_db)
+):
+    """
+    Assigns a role to a user. The role_id_to_assign is the roleName.
+    Requires 'roles:manage_assignments' permission.
+    """
+    user_doc_ref = db.collection(USERS_COLLECTION).document(user_id)
+    role_doc_ref = db.collection(ROLES_COLLECTION).document(role_id_to_assign)
+
+    user_doc = await user_doc_ref.get()
+    if not user_doc.exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{user_id}' not found.")
+
+    role_doc = await role_doc_ref.get()
+    if not role_doc.exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Role '{role_id_to_assign}' not found.")
+
+    try:
+        await user_doc_ref.update({
+            "assignedRoleIds": firestore.ArrayUnion([role_id_to_assign]),
+            "updatedAt": firestore.SERVER_TIMESTAMP
+        })
+    except Exception as e:
+        print(f"Error assigning role {role_id_to_assign} to user {user_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+    
+    return 
+
+@router.delete(
+    "/{user_id}/roles/{role_id_to_unassign}",
+    status_code=status.HTTP_204_NO_CONTENT,
+    dependencies=[Depends(require_permission("roles", "manage_assignments"))] 
+)
+async def unassign_role_from_user(
+    user_id: str,
+    role_id_to_unassign: str, 
+    db: firestore.AsyncClient = Depends(get_db)
+):
+    """
+    Unassigns a role from a user. The role_id_to_unassign is the roleName.
+    Requires 'roles:manage_assignments' permission.
+    """
+    user_doc_ref = db.collection(USERS_COLLECTION).document(user_id)
+
+    user_doc = await user_doc_ref.get()
+    if not user_doc.exists:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"User '{user_id}' not found.")
+    
+    try:
+        await user_doc_ref.update({
+            "assignedRoleIds": firestore.ArrayRemove([role_id_to_unassign]),
+            "updatedAt": firestore.SERVER_TIMESTAMP
+        })
+    except Exception as e:
+        print(f"Error unassigning role {role_id_to_unassign} from user {user_id}: {e}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+    return

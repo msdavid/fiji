@@ -24,13 +24,15 @@ export default function AdminRoleManagementPage() {
   const [error, setError] = useState<string | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
 
-  const canViewRoles = adminUserProfile && (hasPrivilege ? hasPrivilege('roles', 'list') : adminUserProfile?.assignedRoleIds?.includes('sysadmin'));
+  // Privileges are now more granular
+  const canListRoles = adminUserProfile && (hasPrivilege ? hasPrivilege('roles', 'list') : adminUserProfile?.assignedRoleIds?.includes('sysadmin'));
+  const canViewRoleDetails = adminUserProfile && (hasPrivilege ? hasPrivilege('roles', 'view') : adminUserProfile?.assignedRoleIds?.includes('sysadmin'));
   const canCreateRoles = adminUserProfile && (hasPrivilege ? hasPrivilege('roles', 'create') : adminUserProfile?.assignedRoleIds?.includes('sysadmin'));
   const canEditRoles = adminUserProfile && (hasPrivilege ? hasPrivilege('roles', 'edit') : adminUserProfile?.assignedRoleIds?.includes('sysadmin'));
   const canDeleteRoles = adminUserProfile && (hasPrivilege ? hasPrivilege('roles', 'delete') : adminUserProfile?.assignedRoleIds?.includes('sysadmin'));
 
   const fetchRoles = useCallback(async () => {
-    console.log("fetchRoles called. User:", !!user, "AdminProfile:", !!adminUserProfile, "CanViewRoles:", canViewRoles);
+    console.log("fetchRoles called. User:", !!user, "AdminProfile:", !!adminUserProfile, "CanListRoles:", canListRoles);
     if (!user) {
         setIsLoading(false);
         return;
@@ -39,8 +41,8 @@ export default function AdminRoleManagementPage() {
         setIsLoading(false); 
         return;
     }
-    if (!canViewRoles) {
-        setError("You don't have permission to view roles.");
+    if (!canListRoles) { // Changed from canViewRoles to canListRoles for fetching the list
+        setError("You don't have permission to list roles.");
         setIsLoading(false);
         return;
     }
@@ -64,7 +66,6 @@ export default function AdminRoleManagementPage() {
       const rawData: Role[] = await response.json();
       console.log("Raw data from /roles API:", rawData);
       
-      // Ensure all roles have a valid ID; filter out those that don't.
       const validRoles = rawData.filter(role => {
         const isValid = role.id && typeof role.id === 'string' && role.id.trim() !== '';
         if (!isValid) {
@@ -81,7 +82,7 @@ export default function AdminRoleManagementPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, adminUserProfile, canViewRoles]); 
+  }, [user, adminUserProfile, canListRoles]); 
 
   useEffect(() => {
     if (!authLoading && !user) {
@@ -98,7 +99,6 @@ export default function AdminRoleManagementPage() {
 
   const filteredRoles = roles.filter(role => {
     if (!role || !role.id || typeof role.id !== 'string' || role.id.trim() === '') {
-        // This should ideally not happen if the filter in fetchRoles is effective
         console.warn("Filtered out role with invalid id during search filtering:", role);
         return false; 
     }
@@ -109,7 +109,6 @@ export default function AdminRoleManagementPage() {
     );
   });
   
-  // Log error state if it changes
   useEffect(() => {
     if (error) {
         console.error("Page error state:", error);
@@ -124,7 +123,7 @@ export default function AdminRoleManagementPage() {
     );
   }
 
-  if (!canViewRoles && adminUserProfile) { 
+  if (!canListRoles && adminUserProfile) { 
     return (
         <main className="max-w-2xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
             <div className="bg-white dark:bg-gray-900 shadow-xl rounded-lg p-6 sm:p-8 text-center">
@@ -173,7 +172,7 @@ export default function AdminRoleManagementPage() {
       ) : error ? (
         <div className="bg-red-50 dark:bg-red-900/30 p-4 rounded-md shadow text-center">
             <p className="text-red-700 dark:text-red-300">Error: {error}</p>
-            {error !== "You don't have permission to view roles." && (
+            {error !== "You don't have permission to list roles." && ( // Adjusted error message check
               <button 
                   onClick={fetchRoles} 
                   className="mt-4 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center"
@@ -225,6 +224,11 @@ export default function AdminRoleManagementPage() {
                       {typeof role.userCount === 'number' ? role.userCount : <span className="italic text-gray-400 dark:text-gray-500">N/A</span>}
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm font-medium space-x-3">
+                      {canViewRoleDetails && (
+                        <Link href={`/dashboard/admin/roles/${role.id}`} className="text-blue-600 hover:text-blue-800 dark:text-blue-400 dark:hover:text-blue-200 inline-flex items-center">
+                          <span className="material-icons mr-1 text-sm">visibility</span>View
+                        </Link>
+                      )}
                       {canEditRoles && (
                         <Link href={`/dashboard/admin/roles/${role.id}/edit`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 inline-flex items-center">
                           <span className="material-icons mr-1 text-sm">edit</span>Edit
