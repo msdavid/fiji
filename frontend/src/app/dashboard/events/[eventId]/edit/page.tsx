@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useRouter, useParams, useSearchParams } from 'next/navigation'; 
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import apiClient from '@/lib/apiClient'; 
 
 interface EventFormData {
   eventName: string;
@@ -18,6 +19,8 @@ interface EventFormData {
   organizerUserId: string | null; 
   icon: string; 
   point_of_contact?: string;
+  workingGroupIds: string[]; 
+  workingGroupId?: string | null; 
 
   id?: string;
   createdByUserId?: string;
@@ -30,6 +33,7 @@ interface EventFormData {
   organizerEmail?: string;
   isCurrentUserSignedUp?: boolean;
   currentUserAssignmentStatus?: string;
+  workingGroupNames?: string[]; 
 }
 
 interface UserSearchResult {
@@ -39,9 +43,16 @@ interface UserSearchResult {
   email: string;
 }
 
+interface WorkingGroup { 
+  id: string;
+  groupName: string; 
+  name?: string; 
+}
+
 const formatDateTimeForInput = (dateString: string | Date): string => {
   if (!dateString) return '';
   const date = new Date(dateString);
+  if (isNaN(date.getTime())) return ''; 
   const year = date.getFullYear();
   const month = (date.getMonth() + 1).toString().padStart(2, '0');
   const day = date.getDate().toString().padStart(2, '0');
@@ -68,8 +79,8 @@ export default function EditEventPage() {
   const searchParams = useSearchParams(); 
   const eventId = params.eventId as string;
 
-  const { user, loading: authLoading, userProfile, hasPrivilege } = useAuth(); 
-  const [formData, setFormData] = useState<Partial<EventFormData>>({ icon: 'event' }); 
+  const { user, loading: authLoading, userProfile, hasPrivilege, idToken } = useAuth(); 
+  const [formData, setFormData] = useState<Partial<EventFormData>>({ icon: 'event', workingGroupIds: [] }); 
   const [isLoadingEvent, setIsLoadingEvent] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -81,30 +92,60 @@ export default function EditEventPage() {
   const [selectedOrganizerName, setSelectedOrganizerName] = useState<string | null>(null);
   const [isSearchingOrganizers, setIsSearchingOrganizers] = useState(false);
 
-  const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
-  const canDeleteEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'delete') : userProfile.assignedRoleIds?.includes('sysadmin'));
+  const [workingGroups, setWorkingGroups] = useState<WorkingGroup[]>([]); 
+  const [isLoadingWorkingGroups, setIsLoadingWorkingGroups] = useState(true); 
+
+  const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.isSysadmin);
+  const canDeleteEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'delete') : userProfile.isSysadmin);
 
   const handleIconClick = () => {
     localStorage.setItem(`eventFormDraft-${eventId}`, JSON.stringify(formData));
     router.push(`/dashboard/events/select-icon?returnTo=/dashboard/events/${eventId}/edit`);
   };
 
+  useEffect(() => {
+    const fetchWorkingGroups = async () => {
+      if (!idToken) { setIsLoadingWorkingGroups(false); return; }
+      setIsLoadingWorkingGroups(true);
+      try {
+        const result = await apiClient<WorkingGroup[]>({
+          path: '/working-groups?fields=id,groupName,name', 
+          token: idToken,
+          method: 'GET',
+        });
+        if (result.ok && result.data) {
+          const normalizedWGs = result.data.map(wg => ({...wg, groupName: wg.groupName || wg.name || "Unnamed WG"}));
+          setWorkingGroups(normalizedWGs);
+        } else {
+          setError(prev => prev ? `${prev}\nFailed to load working groups.` : 'Failed to load working groups.');
+        }
+      } catch (err) {
+        setError(prev => prev ? `${prev}\nAn error occurred fetching working groups.` : 'An error occurred fetching working groups.');
+      } finally {
+        setIsLoadingWorkingGroups(false);
+      }
+    };
+    if (idToken) fetchWorkingGroups();
+  }, [idToken]);
+
+
   const fetchEventData = useCallback(async (initialLoad = true) => {
-    if (!user || !eventId) return;
+    if (!idToken || !eventId) return;
     if (initialLoad) setIsLoadingEvent(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${eventId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const result = await apiClient<EventFormData>({ 
+        path: `/events/${eventId}`,
+        token: idToken,
+        method: 'GET',
       });
-      if (!response.ok) {
-        if (response.status === 404) throw new Error("Event not found to edit.");
-        const errData = await response.json();
-        throw new Error(errData.detail || "Failed to fetch event data for editing.");
+
+      if (!result.ok || !result.data) {
+        if (result.status === 404) throw new Error("Event not found to edit.");
+        throw new Error(result.error?.message || "Failed to fetch event data for editing.");
       }
-      const eventData = await response.json();
+      const eventData = result.data;
+      
       const formattedDateTime = eventData.dateTime ? formatDateTimeForInput(eventData.dateTime) : '';
       const formattedEndTime = eventData.endTime ? formatDateTimeForInput(eventData.endTime) : '';
       
@@ -114,6 +155,13 @@ export default function EditEventPage() {
       const currentSelectedIcon = searchParams.get('selectedIcon');
       const iconToSet = currentSelectedIcon || eventData.icon || 'event';
       
+      let wgIdsToSet: string[] = [];
+      if (eventData.workingGroupIds && Array.isArray(eventData.workingGroupIds)) {
+        wgIdsToSet = eventData.workingGroupIds;
+      } else if (eventData.workingGroupId) { 
+        wgIdsToSet = [eventData.workingGroupId];
+      }
+
       let draftData: Partial<EventFormData> = { 
         ...restOfEventDataForFrontend, 
         location: location, 
@@ -122,16 +170,21 @@ export default function EditEventPage() {
         organizerUserId: eventData.organizerUserId || null, 
         icon: iconToSet,
         point_of_contact: eventData.point_of_contact || '',
+        workingGroupIds: wgIdsToSet, 
       };
 
-      const storedDraft = localStorage.getItem(`eventFormDraft-${eventId}`);
+      const storedDraftKey = `eventFormDraft-${eventId}`;
+      const storedDraft = localStorage.getItem(storedDraftKey);
       if (currentSelectedIcon && storedDraft) {
         try {
           const parsedDraft = JSON.parse(storedDraft);
-          draftData = { ...parsedDraft, icon: currentSelectedIcon }; 
-        } catch (e) {
-          console.error("Failed to parse stored event form draft for edit:", e);
-        }
+          if (parsedDraft.workingGroupIds && !Array.isArray(parsedDraft.workingGroupIds)) {
+            parsedDraft.workingGroupIds = [parsedDraft.workingGroupIds].filter(Boolean);
+          } else if (!parsedDraft.workingGroupIds) {
+            parsedDraft.workingGroupIds = [];
+          }
+          draftData = { ...parsedDraft, icon: currentSelectedIcon, workingGroupIds: parsedDraft.workingGroupIds }; 
+        } catch (e) { /* console.error("Failed to parse stored event form draft for edit:", e); */ }
       }
       
       setFormData(draftData);
@@ -140,93 +193,128 @@ export default function EditEventPage() {
         setSelectedOrganizerName(`${eventData.organizerFirstName} ${eventData.organizerLastName} (${eventData.organizerEmail || 'email missing'})`);
       } else if (eventData.organizerUserId) {
         try {
-            const orgResponse = await fetch(`${backendUrl}/users/${eventData.organizerUserId}`, {
-                 headers: { 'Authorization': `Bearer ${token}` },
-            });
-            if (orgResponse.ok) {
-                const orgData = await orgResponse.json();
+            const orgResult = await apiClient<UserSearchResult>({ path: `/users/${eventData.organizerUserId}`, token: idToken, method: 'GET' });
+            if (orgResult.ok && orgResult.data) {
+                const orgData = orgResult.data;
                 setSelectedOrganizerName(`${orgData.firstName} ${orgData.lastName} (${orgData.email})`);
-            } else {
-                 setSelectedOrganizerName(`UID: ${eventData.organizerUserId} (Details unavailable)`);
-            }
-        } catch (orgErr) {
-            console.error("Failed to fetch organizer details:", orgErr);
-            setSelectedOrganizerName(`UID: ${eventData.organizerUserId} (Error fetching details)`);
-        }
+            } else { setSelectedOrganizerName(`UID: ${eventData.organizerUserId} (Details unavailable)`); }
+        } catch (orgErr) { setSelectedOrganizerName(`UID: ${eventData.organizerUserId} (Error fetching details)`); }
       } else {
         setSelectedOrganizerName(null);
       }
 
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      if (initialLoad) setIsLoadingEvent(false);
-    }
-  // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, eventId]); 
+    } catch (err: any) { setError(err.message); } 
+    finally { if (initialLoad) setIsLoadingEvent(false); }
+  }, [idToken, eventId, searchParams]); 
 
   useEffect(() => {
-    if (!authLoading && !user) {
-      router.push('/login');
-      return;
-    }
-    if (!authLoading && user && !canEditEvent) { 
-        setError("You are not authorized to edit events.");
-        setIsLoadingEvent(false); 
-        return;
-    }
-    if (user && eventId && canEditEvent) {
+    if (!authLoading && !user) { router.push('/login'); return; }
+    if (!authLoading && user && !canEditEvent) { setError("You are not authorized to edit events."); setIsLoadingEvent(false); return; }
+    
+    if (idToken && eventId && canEditEvent) {
         const selectedIcon = searchParams.get('selectedIcon');
-        const storedDraft = localStorage.getItem(`eventFormDraft-${eventId}`);
+        const storedDraftKey = `eventFormDraft-${eventId}`;
+        const storedDraft = localStorage.getItem(storedDraftKey);
 
         if (selectedIcon) {
             let draftData: Partial<EventFormData> = { icon: selectedIcon };
              if (storedDraft) {
-                try {
-                    draftData = { ...JSON.parse(storedDraft), icon: selectedIcon };
-                } catch (e) {
-                    console.error("Failed to parse stored event form draft for edit:", e);
+                try { 
+                    const parsedDraft = JSON.parse(storedDraft);
+                    if (parsedDraft.workingGroupIds && !Array.isArray(parsedDraft.workingGroupIds)) {
+                        parsedDraft.workingGroupIds = [parsedDraft.workingGroupIds].filter(Boolean);
+                    } else if (!parsedDraft.workingGroupIds) {
+                        parsedDraft.workingGroupIds = [];
+                    }
+                    draftData = { ...parsedDraft, icon: selectedIcon }; 
                 }
+                catch (e) { /* console.error("Failed to parse stored event form draft for edit:", e); */ }
             }
             setFormData(prev => ({ ...prev, ...draftData })); 
-            localStorage.removeItem(`eventFormDraft-${eventId}`);
-            router.replace(`/dashboard/events/${eventId}/edit`, undefined); 
-            setIsLoadingEvent(false); 
-        } else if (storedDraft && !isLoadingEvent && Object.keys(formData).length <= 2) { 
-            try {
-                setFormData(JSON.parse(storedDraft));
-            } catch (e) {
-                console.error("Failed to parse stored event form draft on rehydration (edit):", e);
+            localStorage.removeItem(storedDraftKey);
+            const currentPath = window.location.pathname;
+            window.history.replaceState({}, '', currentPath);
+            if(isLoadingEvent) setIsLoadingEvent(false); 
+        } else if (storedDraft && Object.keys(formData).length <= 3 && !selectedIcon) { 
+            try { 
+                const parsedDraft = JSON.parse(storedDraft);
+                if (parsedDraft.workingGroupIds && !Array.isArray(parsedDraft.workingGroupIds)) {
+                    parsedDraft.workingGroupIds = [parsedDraft.workingGroupIds].filter(Boolean);
+                } else if (!parsedDraft.workingGroupIds) {
+                    parsedDraft.workingGroupIds = [];
+                }
+                setFormData(parsedDraft); 
             }
-            setIsLoadingEvent(false);
-        } else {
+            catch (e) { /* console.error("Failed to parse stored event form draft on rehydration (edit):", e); */ }
+            if(isLoadingEvent) setIsLoadingEvent(false);
+        } else if (Object.keys(formData).length <= 3 || formData.id !== eventId) { 
             fetchEventData(); 
+        } else {
+             if(isLoadingEvent) setIsLoadingEvent(false); 
         }
+    } else if (!idToken && !authLoading) {
+        setIsLoadingEvent(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [user, authLoading, eventId, canEditEvent, fetchEventData]); 
+  }, [idToken, authLoading, eventId, canEditEvent, fetchEventData]); 
 
 
+  const handleWorkingGroupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value, checked } = e.target;
+    setFormData(prev => {
+      const currentGroupIds = prev.workingGroupIds || [];
+      if (checked) {
+        return { ...prev, workingGroupIds: [...currentGroupIds, value] };
+      } else {
+        return { ...prev, workingGroupIds: currentGroupIds.filter(id => id !== value) };
+      }
+    });
+  };
+
+  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
+    const { name, value, type } = e.target;
+    if (name === 'dateTime') {
+      const newDateTime = value;
+      let newEndTime = formData.endTime || ''; 
+      if (newDateTime) {
+        const startDate = new Date(newDateTime);
+        if (!isNaN(startDate.getTime())) {
+          const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); 
+          newEndTime = formatDateTimeForInput(endDate);
+        }
+      }
+      setFormData(prev => ({
+        ...prev,
+        dateTime: newDateTime,
+        endTime: newEndTime, 
+      }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) : value }));
+    }
+  };
+  
   const fetchUsers = async (query: string): Promise<UserSearchResult[]> => {
-    if (!user || query.trim().length < 2) { 
+    if (!idToken || query.trim().length < 2) { 
       setOrganizerSearchResults([]);
       return [];
     }
     setIsSearchingOrganizers(true);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/users/search?q=${encodeURIComponent(query)}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const result = await apiClient<UserSearchResult[]>({
+        path: `/users/search?q=${encodeURIComponent(query)}`,
+        token: idToken,
+        method: 'GET',
       });
-      if (!response.ok) {
-        throw new Error('Failed to search users');
+      if (result.ok && result.data) {
+        setOrganizerSearchResults(result.data);
+        return result.data;
+      } else {
+        // console.error("User search error:", result.error); // Keep for dev
+        setOrganizerSearchResults([]);
+        return [];
       }
-      const results: UserSearchResult[] = await response.json();
-      setOrganizerSearchResults(results);
-      return results;
     } catch (err) {
-      console.error("User search error:", err);
+      // console.error("User search error:", err); // Keep for dev
       setOrganizerSearchResults([]);
       return [];
     } finally {
@@ -234,7 +322,7 @@ export default function EditEventPage() {
     }
   };
 
-  const debouncedUserSearch = useCallback(debounce(fetchUsers, 500), [user]);
+  const debouncedUserSearch = useCallback(debounce(fetchUsers, 500), [idToken]);
 
   const handleOrganizerSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -271,153 +359,98 @@ export default function EditEventPage() {
   };
 
 
-  const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
-    const { name, value, type } = e.target;
-
-    if (name === 'dateTime') {
-      const newDateTime = value;
-      let newEndTime = formData.endTime || ''; 
-      if (newDateTime) {
-        const startDate = new Date(newDateTime);
-        if (!isNaN(startDate.getTime())) {
-          const endDate = new Date(startDate.getTime() + 60 * 60 * 1000); 
-          newEndTime = formatDateTimeForInput(endDate);
-        }
-      }
-      setFormData(prev => ({
-        ...prev,
-        dateTime: newDateTime,
-        endTime: newEndTime, 
-      }));
-    } else {
-      setFormData(prev => ({
-        ...prev,
-        [name]: type === 'number' ? parseInt(value, 10) : value,
-      }));
-    }
-  };
-
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
-    if (!canEditEvent) {
-        setError("Unauthorized action.");
-        return;
+    if (!canEditEvent) { setError("Unauthorized action."); return; }
+    
+    if (!formData.workingGroupIds || formData.workingGroupIds.length === 0) {
+        setError("At least one Working Group must be selected."); return;
     }
-    setError(null);
-    setSuccessMessage(null);
-    setSubmitting(true);
-
-    if (!user) {
-      setError("Authentication error.");
-      setSubmitting(false);
-      return;
-    }
-     if (!formData.dateTime) {
-        setError("Start Date & Time is required.");
-        setSubmitting(false);
-        return;
-    }
-    if (!formData.endTime) {
-        setError("End Date & Time is required.");
-        setSubmitting(false);
-        return;
-    }
+    if (!formData.dateTime) { setError("Start Date & Time is required."); return; }
+    if (!formData.endTime) { setError("End Date & Time is required."); return; }
     if (new Date(formData.endTime) <= new Date(formData.dateTime)) {
-        setError("End Date & Time must be after Start Date & Time.");
-        setSubmitting(false);
-        return;
+        setError("End Date & Time must be after Start Date & Time."); return;
     }
+
+    setError(null); setSuccessMessage(null); setSubmitting(true);
+    if (!idToken) { setError("Authentication error."); setSubmitting(false); return; }
 
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const payloadToSend: any = {
+        eventName: formData.eventName,
+        eventType: formData.eventType,
+        purpose: formData.purpose,
+        description: formData.description,
+        dateTime: formData.dateTime,
+        endTime: formData.endTime,
+        venue: formData.location, 
+        volunteersRequired: formData.volunteersRequired,
+        status: formData.status,
+        organizerUserId: formData.organizerUserId,
+        icon: formData.icon,
+        point_of_contact: formData.point_of_contact,
+        workingGroupIds: Array.isArray(formData.workingGroupIds) ? formData.workingGroupIds : [],
+      };
       
-      const updatePayload: { [key: string]: any } = {};
-      if (formData.eventName !== undefined) updatePayload.eventName = formData.eventName;
-      if (formData.eventType !== undefined) updatePayload.eventType = formData.eventType;
-      if (formData.purpose !== undefined) updatePayload.purpose = formData.purpose;
-      if (formData.description !== undefined) updatePayload.description = formData.description;
-      if (formData.dateTime !== undefined) updatePayload.dateTime = formData.dateTime;
-      if (formData.endTime !== undefined) updatePayload.endTime = formData.endTime;
-      if (formData.location !== undefined) updatePayload.venue = formData.location; 
-      if (formData.volunteersRequired !== undefined) updatePayload.volunteersRequired = formData.volunteersRequired;
-      if (formData.status !== undefined) updatePayload.status = formData.status;
-      if (formData.organizerUserId !== undefined) updatePayload.organizerUserId = formData.organizerUserId; 
-      if (formData.point_of_contact !== undefined) updatePayload.point_of_contact = formData.point_of_contact;
-      updatePayload.icon = formData.icon || 'event';
+      Object.keys(payloadToSend).forEach(key => {
+        if (payloadToSend[key] === undefined) {
+          delete payloadToSend[key];
+        }
+      });
+      if (formData.organizerUserId === null && "organizerUserId" in formData) {
+        payloadToSend.organizerUserId = null;
+      }
+      
+      // console.log("Submitting payload for event update:", payloadToSend); // Removed
 
-      const response = await fetch(`${backendUrl}/events/${eventId}`, {
-        method: 'PUT',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(updatePayload),
+      const result = await apiClient({
+        path: `/events/${eventId}`, token: idToken, method: 'PUT', data: payloadToSend, 
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        let errorMessage = `Failed to update event (status: ${response.status})`;
-        if (errorData && errorData.detail) {
-          if (typeof errorData.detail === 'string') {
-            errorMessage = errorData.detail;
-          } else if (Array.isArray(errorData.detail) && errorData.detail.length > 0 && errorData.detail[0].msg) {
-            errorMessage = errorData.detail.map((err: any) => `${err.loc.join('.')} - ${err.msg}`).join('; ');
-          } else {
-            errorMessage = JSON.stringify(errorData.detail);
-          }
+      if (!result.ok) { 
+        let errorMessage = `Failed to update event (status: ${result.status})`;
+        const errorDetail = result.error?.detail;
+        if (typeof errorDetail === 'string') {
+            errorMessage = errorDetail;
+        } else if (Array.isArray(errorDetail) && errorDetail.length > 0 && errorDetail[0].msg) {
+            errorMessage = errorDetail.map((err: any) => `${err.loc.join('.')} - ${err.msg}`).join('; ');
+        } else if (result.error?.message) {
+            errorMessage = result.error.message;
+        } else if (result.error) {
+            errorMessage = JSON.stringify(result.error);
         }
+        // console.error("Update event API error detail:", result.error); // Keep for dev
         throw new Error(errorMessage);
       }
       
       setSuccessMessage('Event updated successfully!');
       localStorage.removeItem(`eventFormDraft-${eventId}`); 
-      setTimeout(() => {
-        router.push(`/dashboard/events/${eventId}`); 
-      }, 1500);
+      setTimeout(() => { router.push(`/dashboard/events/${eventId}`); }, 1500);
 
-    } catch (err: any) {
-      setError(err.message);
-    } finally {
-      setSubmitting(false);
-    }
+    } catch (err: any) { setError(err.message); } 
+    finally { setSubmitting(false); }
   };
 
-  const handleDelete = async () => {
-    if (!user || !eventId || !canDeleteEvent) return;
-
+  const handleDelete = async () => { 
+    if (!idToken || !eventId || !canDeleteEvent) return;
     if (window.confirm(`Are you sure you want to delete the event "${formData.eventName || 'this event'}"? This action cannot be undone.`)) {
-      setDeleting(true);
-      setError(null);
-      setSuccessMessage(null);
+      setDeleting(true); setError(null); setSuccessMessage(null);
       try {
-        const token = await user.getIdToken();
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-        const response = await fetch(`${backendUrl}/events/${eventId}`, {
-          method: 'DELETE',
-          headers: { 'Authorization': `Bearer ${token}` },
-        });
-
-        if (!response.ok && response.status !== 204) { 
-            const errorData = await response.json().catch(() => ({ detail: "Failed to delete event and parse error." }));
-            throw new Error(errorData.detail || `Failed to delete event (status: ${response.status})`);
-        }
-        
+        const result = await apiClient({ path: `/events/${eventId}`, token: idToken, method: 'DELETE', });
+        if (!result.ok && result.status !== 204) { throw new Error(result.error?.message || `Failed to delete event (status: ${result.status})`); }
         alert('Event deleted successfully!'); 
         localStorage.removeItem(`eventFormDraft-${eventId}`); 
         router.push('/dashboard/events'); 
-      } catch (err: any) {
-        setError(err.message);
-        alert(`Error: ${err.message}`); 
-      } finally {
-        setDeleting(false);
-      }
+      } catch (err: any) { setError(err.message); alert(`Error: ${err.message}`); } 
+      finally { setDeleting(false); }
     }
   };
   
-  if (authLoading || isLoadingEvent ) {
+  if (authLoading || isLoadingEvent || isLoadingWorkingGroups ) {
      return <div className="flex items-center justify-center min-h-screen">Loading event data for editing...</div>;
   }
+
+  const defaultInputStyle = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white";
 
   return (
     <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
@@ -449,104 +482,113 @@ export default function EditEventPage() {
       {canEditEvent && formData.eventName !== undefined && ( 
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
           <form onSubmit={handleSubmit} className="space-y-6">
-            {/* Section 1: Icon and Core Info */}
             <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
                 <div className="md:flex md:space-x-6 items-start">
                 <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center"> 
                     <div 
-                    onClick={handleIconClick}
-                    className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-indigo-100 dark:bg-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-300 border-2 border-indigo-300 dark:border-indigo-600 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors"
-                    title="Click to change icon"
+                        onClick={handleIconClick}
+                        className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-indigo-100 dark:bg-indigo-800 flex items-center justify-center text-indigo-600 dark:text-indigo-300 border-2 border-indigo-300 dark:border-indigo-600 cursor-pointer hover:border-indigo-500 dark:hover:border-indigo-400 transition-colors"
+                        title="Click to change icon"
                     >
-                    <span className="material-icons" style={{ fontSize: '5rem' }}>
-                        {formData.icon || 'add_photo_alternate'}
-                    </span>
+                        <span className="material-icons" style={{ fontSize: '5rem' }}>{formData.icon || 'add_photo_alternate'}</span>
                     </div>
                     <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center w-32 sm:w-40">Click icon to change</p> 
                 </div>
-
                 <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 h-auto self-stretch"></div>
-
                 <div className="flex-grow space-y-6">
                     <div>
-                    <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Name</label>
-                    <input type="text" name="eventName" id="eventName" value={formData.eventName || ''} onChange={handleChange} required 
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Name</label>
+                        <input type="text" name="eventName" id="eventName" value={formData.eventName || ''} onChange={handleChange} required className={defaultInputStyle} />
                     </div>
-                
+                    <div> 
+                        <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Working Groups (select at least one)</label>
+                        <div className="mt-1 space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-md max-h-48 overflow-y-auto">
+                            {workingGroups.length > 0 ? workingGroups.map(wg => (
+                            <label key={wg.id} className="flex items-center space-x-3 cursor-pointer p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                                <input 
+                                type="checkbox"
+                                name="workingGroupIds"
+                                value={wg.id}
+                                checked={(formData.workingGroupIds || []).includes(wg.id)}
+                                onChange={handleWorkingGroupChange}
+                                className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-indigo-600 dark:ring-offset-gray-800"
+                                />
+                                <span className="text-sm text-gray-700 dark:text-gray-300">{wg.groupName}</span>
+                            </label>
+                            )) : (
+                            <p className="text-xs text-gray-500 dark:text-gray-400">
+                                {isLoadingWorkingGroups ? 'Loading working groups...' : 'No working groups available.'}
+                            </p>
+                            )}
+                        </div>
+                    </div>
                     <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
-                    <div>
-                        <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Type</label>
-                        <input type="text" name="eventType" id="eventType" value={formData.eventType || ''} onChange={handleChange} 
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-                    </div>
-                    <div>
-                        <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
-                        <select name="status" id="status" value={formData.status || 'draft'} onChange={handleChange} required
-                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
-                        <option value="draft">Draft</option>
-                        <option value="open_for_signup">Open for Signup</option>
-                        <option value="ongoing">Ongoing</option>
-                        <option value="completed">Completed</option>
-                        <option value="cancelled">Cancelled</option>
-                        </select>
-                    </div>
+                        <div>
+                            <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Type</label>
+                            <input type="text" name="eventType" id="eventType" value={formData.eventType || ''} onChange={handleChange} className={defaultInputStyle} />
+                        </div>
+                        <div>
+                            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
+                            <select name="status" id="status" value={formData.status || 'draft'} onChange={handleChange} required className={defaultInputStyle}>
+                                <option value="draft">Draft</option>
+                                <option value="open_for_signup">Open for Signup</option>
+                                <option value="ongoing">Ongoing</option>
+                                <option value="completed">Completed</option>
+                                <option value="cancelled">Cancelled</option>
+                            </select>
+                        </div>
                     </div>
                 </div>
                 </div>
             </div>
             
-            {/* Section 2: Descriptions */}
             <div className="space-y-6 pt-6 border-b border-gray-200 dark:border-gray-700 pb-6">
                 <div>
                 <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Purpose</label>
                 <textarea name="purpose" id="purpose" value={formData.purpose || ''} onChange={handleChange} rows={3}
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
+                            className={defaultInputStyle}></textarea>
                 </div>
                 <div>
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                 <textarea name="description" id="description" value={formData.description || ''} onChange={handleChange} rows={4}
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
+                            className={defaultInputStyle}></textarea>
                 </div>
             </div>
 
-            {/* Section 3: Date, Time, Location, Contact */}
             <div className="space-y-6 pt-6 border-b border-gray-200 dark:border-gray-700 pb-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                     <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date & Time</label>
                     <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime || ''} onChange={handleChange} required
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        className={defaultInputStyle} />
                 </div>
                 <div>
                     <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date & Time</label>
                     <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime || ''} onChange={handleChange} required
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        className={defaultInputStyle} />
                 </div>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                     <label htmlFor="location" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Venue</label>
                     <input type="text" name="location" id="location" value={formData.location || ''} onChange={handleChange}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        className={defaultInputStyle} />
                 </div>
                 <div>
                     <label htmlFor="point_of_contact" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Point of Contact</label>
                     <input type="text" name="point_of_contact" id="point_of_contact" value={formData.point_of_contact || ''} onChange={handleChange}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        className={defaultInputStyle} />
                 </div>
                 </div>
             </div>
             
-            {/* Section 4: Volunteers and Organizer */}
             <div className="space-y-6 pt-6">
                 <div>
                 <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Volunteers Required</label>
-                <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired || 0} onChange={handleChange} min="0" required
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired === undefined ? 0 : formData.volunteersRequired} onChange={handleChange} min="0" required
+                        className={defaultInputStyle} />
                 </div>
-
-                <div>
+                <div> 
                     <label htmlFor="organizerSearch" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
                     Event Organizer
                     </label>
@@ -572,7 +614,7 @@ export default function EditEventPage() {
                             value={organizerSearchQuery}
                             onChange={handleOrganizerSearchChange}
                             placeholder="Search by name or email to select an organizer..."
-                            className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                            className={defaultInputStyle}
                         />
                         {isSearchingOrganizers && (
                         <div className="absolute top-full w-full mt-1 z-10">
@@ -618,7 +660,7 @@ export default function EditEventPage() {
                             Cancel
                         </button>
                     </Link>
-                    <button type="submit" disabled={submitting || deleting || !canEditEvent}
+                    <button type="submit" disabled={submitting || deleting || !canEditEvent || (workingGroups.length === 0 && (!formData.workingGroupIds || formData.workingGroupIds.length === 0))}
                             className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center">
                         <span className="material-icons mr-2 text-base">{submitting ? 'hourglass_empty' : 'save'}</span>
                         {submitting ? 'Saving...' : 'Save Changes'}

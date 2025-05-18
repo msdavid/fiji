@@ -4,6 +4,7 @@ import { useState, useEffect, FormEvent, useCallback } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
+import apiClient from '@/lib/apiClient'; 
 
 interface EventFormData {
   eventName: string;
@@ -12,12 +13,13 @@ interface EventFormData {
   description: string;
   dateTime: string; 
   endTime: string;   
-  location: string; // Corresponds to 'venue' in backend
+  location: string; 
   volunteersRequired: number;
   status: string; 
   organizerUserId: string | null; 
   icon: string; 
   point_of_contact?: string;
+  workingGroupIds: string[]; 
 }
 
 interface UserSearchResult {
@@ -25,6 +27,11 @@ interface UserSearchResult {
   firstName: string;
   lastName: string;
   email: string;
+}
+
+interface WorkingGroup { 
+  id: string;
+  groupName: string;
 }
 
 const initialFormData: EventFormData = {
@@ -40,6 +47,7 @@ const initialFormData: EventFormData = {
   organizerUserId: null, 
   icon: 'event', 
   point_of_contact: '',
+  workingGroupIds: [], 
 };
 
 const formatDateTimeForInput = (date: Date): string => {
@@ -64,7 +72,7 @@ function debounce<F extends (...args: any[]) => any>(func: F, waitFor: number) {
 
 export default function CreateEventPage() {
   const router = useRouter();
-  const { user, loading, userProfile } = useAuth(); 
+  const { user, loading, userProfile, idToken, hasPrivilege } = useAuth(); 
   const [formData, setFormData] = useState<EventFormData>(initialFormData);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
@@ -75,43 +83,112 @@ export default function CreateEventPage() {
   const [selectedOrganizerName, setSelectedOrganizerName] = useState<string | null>(null);
   const [isSearchingOrganizers, setIsSearchingOrganizers] = useState(false);
 
+  const [workingGroups, setWorkingGroups] = useState<WorkingGroup[]>([]); 
+  const [isLoadingWorkingGroups, setIsLoadingWorkingGroups] = useState(true); 
+
+  const canCreateEvents = userProfile && (hasPrivilege ? hasPrivilege('events', 'create') : userProfile.isSysadmin);
+
   const handleIconClick = () => {
     localStorage.setItem('eventFormDraft', JSON.stringify(formData));
     router.push('/dashboard/events/select-icon?returnTo=/dashboard/events/new');
   };
 
   useEffect(() => {
+    if (!loading && !user) {
+      router.push('/login');
+      return;
+    }
+
+    const fetchWGs = async () => {
+      if (!idToken) {
+        setIsLoadingWorkingGroups(false); 
+        return;
+      }
+      setIsLoadingWorkingGroups(true);
+      try {
+        const result = await apiClient<WorkingGroup[]>({
+          path: '/working-groups?fields=id,groupName',
+          token: idToken,
+          method: 'GET',
+        });
+        if (result.ok && result.data) {
+          setWorkingGroups(result.data);
+        } else {
+          setError('Failed to load working groups. Please try again.');
+          // console.error("Fetch working groups error:", result.error); // Keep for dev if needed
+        }
+      } catch (err) {
+        setError('An error occurred while fetching working groups.');
+        // console.error(err); // Keep for dev if needed
+      } finally {
+        setIsLoadingWorkingGroups(false);
+      }
+    };
+
+    if (user) { 
+        fetchWGs();
+    } else if (!loading && !user) { 
+        setIsLoadingWorkingGroups(false);
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [idToken, user, loading, router]);
+
+
+  useEffect(() => {
     const selectedIcon = new URLSearchParams(window.location.search).get('selectedIcon');
     const storedDraft = localStorage.getItem('eventFormDraft');
 
-    if (selectedIcon) {
-      let draftData = initialFormData;
-      if (storedDraft) {
+    let draftToApply: Partial<EventFormData> = {};
+    let draftLoaded = false;
+
+    if (storedDraft) {
         try {
-          draftData = JSON.parse(storedDraft);
+            draftToApply = JSON.parse(storedDraft);
+            draftLoaded = true;
+            if (draftToApply.workingGroupIds && !Array.isArray(draftToApply.workingGroupIds)) {
+                draftToApply.workingGroupIds = [draftToApply.workingGroupIds].filter(Boolean);
+            } else if (!draftToApply.workingGroupIds) {
+                draftToApply.workingGroupIds = [];
+            }
         } catch (e) {
-          console.error("Failed to parse stored event form draft:", e);
-        }
-      }
-      setFormData(prev => ({ ...draftData, icon: selectedIcon }));
-      localStorage.removeItem('eventFormDraft');
-      router.replace('/dashboard/events/new', undefined);
-    } else if (storedDraft && !selectedIcon) {
-        try {
-            setFormData(JSON.parse(storedDraft));
-        } catch (e) {
-            console.error("Failed to parse stored event form draft on rehydration:", e);
+            // console.error("Failed to parse stored event form draft on rehydration:", e); // Keep for dev
+            draftLoaded = false; 
         }
     }
 
-    if (!loading && !user) {
-      router.push('/login');
+    if (selectedIcon) {
+        setFormData(prev => ({ ...initialFormData, ...draftToApply, icon: selectedIcon, workingGroupIds: draftToApply.workingGroupIds || [] }));
+        localStorage.removeItem('eventFormDraft');
+        const currentPath = window.location.pathname;
+        window.history.replaceState({}, '', currentPath);
+    } else if (draftLoaded) {
+        setFormData(prev => ({ ...initialFormData, ...draftToApply }));
     }
-    if (!loading && user && userProfile && !userProfile.assignedRoleIds?.includes('sysadmin')) {
-       setError("You are not authorized to create events.");
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); 
+
+  useEffect(() => {
+    if (!isLoadingWorkingGroups && workingGroups.length > 0 && formData.workingGroupIds.length === 0) {
+        const isFormPristineForWG = JSON.stringify(formData.workingGroupIds) === JSON.stringify(initialFormData.workingGroupIds);
+        if (isFormPristineForWG) {
+            // Default selection logic removed
+        }
     }
-  // eslint-disable-next-line react-hooks/exhaustive-deps 
-  }, [user, loading, userProfile]); 
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [workingGroups, isLoadingWorkingGroups]); 
+
+
+  const handleWorkingGroupChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const { value, checked } = e.target;
+    setFormData(prev => {
+      const currentGroupIds = prev.workingGroupIds || [];
+      if (checked) {
+        return { ...prev, workingGroupIds: [...currentGroupIds, value] };
+      } else {
+        return { ...prev, workingGroupIds: currentGroupIds.filter(id => id !== value) };
+      }
+    });
+  };
 
 
   const handleChange = (e: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement | HTMLSelectElement>) => {
@@ -141,25 +218,27 @@ export default function CreateEventPage() {
   };
 
   const fetchUsers = async (query: string): Promise<UserSearchResult[]> => {
-    if (!user || query.trim().length < 2) { 
+    if (!idToken || query.trim().length < 2) { 
       setOrganizerSearchResults([]);
       return [];
     }
     setIsSearchingOrganizers(true);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/users/search?q=${encodeURIComponent(query)}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const result = await apiClient<UserSearchResult[]>({
+        path: `/users/search?q=${encodeURIComponent(query)}`,
+        token: idToken,
+        method: 'GET',
       });
-      if (!response.ok) {
-        throw new Error('Failed to search users');
+      if (result.ok && result.data) {
+        setOrganizerSearchResults(result.data);
+        return result.data;
+      } else {
+        // console.error("User search error:", result.error); // Keep for dev
+        setOrganizerSearchResults([]);
+        return [];
       }
-      const results: UserSearchResult[] = await response.json();
-      setOrganizerSearchResults(results); 
-      return results;
     } catch (err) {
-      console.error("User search error:", err);
+      // console.error("User search error:", err); // Keep for dev
       setOrganizerSearchResults([]);
       return [];
     } finally {
@@ -167,7 +246,7 @@ export default function CreateEventPage() {
     }
   };
 
-  const debouncedUserSearch = useCallback(debounce(fetchUsers, 500), [user]);
+  const debouncedUserSearch = useCallback(debounce(fetchUsers, 500), [idToken]);
 
   const handleOrganizerSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const query = e.target.value;
@@ -194,72 +273,89 @@ export default function CreateEventPage() {
     e.preventDefault();
     setError(null);
     setSuccessMessage(null);
+    
+    if (!formData.workingGroupIds || formData.workingGroupIds.length === 0) { 
+        setError("At least one Working Group must be selected.");
+        return;
+    }
+    if (!formData.dateTime) {
+        setError("Start Date & Time is required.");
+        return;
+    }
+    if (!formData.endTime) {
+        setError("End Date & Time is required.");
+        return;
+    }
+    if (new Date(formData.endTime) <= new Date(formData.dateTime)) {
+        setError("End Date & Time must be after Start Date & Time.");
+        return;
+    }
+
     setSubmitting(true);
 
-    if (!user) {
+    if (!idToken) {
       setError("Authentication error. Please log in again.");
       setSubmitting(false);
       return;
     }
     
-    if (!formData.dateTime) {
-        setError("Start Date & Time is required.");
-        setSubmitting(false);
-        return;
-    }
-    if (!formData.endTime) {
-        setError("End Date & Time is required.");
-        setSubmitting(false);
-        return;
-    }
-    if (new Date(formData.endTime) <= new Date(formData.dateTime)) {
-        setError("End Date & Time must be after Start Date & Time.");
-        setSubmitting(false);
-        return;
-    }
-
     const { location, ...restOfFormData } = formData;
     const payload = { 
         ...restOfFormData,
         venue: location 
     }; 
+    // console.log("Submitting payload for new event:", payload); // Removed
 
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      
-      const response = await fetch(`${backendUrl}/events`, {
+      const result = await apiClient({
+        path: '/events',
+        token: idToken,
         method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'Authorization': `Bearer ${token}`,
-        },
-        body: JSON.stringify(payload), 
+        data: payload, 
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || `Failed to create event (status: ${response.status})`);
+      if (!result.ok || !result.data) {
+        const errorDetail = result.error?.detail || `Failed to create event (status: ${result.status})`;
+        // console.error("Create event API error detail:", result.error); // Keep for dev
+        throw new Error(typeof errorDetail === 'string' ? errorDetail : JSON.stringify(errorDetail));
       }
       
       setSuccessMessage('Event created successfully!');
       setFormData(initialFormData); 
       setSelectedOrganizerName(null); 
       localStorage.removeItem('eventFormDraft');
+      
       setTimeout(() => {
         router.push('/dashboard/events'); 
       }, 1500); 
 
     } catch (err: any) {
       setError(err.message || 'An error occurred during submission.');
-      console.error('Event submission error:', err);
+      // console.error('Event submission error:', err); // Keep for dev
     } finally {
       setSubmitting(false);
     }
   };
   
-  if (loading && !formData.icon) { 
+  if (loading || isLoadingWorkingGroups) { 
     return <div className="flex items-center justify-center min-h-screen">Loading...</div>;
+  }
+
+  if (!loading && !canCreateEvents) {
+    return (
+        <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+            <div className="mb-6">
+                <Link href="/dashboard/events" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+                    <span className="material-icons mr-1 text-lg">arrow_back</span>
+                    Back to Events
+                </Link>
+            </div>
+            <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Create New Event</h1>
+            <div className="mb-6 p-4 text-sm text-red-700 bg-red-100 dark:bg-red-700 dark:text-red-100 rounded-lg shadow-md" role="alert">
+              <span className="font-medium">Access Denied:</span> You do not have permission to create events.
+            </div>
+        </main>
+    );
   }
 
   return (
@@ -281,12 +377,6 @@ export default function CreateEventPage() {
         <div className="mb-6 p-4 text-sm text-red-700 bg-red-100 dark:bg-red-700 dark:text-red-100 rounded-lg shadow-md" role="alert">
           <span className="font-medium">Error:</span> {error}
         </div>
-      )}
-
-      {(!user || (userProfile && !userProfile.assignedRoleIds?.includes('sysadmin')) && !loading) && !error && (
-            <div className="mb-6 p-4 text-sm text-yellow-700 bg-yellow-100 dark:bg-yellow-700 dark:text-yellow-100 rounded-lg shadow-md" role="alert">
-              You might not have the necessary permissions to create an event. Please contact an administrator if you believe this is an error.
-            </div>
       )}
 
       <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8">
@@ -315,6 +405,28 @@ export default function CreateEventPage() {
                   <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
                           className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                 </div>
+                <div> 
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Working Groups (select at least one)</label>
+                  <div className="mt-1 space-y-2 p-3 border border-gray-300 dark:border-gray-600 rounded-md max-h-48 overflow-y-auto">
+                    {workingGroups.length > 0 ? workingGroups.map(wg => (
+                      <label key={wg.id} className="flex items-center space-x-3 cursor-pointer p-1 hover:bg-gray-100 dark:hover:bg-gray-700 rounded-md">
+                        <input 
+                          type="checkbox"
+                          name="workingGroupIds"
+                          value={wg.id}
+                          checked={(formData.workingGroupIds || []).includes(wg.id)}
+                          onChange={handleWorkingGroupChange}
+                          className="h-4 w-4 text-indigo-600 border-gray-300 rounded focus:ring-indigo-500 dark:bg-gray-700 dark:border-gray-600 dark:focus:ring-indigo-600 dark:ring-offset-gray-800"
+                        />
+                        <span className="text-sm text-gray-700 dark:text-gray-300">{wg.groupName}</span>
+                      </label>
+                    )) : (
+                      <p className="text-xs text-gray-500 dark:text-gray-400">
+                        {isLoadingWorkingGroups ? 'Loading working groups...' : 'No working groups available. Please create one first.'}
+                      </p>
+                    )}
+                  </div>
+                </div>
               
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                   <div>
@@ -328,7 +440,6 @@ export default function CreateEventPage() {
                             className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
                       <option value="draft">Draft</option>
                       <option value="open_for_signup">Open for Signup</option>
-                      <option value="ongoing">Ongoing</option>
                       <option value="completed">Completed</option>
                       <option value="cancelled">Cancelled</option>
                     </select>
@@ -338,7 +449,6 @@ export default function CreateEventPage() {
             </div>
           </div>
 
-          {/* Section 2: Descriptions */}
           <div className="space-y-6 pt-6 border-b border-gray-200 dark:border-gray-700 pb-6">
             <div>
               <label htmlFor="purpose" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Purpose</label>
@@ -352,7 +462,6 @@ export default function CreateEventPage() {
             </div>
           </div>
 
-          {/* Section 3: Date, Time, Location, Contact */}
           <div className="space-y-6 pt-6 border-b border-gray-200 dark:border-gray-700 pb-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
@@ -380,7 +489,6 @@ export default function CreateEventPage() {
             </div>
           </div>
           
-          {/* Section 4: Volunteers and Organizer */}
           <div className="space-y-6 pt-6">
             <div>
               <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Volunteers Required</label>
@@ -439,7 +547,7 @@ export default function CreateEventPage() {
                     Cancel
                 </button>
             </Link>
-            <button type="submit" disabled={submitting || (!userProfile?.assignedRoleIds?.includes('sysadmin') && !loading)}
+            <button type="submit" disabled={submitting || !canCreateEvents || workingGroups.length === 0}
                     className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center">
               <span className="material-icons mr-2 text-base">{submitting ? 'hourglass_empty' : 'add_circle_outline'}</span>
               {submitting ? 'Submitting...' : 'Create Event'}

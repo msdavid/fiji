@@ -4,12 +4,13 @@ import { useState, useEffect, useCallback } from 'react';
 import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
-import { format, parseISO } from 'date-fns'; 
+import { format, parseISO, isValid } from 'date-fns'; 
+import apiClient from '@/lib/apiClient'; 
 
 interface Event {
   id: string; 
   eventName: string;
-  icon?: string; // Added for icon display
+  icon?: string; 
   eventType?: string;
   purpose?: string;
   description?: string;
@@ -29,6 +30,9 @@ interface Event {
   organizerFirstName?: string; 
   organizerLastName?: string;
   point_of_contact?: string; 
+  workingGroupId?: string; 
+  workingGroupIds?: string[]; 
+  workingGroupNames?: string[]; 
 }
 interface EventDetail extends Event {}
 
@@ -49,14 +53,10 @@ interface Assignment {
   hoursContributed?: number;
 }
 
-// UserSearchInput is used but not directly defined here, assuming it's imported correctly
-// interface UserSearchResult { ... } 
-
-// Helper component for displaying detail items with icons
 const DetailItem = ({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) => {
-  if (!value && typeof value !== 'number') return null; // Don't render if value is empty (except for 0)
+  if (!value && typeof value !== 'number' && typeof value !== 'boolean') return null; 
   return (
-    <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-800 rounded-lg">
+    <div className="flex items-start space-x-3 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg shadow-sm">
       <span className="material-icons text-indigo-500 dark:text-indigo-400 mt-1">{icon}</span>
       <div>
         <p className="text-xs font-medium text-gray-500 dark:text-gray-400">{label}</p>
@@ -72,7 +72,7 @@ export default function EventDetailPage() {
   const params = useParams();
   const pageEventId = params.eventId as string; 
 
-  const { user, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege, logout } = useAuth();
   const [event, setEvent] = useState<EventDetail | null>(null);
   const [isLoadingEvent, setIsLoadingEvent] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -82,72 +82,72 @@ export default function EventDetailPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   
-  const [selectedUserToAssign, setSelectedUserToAssign] = useState<any | null>(null); // Using 'any' as UserSearchResult is not defined here
+  const [selectedUserToAssign, setSelectedUserToAssign] = useState<any | null>(null); 
 
-  const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.assignedRoleIds?.includes('sysadmin'));
-  const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('events', 'manage_assignments') : userProfile.assignedRoleIds?.includes('sysadmin'));
+  const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.isSysadmin);
+  const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('events', 'manage_assignments') : userProfile.isSysadmin);
 
   const fetchEventDetails = useCallback(async () => {
-    if (!user || !pageEventId) return;
+    if (!idToken || !pageEventId) return;
     setIsLoadingEvent(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${pageEventId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const result = await apiClient<EventDetail>({
+        path: `/events/${pageEventId}`,
+        token: idToken,
+        method: 'GET',
       });
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || 'Failed to fetch event details');
+      if (!result.ok || !result.data) {
+        if (result.status === 401) { await logout(); router.push('/login'); return; }
+        if (result.status === 403) { setError("You are not authorized to view this event."); setEvent(null); setIsLoadingEvent(false); return; }
+        if (result.status === 404) { setError("Event not found."); setEvent(null); setIsLoadingEvent(false); return; }
+        throw new Error(result.error?.message || 'Failed to fetch event details');
       }
-      const data: EventDetail = await response.json();
-      setEvent(data);
+      setEvent(result.data);
     } catch (err: any) {
       setError(err.message);
       setEvent(null); 
     } finally {
       setIsLoadingEvent(false);
     }
-  }, [user, pageEventId]);
+  }, [idToken, pageEventId, logout, router]);
 
   const fetchEventAssignments = useCallback(async (currentEventId: string) => { 
-    if (!user || !currentEventId || !canManageAssignments) return; 
+    if (!idToken || !currentEventId || !canManageAssignments) return; 
     
     setIsLoadingAssignments(true);
     setAssignmentsError(null);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${currentEventId}/assignments`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const result = await apiClient<Assignment[]>({
+        path: `/events/${currentEventId}/assignments`,
+        token: idToken,
+        method: 'GET',
       });
-      if (!response.ok) {
-        const errData = await response.json();
-        throw new Error(errData.detail || 'Failed to fetch event assignments');
+      if (!result.ok || !result.data) {
+        if (result.status === 401) { await logout(); router.push('/login'); return; }
+        throw new Error(result.error?.message || 'Failed to fetch event assignments');
       }
-      const data: Assignment[] = await response.json();
-      setAssignments(data);
+      setAssignments(result.data);
     } catch (err: any) {
       setAssignmentsError(err.message); 
       console.error("Fetch assignments error:", err);
     } finally {
       setIsLoadingAssignments(false);
     }
-  }, [user, canManageAssignments]); 
+  }, [idToken, canManageAssignments, logout, router]); 
 
   useEffect(() => {
     if (!authLoading && !user) {
       router.push('/login');
       return;
     }
-    if (user && !userProfile) {
+    if (user && !userProfile && fetchUserProfile) { 
         fetchUserProfile();
     }
-    if (user && pageEventId) { 
+    if (idToken && pageEventId) { 
       fetchEventDetails();
     }
-  }, [user, authLoading, pageEventId, router, fetchEventDetails, userProfile, fetchUserProfile]);
+  }, [user, authLoading, pageEventId, router, fetchEventDetails, userProfile, fetchUserProfile, idToken]);
 
   useEffect(() => {
     if (event && event.id && canManageAssignments) {
@@ -161,26 +161,30 @@ export default function EventDetailPage() {
 
 
   const handleSignup = async () => { 
-    if (!user || !event) return;
+    if (!idToken || !event) return;
     setActionInProgress(true); setError(null);
     try {
-        const token = await user.getIdToken();
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-        const response = await fetch(`${backendUrl}/events/${event.id}/signup`, { method: 'POST', headers: { 'Authorization': `Bearer ${token}` } });
-        if (!response.ok) throw new Error((await response.json()).detail || 'Failed to sign up');
+        const result = await apiClient({
+            path: `/events/${event.id}/signup`,
+            token: idToken,
+            method: 'POST'
+        });
+        if (!result.ok) throw new Error(result.error?.message || 'Failed to sign up');
         await fetchEventDetails(); 
     } catch (err: any) { setError(err.message); } 
     finally { setActionInProgress(false); }
   };
 
   const handleWithdraw = async () => { 
-    if (!user || !event) return;
+    if (!idToken || !event) return;
     setActionInProgress(true); setError(null);
     try {
-        const token = await user.getIdToken();
-        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-        const response = await fetch(`${backendUrl}/events/${event.id}/signup`, { method: 'DELETE', headers: { 'Authorization': `Bearer ${token}` } });
-        if (!response.ok) throw new Error((await response.json()).detail || 'Failed to withdraw');
+        const result = await apiClient({
+            path: `/events/${event.id}/signup`,
+            token: idToken,
+            method: 'DELETE'
+        });
+        if (!result.ok && result.status !== 204) throw new Error(result.error?.message || 'Failed to withdraw');
         await fetchEventDetails();
     } catch (err: any) { setError(err.message); }
     finally { setActionInProgress(false); }
@@ -188,22 +192,20 @@ export default function EventDetailPage() {
 
   const handleAssignVolunteer = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!user || !event || !selectedUserToAssign) {
+    if (!idToken || !event || !selectedUserToAssign) {
         setAssignmentsError("Please select a user to assign.");
         return;
     }
     setActionInProgress(true); setError(null); setAssignmentsError(null);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${event.id}/assignments`, {
+      const result = await apiClient({
+        path: `/events/${event.id}/assignments`,
+        token: idToken,
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({ userId: selectedUserToAssign.id, assignableId: event.id, assignableType: 'event', status: 'confirmed_admin' }),
+        body: { userId: selectedUserToAssign.id, assignableId: event.id, assignableType: 'event', status: 'confirmed_admin' },
       });
-      if (!response.ok) throw new Error((await response.json()).detail || 'Failed to assign volunteer');
+      if (!result.ok) throw new Error(result.error?.message || 'Failed to assign volunteer');
       setSelectedUserToAssign(null); 
-      // TODO: Clear UserSearchInput after successful assignment
       await fetchEventAssignments(event.id); 
       await fetchEventDetails(); 
     } catch (err: any) { setAssignmentsError(err.message); } 
@@ -211,18 +213,16 @@ export default function EventDetailPage() {
   };
 
   const handleRemoveAssignment = async (assignmentId: string) => {
-    if (!user || !event || !confirm("Are you sure you want to remove this volunteer?")) return;
+    if (!idToken || !event || !confirm("Are you sure you want to remove this volunteer?")) return;
     setActionInProgress(true); setError(null); setAssignmentsError(null);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/events/${event.id}/assignments/${assignmentId}`, {
+      const result = await apiClient({
+        path: `/events/${event.id}/assignments/${assignmentId}`,
+        token: idToken,
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
       });
-      if (!response.ok && response.status !== 204) { 
-        const errorData = await response.json().catch(() => ({ detail: 'Failed to remove volunteer assignment' }));
-        throw new Error(errorData.detail || 'Failed to remove volunteer assignment');
+      if (!result.ok && result.status !== 204) { 
+        throw new Error(result.error?.message || 'Failed to remove volunteer assignment');
       }
       await fetchEventAssignments(event.id); 
       await fetchEventDetails();
@@ -230,31 +230,45 @@ export default function EventDetailPage() {
     finally { setActionInProgress(false); }
   };
 
-  if (authLoading || isLoadingEvent || (!userProfile && user)) { 
+  if (authLoading || isLoadingEvent || (!userProfile && user && !idToken)) { 
     return <div className="flex items-center justify-center min-h-screen"><p>Loading event details...</p></div>;
   }
+  
   if (error && !event) { 
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
-        <Link href="/dashboard/events" className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 mb-4 inline-block">← Back to Events</Link>
+      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> {/* Added main wrapper for consistency */}
+        <div className="mb-6">
+            <Link href="/dashboard/events" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200">← Back to Events</Link>
+        </div>
         <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 text-center">
-          <h2 className="text-xl font-semibold text-red-600 dark:text-red-400">Error</h2>
+          <h2 className="text-xl font-semibold text-red-600 dark:text-red-400">Access Error</h2>
           <p className="text-gray-600 dark:text-gray-300 mt-2">{error}</p>
         </div>
-      </div>
+      </main>
     );
   }
-  if (!event) { 
+  if (!event && !isLoadingEvent) { 
     return (
-      <div className="min-h-screen bg-gray-100 dark:bg-gray-800 p-8">
-        <Link href="/dashboard/events" className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 mb-4 inline-block">← Back to Events</Link>
+      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> {/* Added main wrapper for consistency */}
+        <div className="mb-6">
+            <Link href="/dashboard/events" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200">← Back to Events</Link>
+        </div>
         <div className="bg-white dark:bg-gray-900 shadow rounded-lg p-6 text-center">
           <p className="text-gray-600 dark:text-gray-300">Event data not available. It might have been deleted or an error occurred.</p>
         </div>
-      </div>
+      </main>
     );
   }
   
+  if (!event) {
+    // This case should ideally be covered by the above, but as a fallback:
+    return (
+        <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
+             <p className="text-center text-gray-500 dark:text-gray-400">No event data to display.</p>
+        </main>
+    );
+  }
+
   const canSignUp = event.status === 'open_for_signup' && !event.isCurrentUserSignedUp;
   const canWithdraw = event.isCurrentUserSignedUp;
   const organizerName = event.organizerFirstName && event.organizerLastName ? `${event.organizerFirstName} ${event.organizerLastName}` : event.organizerUserId || 'N/A';
@@ -267,6 +281,10 @@ export default function EventDetailPage() {
     ongoing: 'bg-teal-100 text-teal-800 dark:bg-teal-700 dark:text-teal-100 animate-pulse',
   };
   const statusDisplay = event.status.replace(/_/g, ' ');
+  
+  const displayWorkingGroupNames = event.workingGroupNames && event.workingGroupNames.length > 0 
+    ? event.workingGroupNames.join(', ') 
+    : (event.workingGroupName || 'N/A'); 
 
   return (
       <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
@@ -285,7 +303,9 @@ export default function EventDetailPage() {
                 </div>
                 <div>
                     <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{event.eventName}</h1>
-                    <p className="text-sm text-gray-500 dark:text-gray-400">Last updated: {format(parseISO(event.updatedAt), 'PPP p')}</p>
+                    {event.updatedAt && isValid(parseISO(event.updatedAt)) && (
+                        <p className="text-sm text-gray-500 dark:text-gray-400">Last updated: {format(parseISO(event.updatedAt), 'PPP p')}</p>
+                    )}
                 </div>
               </div>
               {canEditEvent && (
@@ -302,15 +322,16 @@ export default function EventDetailPage() {
 
             <div className="grid grid-cols-1 md:grid-cols-2 gap-4 mb-8"> 
               <DetailItem icon="category" label="Type" value={event.eventType || 'N/A'} />
-              <DetailItem icon="event" label="Start Date & Time" value={event.dateTime ? format(parseISO(event.dateTime), 'PPP p') : 'N/A'} />
+              <DetailItem icon="event" label="Start Date & Time" value={event.dateTime && isValid(parseISO(event.dateTime)) ? format(parseISO(event.dateTime), 'PPP p') : 'N/A'} />
               <DetailItem icon="place" label="Venue" value={event.venue || 'N/A'} /> 
-              <DetailItem icon="event_busy" label="End Date & Time" value={event.endTime ? format(parseISO(event.endTime), 'PPP p') : 'N/A'} />
+              <DetailItem icon="event_busy" label="End Date & Time" value={event.endTime && isValid(parseISO(event.endTime)) ? format(parseISO(event.endTime), 'PPP p') : 'N/A'} />
               <DetailItem icon="info" label="Status" value={<span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[event.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'}`}>{statusDisplay}</span>} />
               <DetailItem icon="groups" label="Volunteers Required" value={event.volunteersRequired ?? 'N/A'} />
               <DetailItem icon="person_pin" label="Organizer" value={organizerName} />
               {event.point_of_contact && <DetailItem icon="contact_mail" label="Point of Contact" value={event.point_of_contact} />}
               <DetailItem icon="person_add" label="Created By" value={creatorName} />
-              <DetailItem icon="today" label="Created On" value={format(parseISO(event.createdAt), 'PPP p')} />
+              <DetailItem icon="today" label="Created On" value={event.createdAt && isValid(parseISO(event.createdAt)) ? format(parseISO(event.createdAt), 'PPP p') : 'N/A'} />
+              <DetailItem icon="group_work" label="Working Groups" value={displayWorkingGroupNames} />
             </div>
 
             {event.purpose && ( 
@@ -367,12 +388,6 @@ export default function EventDetailPage() {
                   <h3 className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-3">Assign New Volunteer</h3>
                   <form onSubmit={handleAssignVolunteer} className="space-y-4">
                     <div>
-                        {/* Assuming UserSearchInput is available and works */}
-                        {/* <UserSearchInput 
-                            onUserSelected={(u: any) => setSelectedUserToAssign(u)}
-                            label="Search for volunteer to assign:"
-                            placeholder="Type name or email..."
-                        /> */}
                         <label htmlFor="user-search-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search for volunteer to assign:</label>
                         <input id="user-search-input" type="text" placeholder="UserSearchInput component placeholder" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                         {selectedUserToAssign && <p className="text-xs text-green-600 dark:text-green-400 mt-1">Selected: {selectedUserToAssign.firstName} {selectedUserToAssign.lastName}</p>}
@@ -403,7 +418,7 @@ export default function EventDetailPage() {
                             </p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">{assignment.userEmail || assignment.userId}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Status: <span className="font-medium">{assignment.status.replace(/_/g, ' ')}</span> | Assigned: {format(parseISO(assignment.assignmentDate), 'Pp')}
+                                Status: <span className="font-medium">{assignment.status.replace(/_/g, ' ')}</span> | Assigned: {assignment.assignmentDate && isValid(parseISO(assignment.assignmentDate)) ? format(parseISO(assignment.assignmentDate), 'Pp') : 'N/A'}
                             </p>
                             </div>
                             <button 

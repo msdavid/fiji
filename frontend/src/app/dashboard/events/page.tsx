@@ -2,7 +2,6 @@
 
 import React, { useState, useEffect, useCallback, useMemo } from 'react'; 
 import Link from 'next/link';
-import { useRouter } from 'next/navigation'; 
 import { useAuth } from '@/context/AuthContext';
 import apiClient, { ApiResponse } from '@/lib/apiClient';
 import { format, parseISO, isBefore, isAfter, isEqual, isValid as isValidDate } from 'date-fns'; 
@@ -26,6 +25,9 @@ interface EventWithSignupStatus {
   creatorFirstName?: string;
   creatorLastName?: string;
   createdAt: string | Date; 
+  workingGroupId?: string; // Legacy single ID
+  workingGroupIds?: string[]; // New multiple IDs
+  workingGroupNames?: string[]; // Changed from workingGroupName to workingGroupNames (list)
 }
 
 const EVENT_STATUSES = {
@@ -79,6 +81,10 @@ const EventCard = ({ event, onSignup, onWithdraw, isProcessingSignup, currentUse
   const dateTimeString = ensureDateString(event.dateTime);
   const createdAtString = ensureDateString(event.createdAt);
 
+  const displayWorkingGroupNames = event.workingGroupNames && event.workingGroupNames.length > 0 
+    ? event.workingGroupNames.join(', ') 
+    : null;
+
   return (
     <div key={event.id} className="bg-white dark:bg-gray-900 shadow-lg rounded-lg overflow-hidden h-full flex flex-col group hover:shadow-xl transition-shadow duration-200 ease-in-out">
       <Link href={`/dashboard/events/${event.id}`} className="flex flex-col flex-grow">
@@ -98,6 +104,12 @@ const EventCard = ({ event, onSignup, onWithdraw, isProcessingSignup, currentUse
               <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
                 {event.eventType || 'General Event'} - Venue: {event.venue || 'N/A'}
               </p>
+              {displayWorkingGroupNames && ( 
+                <p className="text-xs sm:text-sm text-indigo-600 dark:text-indigo-400 font-medium mb-1 inline-flex items-center" title={displayWorkingGroupNames}>
+                  <span className="material-icons text-sm mr-1">group_work</span>
+                  <span className="truncate">{displayWorkingGroupNames}</span>
+                </p>
+              )}
               {dateTimeString && isValidDate(parseISO(dateTimeString)) && (
                 <p className="text-xs sm:text-sm text-gray-500 dark:text-gray-400 mb-1">
                   Date: {format(parseISO(dateTimeString), 'PP p')}
@@ -190,7 +202,6 @@ export default function EventsPage() {
   const [isProcessingSignup, setIsProcessingSignup] = useState<string | null>(null); 
 
   const [statusFilter, setStatusFilter] = useState<string>(EVENT_STATUSES.ALL); 
-  // Default fromDateFilter to today's date in YYYY-MM-DD format
   const [fromDateFilter, setFromDateFilter] = useState<string>(format(new Date(), 'yyyy-MM-dd'));
   const [daysRangeFilter, setDaysRangeFilter] = useState<string>('14'); 
   const [currentTimeTick, setCurrentTimeTick] = useState(new Date()); 
@@ -214,7 +225,6 @@ export default function EventsPage() {
     const params = new URLSearchParams();
     if (statusFilter && statusFilter !== EVENT_STATUSES.ALL) params.append('status', statusFilter);
     if (fromDateFilter) params.append('from_date', fromDateFilter);
-    // Only send days_range if it's a valid positive number
     const days = parseInt(daysRangeFilter, 10);
     if (!isNaN(days) && days > 0) {
         params.append('days_range', days.toString());
@@ -239,12 +249,12 @@ export default function EventsPage() {
   }, [idToken, authLoading, statusFilter, fromDateFilter, daysRangeFilter, logout]);
 
   useEffect(() => {
-    if (!authLoading && !user) { /* router.push('/login'); Handled by layout */ }
+    if (!authLoading && !user) { /* Handled by layout */ }
     if (user && !userProfile && fetchUserProfile) fetchUserProfile();
     if (idToken) { 
         fetchEvents();
     }
-  }, [user, authLoading, userProfile, fetchUserProfile, idToken, statusFilter, fromDateFilter, daysRangeFilter, fetchEvents]);
+  }, [user, authLoading, userProfile, fetchUserProfile, idToken, fetchEvents]);
 
   const displayedEvents = useMemo(() => {
     const now = currentTimeTick;
@@ -321,8 +331,8 @@ export default function EventsPage() {
   };
 
   const clearDateAndDaysFilters = () => {
-    setFromDateFilter(format(new Date(), 'yyyy-MM-dd')); // Reset From Date to today
-    setDaysRangeFilter('14'); // Reset Days Range to default
+    setFromDateFilter(format(new Date(), 'yyyy-MM-dd'));
+    setDaysRangeFilter('14'); 
   };
 
 
