@@ -5,7 +5,15 @@ import { useRouter, useParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO, isValid } from 'date-fns'; 
-import apiClient from '@/lib/apiClient'; 
+// apiClient import removed as we are switching to direct fetch for this specific call
+import UserSearchInput from '@/components/admin/UserSearchInput'; 
+
+interface UserSearchResultForPage { 
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+}
 
 interface Event {
   id: string; 
@@ -17,7 +25,7 @@ interface Event {
   dateTime: string; 
   endTime?: string;  
   venue?: string; 
-  volunteersRequired?: number;
+  volunteersRequired?: number; 
   status: string;
   createdByUserId: string;
   creatorFirstName?: string; 
@@ -53,6 +61,15 @@ interface Assignment {
   hoursContributed?: number;
 }
 
+// apiClient is still used elsewhere, so we need to keep it for other calls or refactor them too.
+// For now, only modifying the problematic call.
+// If apiClient is not used elsewhere in this file after this change, it can be fully removed.
+// For now, assuming it might be used by other functions not directly in handleAssignVolunteer.
+// Re-checking usage: fetchEventDetails, fetchEventAssignments, handleSignup, handleWithdraw, handleRemoveAssignment
+// still use apiClient. So, the import should remain.
+import apiClient from '@/lib/apiClient';
+
+
 const DetailItem = ({ icon, label, value }: { icon: string; label: string; value: React.ReactNode }) => {
   if (!value && typeof value !== 'number' && typeof value !== 'boolean') return null; 
   return (
@@ -82,7 +99,7 @@ export default function EventDetailPage() {
   const [assignments, setAssignments] = useState<Assignment[]>([]);
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   
-  const [selectedUserToAssign, setSelectedUserToAssign] = useState<any | null>(null); 
+  const [selectedUserToAssign, setSelectedUserToAssign] = useState<UserSearchResultForPage | null>(null); 
 
   const canEditEvent = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.isSysadmin);
   const canManageAssignments = userProfile && (hasPrivilege ? hasPrivilege('events', 'manage_assignments') : userProfile.isSysadmin);
@@ -92,6 +109,7 @@ export default function EventDetailPage() {
     setIsLoadingEvent(true);
     setError(null);
     try {
+      // This still uses apiClient, which is fine if it works for GET requests
       const result = await apiClient<EventDetail>({
         path: `/events/${pageEventId}`,
         token: idToken,
@@ -118,6 +136,7 @@ export default function EventDetailPage() {
     setIsLoadingAssignments(true);
     setAssignmentsError(null);
     try {
+      // This still uses apiClient
       const result = await apiClient<Assignment[]>({
         path: `/events/${currentEventId}/assignments`,
         token: idToken,
@@ -164,6 +183,7 @@ export default function EventDetailPage() {
     if (!idToken || !event) return;
     setActionInProgress(true); setError(null);
     try {
+        // This still uses apiClient
         const result = await apiClient({
             path: `/events/${event.id}/signup`,
             token: idToken,
@@ -179,6 +199,7 @@ export default function EventDetailPage() {
     if (!idToken || !event) return;
     setActionInProgress(true); setError(null);
     try {
+        // This still uses apiClient
         const result = await apiClient({
             path: `/events/${event.id}/signup`,
             token: idToken,
@@ -190,39 +211,91 @@ export default function EventDetailPage() {
     finally { setActionInProgress(false); }
   };
 
-  const handleAssignVolunteer = async (e: React.FormEvent) => {
+  const handleUserSelectedForAssignment = (selectedUser: UserSearchResultForPage) => {
+    setSelectedUserToAssign(selectedUser);
+  };
+
+  const handleAssignVolunteer = async (e: React.FormEvent) => { 
     e.preventDefault();
-    if (!idToken || !event || !selectedUserToAssign) {
-        setAssignmentsError("Please select a user to assign.");
+    if (!user || !event || !selectedUserToAssign) { // Check for user object for getIdToken
+        setAssignmentsError("User session, event details, or selected user is missing. Please select a user to add to signups.");
         return;
     }
+
+    if (!event.id) {
+        console.error("Critical: Event ID is missing before attempting to assign user.", event);
+        setAssignmentsError("Event information is incomplete. Please refresh the page.");
+        return;
+    }
+    if (!selectedUserToAssign.id) {
+        console.error("Critical: Selected user ID is missing before attempting to assign.", selectedUserToAssign);
+        setAssignmentsError("Selected user information is incomplete. Please select the user again.");
+        return;
+    }
+
+    const payload = { 
+        userId: selectedUserToAssign.id, 
+        assignableId: event.id, 
+        assignableType: 'event' as 'event', 
+        status: 'confirmed_admin' 
+    };
+    
+    console.log("Attempting to create assignment with payload (direct fetch):", JSON.stringify(payload, null, 2));
+
     setActionInProgress(true); setError(null); setAssignmentsError(null);
     try {
-      const result = await apiClient({
-        path: `/events/${event.id}/assignments`,
-        token: idToken,
+      const currentIdToken = await user.getIdToken(); // Get fresh token
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/events/${event.id}/assignments`, {
         method: 'POST',
-        body: { userId: selectedUserToAssign.id, assignableId: event.id, assignableType: 'event', status: 'confirmed_admin' },
+        headers: { 
+            'Authorization': `Bearer ${currentIdToken}`,
+            'Content-Type': 'application/json' 
+        },
+        body: JSON.stringify(payload),
       });
-      if (!result.ok) throw new Error(result.error?.message || 'Failed to assign volunteer');
+
+      if (!response.ok) {
+        let errorDetail = 'Failed to add signup.';
+        try {
+            const errorData = await response.json();
+            errorDetail = errorData.detail || (errorData.message ? JSON.stringify(errorData.message) : errorDetail);
+            if (Array.isArray(errorData.detail)) { // Handle Pydantic's detailed error messages
+                errorDetail = errorData.detail.map((d: any) => `${d.loc.join('.')} - ${d.msg}`).join('; ');
+            }
+        } catch (jsonError) {
+            // If parsing error JSON fails, stick with a generic message or response status text
+            errorDetail = response.statusText || errorDetail;
+        }
+        throw new Error(`HTTP ${response.status}: ${errorDetail}`);
+      }
+      
+      // Assuming successful response is 201 with the created assignment data
+      // const createdAssignment = await response.json(); 
+      // console.log("Assignment created:", createdAssignment);
+
       setSelectedUserToAssign(null); 
-      await fetchEventAssignments(event.id); 
-      await fetchEventDetails(); 
-    } catch (err: any) { setAssignmentsError(err.message); } 
+      await fetchEventAssignments(event.id); // Refresh assignments list (uses apiClient)
+      await fetchEventDetails(); // Refresh event details (uses apiClient)
+    } catch (err: any) { 
+        console.error("Error in handleAssignVolunteer (direct fetch):", err);
+        setAssignmentsError(`${err.message}`); 
+    } 
     finally { setActionInProgress(false); }
   };
 
-  const handleRemoveAssignment = async (assignmentId: string) => {
-    if (!idToken || !event || !confirm("Are you sure you want to remove this volunteer?")) return;
+  const handleRemoveAssignment = async (assignmentId: string) => { 
+    if (!idToken || !event || !confirm("Are you sure you want to remove this signup?")) return;
     setActionInProgress(true); setError(null); setAssignmentsError(null);
     try {
+      // This still uses apiClient
       const result = await apiClient({
         path: `/events/${event.id}/assignments/${assignmentId}`,
         token: idToken,
         method: 'DELETE',
       });
       if (!result.ok && result.status !== 204) { 
-        throw new Error(result.error?.message || 'Failed to remove volunteer assignment');
+        throw new Error(result.error?.message || 'Failed to remove signup');
       }
       await fetchEventAssignments(event.id); 
       await fetchEventDetails();
@@ -236,7 +309,7 @@ export default function EventDetailPage() {
   
   if (error && !event) { 
     return (
-      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> {/* Added main wrapper for consistency */}
+      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
             <Link href="/dashboard/events" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200">← Back to Events</Link>
         </div>
@@ -249,7 +322,7 @@ export default function EventDetailPage() {
   }
   if (!event && !isLoadingEvent) { 
     return (
-      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> {/* Added main wrapper for consistency */}
+      <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
         <div className="mb-6">
             <Link href="/dashboard/events" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200">← Back to Events</Link>
         </div>
@@ -261,7 +334,6 @@ export default function EventDetailPage() {
   }
   
   if (!event) {
-    // This case should ideally be covered by the above, but as a fallback:
     return (
         <main className="max-w-4xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
              <p className="text-center text-gray-500 dark:text-gray-400">No event data to display.</p>
@@ -326,7 +398,7 @@ export default function EventDetailPage() {
               <DetailItem icon="place" label="Venue" value={event.venue || 'N/A'} /> 
               <DetailItem icon="event_busy" label="End Date & Time" value={event.endTime && isValid(parseISO(event.endTime)) ? format(parseISO(event.endTime), 'PPP p') : 'N/A'} />
               <DetailItem icon="info" label="Status" value={<span className={`px-2 py-0.5 inline-flex text-xs leading-5 font-semibold rounded-full ${statusColors[event.status] || 'bg-gray-100 text-gray-800 dark:bg-gray-700 dark:text-gray-100'}`}>{statusDisplay}</span>} />
-              <DetailItem icon="groups" label="Volunteers Required" value={event.volunteersRequired ?? 'N/A'} />
+              <DetailItem icon="groups" label="Signups Required" value={event.volunteersRequired ?? 'N/A'} />
               <DetailItem icon="person_pin" label="Organizer" value={organizerName} />
               {event.point_of_contact && <DetailItem icon="contact_mail" label="Point of Contact" value={event.point_of_contact} />}
               <DetailItem icon="person_add" label="Created By" value={creatorName} />
@@ -382,15 +454,22 @@ export default function EventDetailPage() {
 
             {canManageAssignments && (
               <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
-                <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">Manage Volunteers</h2>
+                <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">Manage Signups</h2>
                 
                 <div className="mb-8 p-6 bg-gray-50 dark:bg-gray-800/50 rounded-lg shadow">
-                  <h3 className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-3">Assign New Volunteer</h3>
+                  <h3 className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-3">Signup Users</h3>
                   <form onSubmit={handleAssignVolunteer} className="space-y-4">
                     <div>
-                        <label htmlFor="user-search-input" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Search for volunteer to assign:</label>
-                        <input id="user-search-input" type="text" placeholder="UserSearchInput component placeholder" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
-                        {selectedUserToAssign && <p className="text-xs text-green-600 dark:text-green-400 mt-1">Selected: {selectedUserToAssign.firstName} {selectedUserToAssign.lastName}</p>}
+                        <UserSearchInput
+                            onUserSelected={handleUserSelectedForAssignment}
+                            label="Search for user to sign up:"
+                            placeholder="Search by name or email..."
+                        />
+                        {selectedUserToAssign && (
+                            <p className="text-xs text-green-600 dark:text-green-400 mt-1">
+                                Selected for signup: {selectedUserToAssign.firstName || ''} {selectedUserToAssign.lastName || ''} ({selectedUserToAssign.email})
+                            </p>
+                        )}
                     </div>
                     <button 
                         type="submit" 
@@ -398,7 +477,7 @@ export default function EventDetailPage() {
                         className="w-full inline-flex items-center justify-center py-2 px-4 bg-green-600 hover:bg-green-700 text-white font-medium rounded-md shadow-sm disabled:opacity-50"
                     >
                       <span className="material-icons mr-2 text-base">person_add</span>
-                      {actionInProgress ? 'Assigning...' : `Assign ${selectedUserToAssign ? (selectedUserToAssign.firstName || selectedUserToAssign.email) : ''}`}
+                      {actionInProgress ? 'Manually Signing Up...' : `Manually Signup ${selectedUserToAssign ? (selectedUserToAssign.firstName || selectedUserToAssign.email) : 'Selected User'}`}
                     </button>
                   </form>
                   {assignmentsError && <p className="text-red-500 text-sm mt-3 p-2 bg-red-50 dark:bg-red-900/30 rounded-md">{assignmentsError}</p>}
@@ -406,9 +485,9 @@ export default function EventDetailPage() {
 
                 <div>
                     <h3 className="text-xl font-medium text-gray-700 dark:text-gray-300 mb-4">
-                        Assigned Volunteers ({assignments.length})
+                        Current Signups ({assignments.length})
                     </h3>
-                    {isLoadingAssignments ? <p className="text-gray-500 dark:text-gray-400">Loading assignments...</p> : assignments.length > 0 ? (
+                    {isLoadingAssignments ? <p className="text-gray-500 dark:text-gray-400">Loading signups...</p> : assignments.length > 0 ? (
                     <ul className="space-y-4">
                         {assignments.map((assignment) => (
                         <li key={assignment.id} className="p-4 bg-white dark:bg-gray-800 rounded-lg shadow-md flex flex-col sm:flex-row justify-between items-start sm:items-center">
@@ -418,7 +497,7 @@ export default function EventDetailPage() {
                             </p>
                             <p className="text-sm text-gray-500 dark:text-gray-400">{assignment.userEmail || assignment.userId}</p>
                             <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
-                                Status: <span className="font-medium">{assignment.status.replace(/_/g, ' ')}</span> | Assigned: {assignment.assignmentDate && isValid(parseISO(assignment.assignmentDate)) ? format(parseISO(assignment.assignmentDate), 'Pp') : 'N/A'}
+                                Status: <span className="font-medium">{assignment.status.replace(/_/g, ' ')}</span> | Signed Up: {assignment.assignmentDate && isValid(parseISO(assignment.assignmentDate)) ? format(parseISO(assignment.assignmentDate), 'Pp') : 'N/A'}
                             </p>
                             </div>
                             <button 
@@ -427,13 +506,13 @@ export default function EventDetailPage() {
                             className="py-1.5 px-3 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-700 dark:hover:bg-red-600 dark:text-red-100 text-xs font-medium rounded-md shadow-sm disabled:opacity-50 inline-flex items-center"
                             >
                             <span className="material-icons mr-1 text-sm">person_remove</span>
-                            Remove
+                            Remove Signup
                             </button>
                         </li>
                         ))}
                     </ul>
                     ) : (
-                    <p className="text-gray-500 dark:text-gray-400">No volunteers currently assigned to this event.</p>
+                    <p className="text-gray-500 dark:text-gray-400">No users currently signed up for this event.</p>
                     )}
                     {assignmentsError && !isLoadingAssignments && assignments.length === 0 && <p className="text-red-500 text-sm mt-2">{assignmentsError}</p>}
                 </div>
