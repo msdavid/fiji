@@ -66,24 +66,21 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
   eventStartDate,
 }) => {
   const [isMounted, setIsMounted] = useState(false);
-  // Initialize recurrenceEnabled based on the initial presence of `value`
   const [recurrenceEnabled, setRecurrenceEnabled] = useState(() => !!value); 
 
   const [options, setOptions] = useState<RRuleOptionsState>(() => calculateDefaultOptions(getValidDtStart(eventStartDate)));
 
   useEffect(() => {
     setIsMounted(true);
-    // No need to setRecurrenceEnabled here based on value anymore, useState initializer handles it.
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
-  // Effect to parse RRULE value or set defaults based on eventStartDate and current value
   useEffect(() => {
     if (!isMounted) return;
 
     const currentDtStart = getValidDtStart(eventStartDate);
 
-    if (value) { // If there's an RRULE string, try to parse it and update options
+    if (value) { 
       try {
         const ruleInput = rrulestr(value, { unfold: true });
         let parsedRRuleOpts: RRule.Options | null = null;
@@ -106,55 +103,40 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
             until: currentUntil && isValidDate(currentUntil) ? format(currentUntil, 'yyyy-MM-dd') : '',
             count: parsedRRuleOpts.count || null,
           };
-          if (JSON.stringify(newOptionsState) !== JSON.stringify(options)) {
-             setOptions(newOptionsState);
-          }
-          // Ensure recurrence is enabled if we successfully parsed a value
+          setOptions(newOptionsState); // Directly set options based on parsed value
           if (!recurrenceEnabled) setRecurrenceEnabled(true);
-
-        } else { // rrulestr returned null (invalid string for parsing)
-          const defaultOpts = calculateDefaultOptions(currentDtStart);
-          if (JSON.stringify(options) !== JSON.stringify(defaultOpts)) setOptions(defaultOpts);
+        } else { 
+          setOptions(calculateDefaultOptions(currentDtStart)); // Use defaults if parsing fails (rrulestr returned null)
         }
       } catch (e) { 
         console.error("Error parsing RRULE string:", e, "Input value:", value);
-        const defaultOpts = calculateDefaultOptions(currentDtStart);
-        if (JSON.stringify(options) !== JSON.stringify(defaultOpts)) setOptions(defaultOpts);
+        setOptions(calculateDefaultOptions(currentDtStart)); // Use defaults on error
       }
     } else { 
-      // Value is empty: reset options to defaults based on current eventStartDate.
-      // Also, ensure recurrence is marked as disabled.
-      const defaultOpts = calculateDefaultOptions(currentDtStart);
-      if (JSON.stringify(options) !== JSON.stringify(defaultOpts)) {
-        setOptions(defaultOpts);
-      }
-      if (recurrenceEnabled) setRecurrenceEnabled(false); // Sync if value is empty
+      setOptions(calculateDefaultOptions(currentDtStart)); // Value is empty, set defaults
+      if (recurrenceEnabled) setRecurrenceEnabled(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, eventStartDate, isMounted]); // recurrenceEnabled removed as a direct dependency here to break loops
-                                          // It's now managed based on `value` presence.
+  }, [value, eventStartDate, isMounted]); // recurrenceEnabled is managed based on value, so not a direct dep here.
 
-  // Construct RRULE string when options change OR recurrenceEnabled changes
   useEffect(() => {
     if (!isMounted) return;
 
-    if (!recurrenceEnabled) { // If recurrence is explicitly disabled by user
-      if (value !== "") onChange(""); // Clear the value in parent form
+    if (!recurrenceEnabled) { 
+      if (value !== "") onChange(""); 
       return;
     }
 
-    // If recurrence is enabled, proceed to generate rule
     const dtStart = getValidDtStart(eventStartDate);
     if (!isValidDate(dtStart)) {
       if (value !== "") onChange(""); 
       return;
     }
     
-    // Conditions for an "empty" or invalid rule based on UI state
     if ((options.freq === 'WEEKLY' && options.byweekday.length === 0) ||
         (options.freq === 'MONTHLY' && !options.bymonthday) ||
         options.interval < 1) {
-      if (value !== "") onChange(""); // If UI state implies no rule, clear existing value
+      if (value !== "") onChange(""); 
       return; 
     }
 
@@ -185,20 +167,17 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
       if (value !== "") onChange(""); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options, eventStartDate, recurrenceEnabled, isMounted]); // `value` and `onChange` are not direct deps here
+  }, [options, eventStartDate, recurrenceEnabled, isMounted]); 
 
   const handleToggleRecurrence = () => {
     const newEnabledState = !recurrenceEnabled;
     setRecurrenceEnabled(newEnabledState);
-    // If disabling, the generation useEffect will call onChange("").
-    // If enabling, the parsing/defaulting useEffect (triggered by recurrenceEnabled change if value is empty)
-    // or the generation useEffect (if options are already valid) should handle producing a rule.
   };
 
   const handleFrequencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newFreq = e.target.value as FrequencyOption;
     const dtStart = getValidDtStart(eventStartDate); 
-    setOptions(() => { // No prevOpts needed, always reset for new frequency
+    setOptions(() => { 
       const freshDefaults = calculateDefaultOptions(dtStart);
       return {
         ...freshDefaults, 
@@ -213,7 +192,6 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
     });
   };
   
-  // ... other handlers (handleIntervalChange, handleWeekdayToggle, etc.) remain the same
   const handleIntervalChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const newInterval = parseInt(e.target.value, 10);
     setOptions(prev => ({ ...prev, interval: newInterval >= 1 ? newInterval : 1 }));
