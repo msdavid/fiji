@@ -15,4 +15,4 @@
 - when adding placehoders for future code, use the TODO comment format.
 - DO NOT under any circumstances modify the pyproject.toml file.- use uv to manage packages. e.g `uv add <package_name>`, `uv run <py_file>`, `uv test <package_name>`, etc.
 - always use -m for git commits. e.g `git commit -m "your message"`.
-- do not escape backtcks and other special characters in commit messages.
+- you must escape backtcks and other special characters in commit messages.
