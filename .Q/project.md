@@ -13,3 +13,4 @@
 - if you need to create temporary scirpts, files, etc. use the tmp directory.
 - the root directory for the backend is backend/. use direct imports from the backend directory.
 - when adding placehoders for future code, use the TODO comment format.
+- DO NOT under any circumstances modify the pyproject.toml file.- use uv to manage packages. e.g uv add <package_name>, etc.

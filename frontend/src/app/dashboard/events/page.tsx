@@ -9,12 +9,12 @@ import Tippy from '@tippyjs/react';
 
 // Interface for the event data
 interface EventWithSignupStatus {
-  id: string;
+  id: string; 
   eventName: string;
   eventType?: string;
   description?: string;
   dateTime: string | Date; 
-  endTime: string | Date;
+  endTime: string | Date;   
   venue?: string;
   volunteersRequired?: number;
   status: string; 
@@ -33,6 +33,7 @@ interface EventWithSignupStatus {
   workingGroupNames?: string[]; 
   currentVolunteerCount?: number; 
   volunteerNames?: string[]; 
+  recurrenceRule?: string; 
 }
 
 interface WorkingGroup {
@@ -75,12 +76,8 @@ const ensureDateString = (date: string | Date): string => {
   return date;
 };
 
-const TippyContentWrapper = React.forwardRef<HTMLSpanElement, { children: React.ReactNode }>(
-  ({ children }, ref) => {
-    return <span ref={ref}>{children}</span>;
-  }
-);
-TippyContentWrapper.displayName = 'TippyContentWrapper';
+// TippyContentWrapper removed as it might be related to the React 19 ref warning.
+// We will use a direct <span> as child of Tippy.
 
 function debounce<F extends (...args: any[]) => void>(func: F, waitFor: number) {
   let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -96,7 +93,7 @@ function debounce<F extends (...args: any[]) => void>(func: F, waitFor: number) 
 
 export default function EventsPage() {
   const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege, logout } = useAuth();
-  const [events, setEvents] = useState<EventWithSignupStatus[]>([]);
+  const [events, setEvents] = useState<EventWithSignupStatus[]>([]); 
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [isProcessingSignup, setIsProcessingSignup] = useState<string | null>(null); 
@@ -152,7 +149,6 @@ export default function EventsPage() {
         return;
     }
 
-    // console.log("Fetching events with filters:", { statusFilter, fromDateFilter, daysRangeFilter, workingGroupFilter, searchTerm }); // DEBUG
     setIsLoading(true);
     setError(null);
 
@@ -178,28 +174,7 @@ export default function EventsPage() {
       });
 
       if (response.ok && response.data) {
-        // console.log("Raw data from backend:", response.data); // DEBUG: Check raw backend data
-        // Temporarily set events directly to see if mapping is an issue
         setEvents(response.data); 
-        
-        // Original mapping (can be re-enabled after testing)
-        // const eventsWithMockedNames = response.data.map(event => {
-        //   let mockNames: string[] = [];
-        //   const actualVolunteerCount = event.isCurrentUserSignedUp ? 1 : 0; 
-        //   if (actualVolunteerCount > 0) {
-        //     mockNames = event.isCurrentUserSignedUp && userProfile?.firstName 
-        //       ? [`${userProfile.firstName} ${userProfile.lastName || ''}`.trim()] 
-        //       : ['Demo User 1'];
-        //     if (actualVolunteerCount > 1) mockNames.push('Demo User 2'); 
-        //   }
-        //   return { 
-        //     ...event, 
-        //     currentVolunteerCount: actualVolunteerCount, 
-        //     volunteerNames: mockNames 
-        //   };
-        // });
-        // setEvents(eventsWithMockedNames);
-
       } else {
         if (response.status === 401) { await logout(); }
         setError(response.error?.message || 'Failed to fetch events.');
@@ -209,7 +184,7 @@ export default function EventsPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [idToken, authLoading, statusFilter, fromDateFilter, daysRangeFilter, workingGroupFilter, searchTerm, logout, user, userProfile]);
+  }, [idToken, authLoading, statusFilter, fromDateFilter, daysRangeFilter, workingGroupFilter, searchTerm, logout, user]);
 
   const debouncedFetchEvents = useMemo(() => debounce(fetchEvents, 500), [fetchEvents]);
 
@@ -230,41 +205,47 @@ export default function EventsPage() {
 
   const displayedEvents = useMemo(() => {
     const now = currentTimeTick;
-    return events.map(event => {
-      const eventStartDateTime = parseISO(ensureDateString(event.dateTime));
-      const eventEndDateTime = parseISO(ensureDateString(event.endTime));
-      let dynamicStatus = event.status;
+    return events.map(eventInstance => {
+      const eventStartDateTime = parseISO(ensureDateString(eventInstance.dateTime));
+      const eventEndDateTime = parseISO(ensureDateString(eventInstance.endTime));
+      let dynamicStatus = eventInstance.status; 
 
-      if (event.status === 'open_for_signup' && isBefore(eventStartDateTime, now) && isAfter(eventEndDateTime, now)) {
-        dynamicStatus = 'ongoing';
-      } else if (event.status === 'open_for_signup' && isBefore(eventStartDateTime, now) && isBefore(eventEndDateTime, now)) {
-         dynamicStatus = 'completed'; 
-      } else if (event.status === 'draft' && isBefore(eventStartDateTime, now) && isAfter(eventEndDateTime, now)) {
-        dynamicStatus = 'ongoing'; 
-      } else if (event.status !== 'completed' && event.status !== 'cancelled' && isBefore(eventEndDateTime, now)) {
-        dynamicStatus = 'completed'; 
+      if (dynamicStatus === 'open_for_signup' || dynamicStatus === 'draft') {
+        if (isBefore(eventStartDateTime, now) && isAfter(eventEndDateTime, now)) {
+          dynamicStatus = 'ongoing';
+        } else if (isBefore(eventEndDateTime, now)) {
+          dynamicStatus = 'completed';
+        }
+      } else if (dynamicStatus !== 'completed' && dynamicStatus !== 'cancelled' && isBefore(eventEndDateTime, now)) {
+        dynamicStatus = 'completed';
       }
       
-      // Simulate volunteerNames and currentVolunteerCount if not present from backend (for demo)
-      // In a real scenario, backend should provide this if needed for the list view.
-      const volunteerNames = event.volunteerNames || (event.isCurrentUserSignedUp && userProfile?.firstName ? [`${userProfile.firstName} ${userProfile.lastName || ''}`.trim()] : []);
-      const currentVolunteerCount = event.currentVolunteerCount ?? (event.isCurrentUserSignedUp ? 1 : 0);
+      const volunteerNames = eventInstance.volunteerNames || (eventInstance.isCurrentUserSignedUp && userProfile?.firstName ? [`${userProfile.firstName} ${userProfile.lastName || ''}`.trim()] : []);
+      const currentVolunteerCount = eventInstance.currentVolunteerCount ?? (eventInstance.isCurrentUserSignedUp ? 1 : 0);
 
-
-      return { ...event, dynamicStatus, volunteerNames, currentVolunteerCount };
+      return { ...eventInstance, dynamicStatus, volunteerNames, currentVolunteerCount };
     }).sort((a, b) => {
       const dateA = isValidDate(parseISO(ensureDateString(a.dateTime))) ? parseISO(ensureDateString(a.dateTime)) : new Date(0);
       const dateB = isValidDate(parseISO(ensureDateString(b.dateTime))) ? parseISO(ensureDateString(b.dateTime)) : new Date(0);
       return dateA.getTime() - dateB.getTime();
     });
-  }, [events, currentTimeTick, userProfile]); // Added userProfile to dependencies of displayedEvents
+  }, [events, currentTimeTick, userProfile]);
 
 
-  const handleSignup = async (eventId: string) => {
+  const handleSignup = async (eventInstance: EventWithSignupStatus) => {
     if (!idToken || !user) return;
-    setIsProcessingSignup(eventId);
+    const processingKey = `${eventInstance.id}-${ensureDateString(eventInstance.dateTime)}`;
+    setIsProcessingSignup(processingKey);
     try {
-      const response = await apiClient({ path: `/events/${eventId}/signup`, token: idToken, method: 'POST' });
+      const response = await apiClient({ 
+        path: `/events/${eventInstance.id}/signup`, 
+        token: idToken, 
+        method: 'POST',
+        data: { 
+            event_instance_start_date_time: ensureDateString(eventInstance.dateTime),
+            event_instance_end_date_time: ensureDateString(eventInstance.endTime)
+        }
+      });
       if (!response.ok) throw new Error(response.error?.message || 'Failed to sign up');
       fetchEvents(); 
     } catch (err: any) {
@@ -274,11 +255,19 @@ export default function EventsPage() {
     }
   };
 
-  const handleWithdraw = async (eventId: string) => {
+  const handleWithdraw = async (eventInstance: EventWithSignupStatus) => {
     if (!idToken || !user) return;
-    setIsProcessingSignup(eventId);
+    const processingKey = `${eventInstance.id}-${ensureDateString(eventInstance.dateTime)}`;
+    setIsProcessingSignup(processingKey);
     try {
-      const response = await apiClient({ path: `/events/${eventId}/signup`, token: idToken, method: 'DELETE' });
+      const response = await apiClient({ 
+        path: `/events/${eventInstance.id}/signup`, 
+        token: idToken, 
+        method: 'DELETE',
+        data: { 
+            event_instance_start_date_time: ensureDateString(eventInstance.dateTime)
+        }
+      });
       if (!response.ok && response.status !== 204) throw new Error(response.error?.message || 'Failed to withdraw');
       fetchEvents(); 
     } catch (err: any) {
@@ -323,7 +312,7 @@ export default function EventsPage() {
             id="search-term"
             value={searchTerm}
             onChange={(e) => setSearchTerm(e.target.value)}
-            placeholder="Search by name, description, venue..."
+            placeholder="Search by name or description ..."
             className={`${filterInputBaseClass} pr-2`} 
           />
         </div>
@@ -427,30 +416,38 @@ export default function EventsPage() {
                   </td>
                 </tr>
               ) : (
-                displayedEvents.map((event) => {
+                displayedEvents.map((eventInstance) => {
+                  const instanceKey = `${eventInstance.id}-${ensureDateString(eventInstance.dateTime)}`;
+                  const processingKeyCompare = `${eventInstance.id}-${ensureDateString(eventInstance.dateTime)}`;
+
                   const canEdit = userProfile && (hasPrivilege ? hasPrivilege('events', 'edit') : userProfile.isSysadmin);
-                  const canSignUp = event.dynamicStatus === 'open_for_signup' && !event.isCurrentUserSignedUp;
-                  const canWithdraw = event.isCurrentUserSignedUp && (event.dynamicStatus === 'open_for_signup' || event.dynamicStatus === 'ongoing');
-                  const displayStatus = event.dynamicStatus.replace(/_/g, ' ');
+                  const canSignUp = eventInstance.dynamicStatus === 'open_for_signup' && !eventInstance.isCurrentUserSignedUp;
+                  const canWithdraw = eventInstance.isCurrentUserSignedUp && (eventInstance.dynamicStatus === 'open_for_signup' || eventInstance.dynamicStatus === 'ongoing');
+                  const displayStatus = eventInstance.dynamicStatus.replace(/_/g, ' ');
                   
-                  const eventDate = parseISO(ensureDateString(event.dateTime));
+                  const eventDate = parseISO(ensureDateString(eventInstance.dateTime)); 
                   const formattedDate = isValidDate(eventDate) ? format(eventDate, 'MMM d, yy') : 'Invalid Date';
                   const formattedTime = isValidDate(eventDate) ? format(eventDate, 'p') : '';
                   
-                  const volunteerNamesTooltipContent = event.volunteerNames && event.volunteerNames.length > 0 
-                    ? event.volunteerNames.join(', ') 
+                  const volunteerNamesTooltipContent = eventInstance.volunteerNames && eventInstance.volunteerNames.length > 0 
+                    ? eventInstance.volunteerNames.join(', ') 
                     : 'No volunteers signed up yet';
 
+                  const viewLink = `/dashboard/events/${eventInstance.id}?instanceStartDateTime=${encodeURIComponent(ensureDateString(eventInstance.dateTime))}`;
+                  const editLink = `/dashboard/events/${eventInstance.id}/edit`;
+
+
                   return (
-                    <tr key={event.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
+                    <tr key={instanceKey} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors">
                       <td className="px-2 py-1 whitespace-nowrap"> 
-                        <span className="material-icons text-gray-600 dark:text-gray-300 text-lg" title={event.icon || 'event'}>{event.icon || 'event'}</span> 
+                        <span className="material-icons text-gray-600 dark:text-gray-300 text-lg" title={eventInstance.icon || 'event'}>{eventInstance.icon || 'event'}</span> 
                       </td>
                       <td className="px-3 py-1 text-sm text-gray-700 dark:text-gray-200 whitespace-normal break-words"> 
-                        <Link href={`/dashboard/events/${event.id}`} className="font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
-                          {event.eventName}
+                        <Link href={viewLink} className="font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
+                          {eventInstance.eventName}
                         </Link>
-                        {event.eventType && <div className="text-xs text-gray-500 dark:text-gray-400">{event.eventType}</div>}
+                        {eventInstance.eventType && <div className="text-xs text-gray-500 dark:text-gray-400">{eventInstance.eventType}</div>}
+                        {eventInstance.recurrenceRule && <div className="text-xs text-blue-500 dark:text-blue-400" title={eventInstance.recurrenceRule}>(Recurring)</div>}
                       </td>
                       <td className="px-3 py-1 text-xs sm:text-sm text-gray-500 dark:text-gray-300 whitespace-normal"> 
                         {formattedDate !== 'Invalid Date' ? (
@@ -462,52 +459,52 @@ export default function EventsPage() {
                           'Invalid Date'
                         )}
                       </td>
-                      <td className="px-3 py-1 text-xs sm:text-sm text-gray-500 dark:text-gray-300 whitespace-normal break-words" title={event.venue || 'N/A'}> 
-                        {event.venue || 'N/A'}
+                      <td className="px-3 py-1 text-xs sm:text-sm text-gray-500 dark:text-gray-300 whitespace-normal break-words" title={eventInstance.venue || 'N/A'}> 
+                        {eventInstance.venue || 'N/A'}
                       </td>
                       <td className="px-3 py-1 whitespace-nowrap"> 
-                        <span className={`px-1.5 py-0.5 inline-flex text-xs leading-tight font-semibold rounded-full ${statusColors[event.dynamicStatus] || statusColors.draft}`}> 
+                        <span className={`px-1.5 py-0.5 inline-flex text-xs leading-tight font-semibold rounded-full ${statusColors[eventInstance.dynamicStatus] || statusColors.draft}`}> 
                           {displayStatus}
                         </span>
                       </td>
                       <td className="px-2 py-1 text-xs sm:text-sm text-gray-500 dark:text-gray-300 whitespace-nowrap text-center"> 
                         <Tippy content={volunteerNamesTooltipContent} placement="top" className="tippy-small-font">
-                           <TippyContentWrapper>
-                             {event.currentVolunteerCount ?? 0} / {event.volunteersRequired ?? 'N/A'}
-                           </TippyContentWrapper>
+                           <span> {/* Direct span child for Tippy */}
+                             {eventInstance.currentVolunteerCount ?? 0} / {eventInstance.volunteersRequired ?? 'N/A'}
+                           </span>
                         </Tippy>
                       </td>
                       <td className="px-3 py-1 whitespace-nowrap text-sm font-medium"> 
                         <div className="flex items-center justify-end space-x-1">
                           <div className={actionIconWrapperClass}>
-                            <Link href={`/dashboard/events/${event.id}`}
+                            <Link href={viewLink}
                                   className="text-indigo-500 hover:text-indigo-700 dark:text-indigo-300 dark:hover:text-indigo-100 p-0.5 rounded hover:bg-indigo-100 dark:hover:bg-gray-700" 
-                                  title="View Details">
+                                  title="View Event Instance Details">
                               <span className="material-icons text-base">visibility</span>
                             </Link>
                           </div>
                           <div className={actionIconWrapperClass}>
-                            {canEdit && (
-                              <Link href={`/dashboard/events/${event.id}/edit`}
+                            {canEdit && ( 
+                              <Link href={editLink}
                                     className="text-yellow-500 hover:text-yellow-700 dark:text-yellow-300 dark:hover:text-yellow-100 p-0.5 rounded hover:bg-yellow-100 dark:hover:bg-gray-700"
-                                    title="Edit Event">
+                                    title="Edit Event Series">
                                 <span className="material-icons text-base">edit</span>
                               </Link>
                             )}
                           </div>
                           <div className={actionIconWrapperClass}>
                             {canSignUp && (
-                              <button onClick={() => handleSignup(event.id)} disabled={isProcessingSignup === event.id}
+                              <button onClick={() => handleSignup(eventInstance)} disabled={isProcessingSignup === processingKeyCompare}
                                       className="text-green-500 hover:text-green-700 dark:text-green-300 dark:hover:text-green-100 p-0.5 rounded hover:bg-green-100 dark:hover:bg-gray-700 disabled:opacity-50"
-                                      title="Sign Up">
-                                <span className="material-icons text-base">{isProcessingSignup === event.id ? 'hourglass_empty' : 'person_add'}</span>
+                                      title="Sign Up for this instance">
+                                <span className="material-icons text-base">{isProcessingSignup === processingKeyCompare ? 'hourglass_empty' : 'person_add'}</span>
                               </button>
                             )}
                             {canWithdraw && (
-                              <button onClick={() => handleWithdraw(event.id)} disabled={isProcessingSignup === event.id}
+                              <button onClick={() => handleWithdraw(eventInstance)} disabled={isProcessingSignup === processingKeyCompare}
                                       className="text-red-800 hover:text-red-800 dark:text-red-800 dark:hover:text-red-800 p-0.5 rounded hover:bg-red-100 dark:hover:bg-red-700/50 disabled:opacity-50"
-                                      title="Withdraw Signup">
-                                <span className="material-icons text-base">{isProcessingSignup === event.id ? 'hourglass_empty' : 'person_remove'}</span>
+                                      title="Withdraw from this instance">
+                                <span className="material-icons text-base">{isProcessingSignup === processingKeyCompare ? 'hourglass_empty' : 'person_remove'}</span>
                               </button>
                             )}
                           </div>
@@ -523,7 +520,7 @@ export default function EventsPage() {
       </div>
       {(!isLoading && displayedEvents.length > 10) && (
          <p className="mt-3 text-xs sm:text-sm text-gray-500 dark:text-gray-400"> 
-            Displaying {displayedEvents.length} events. Consider refining filters for large lists.
+            Displaying {displayedEvents.length} event instances. Consider refining filters for large lists.
         </p>
       )}
     </main>

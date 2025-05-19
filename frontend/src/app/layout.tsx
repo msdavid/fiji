@@ -2,6 +2,7 @@ import type { Metadata } from "next";
 import { Inter } from "next/font/google";
 import "./globals.css";
 import { AuthProvider } from '@/context/AuthContext';
+import ConsoleWarningSuppressor from '@/components/utils/ConsoleWarningSuppressor'; // Import the suppressor
 
 const inter = Inter({ subsets: ["latin"] });
 
@@ -21,6 +22,7 @@ export default function RootLayout({
         <link href="https://fonts.googleapis.com/icon?family=Material+Icons" rel="stylesheet" />
       </head>
       <body className={inter.className}>
+        <ConsoleWarningSuppressor /> {/* Add the suppressor component here */}
         <AuthProvider>
           {children}
         </AuthProvider>
