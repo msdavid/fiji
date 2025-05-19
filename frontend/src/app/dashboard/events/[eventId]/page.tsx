@@ -506,7 +506,7 @@ export default function EventDetailPage() {
                             className="py-1.5 px-3 bg-red-100 hover:bg-red-200 text-red-700 dark:bg-red-700 dark:hover:bg-red-600 dark:text-red-100 text-xs font-medium rounded-md shadow-sm disabled:opacity-50 inline-flex items-center"
                             >
                             <span className="material-icons mr-1 text-sm">person_remove</span>
-                            Remove Signup
+                            Remove
                             </button>
                         </li>
                         ))}
