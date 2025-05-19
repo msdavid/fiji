@@ -68,3 +68,6 @@ body {
   font-size: 0.75rem; /* Equivalent to Tailwind's text-xs */
   padding: 0.25rem 0.5rem; /* Adjust padding if needed */
 }
+
+/* Styles for react-rrule-generator and its react-datetime dependency have been removed. */
+/* Add any new global styles for the custom component below if necessary. */

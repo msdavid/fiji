@@ -5,25 +5,23 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/lib/apiClient'; 
+import CustomRRuleGenerator from '@/components/events/CustomRRuleGenerator'; 
 
 interface EventFormData {
   eventName: string;
   eventType: string;
-  // purpose: string; // Not in backend EventUpdate model
   description: string;
   dateTime: string; 
   endTime: string;  
-  venue: string; // Changed from location
+  venue: string; 
   volunteersRequired: number;
   status: string;
   organizerUserId: string | null; 
   icon: string; 
-  // point_of_contact?: string; // Not in backend EventUpdate model
   workingGroupIds: string[]; 
-  workingGroupId?: string | null; // Legacy, primarily use workingGroupIds
-  recurrenceRule?: string; // Added for recurrence
+  workingGroupId?: string | null; 
+  recurrenceRule?: string; 
 
-  // Fields that might come from GET but not directly part of PUT payload structure
   id?: string;
   createdByUserId?: string;
   createdAt?: string;
@@ -136,9 +134,8 @@ export default function EditEventPage() {
     if (initialLoad) setIsLoadingEvent(true);
     setError(null);
     try {
-      // Backend GET /events/{id} returns EventWithSignupStatus which includes recurrenceRule
       const result = await apiClient<EventFormData>({ 
-        path: `/events/${eventId}`, // This should fetch the master event data
+        path: `/events/${eventId}`, 
         token: idToken,
         method: 'GET',
       });
@@ -152,7 +149,6 @@ export default function EditEventPage() {
       const formattedDateTime = eventData.dateTime ? formatDateTimeForInput(eventData.dateTime) : '';
       const formattedEndTime = eventData.endTime ? formatDateTimeForInput(eventData.endTime) : '';
       
-      // Use 'venue' from backend, map to frontend's 'venue' (was 'location')
       const venue = eventData.venue; 
 
       const currentSelectedIcon = searchParams.get('selectedIcon');
@@ -166,19 +162,15 @@ export default function EditEventPage() {
       }
 
       let draftData: Partial<EventFormData> = { 
-        ...eventData, // Spread all fetched data first
+        ...eventData, 
         venue: venue, 
         dateTime: formattedDateTime,
         endTime: formattedEndTime, 
         organizerUserId: eventData.organizerUserId || null, 
         icon: iconToSet,
         workingGroupIds: wgIdsToSet, 
-        recurrenceRule: eventData.recurrenceRule || '', // Populate recurrence rule
+        recurrenceRule: eventData.recurrenceRule || '', 
       };
-
-      // Remove fields not part of EventFormData for editing state
-      // delete draftData.purpose; // If 'purpose' was in fetched data but not in form model
-      // delete draftData.point_of_contact; // Same for point_of_contact
 
       const storedDraftKey = `eventFormDraft-${eventId}`;
       const storedDraft = localStorage.getItem(storedDraftKey);
@@ -190,7 +182,6 @@ export default function EditEventPage() {
           } else if (!parsedDraft.workingGroupIds) {
             parsedDraft.workingGroupIds = [];
           }
-          // Merge draft but prioritize fetched data, then apply icon
           draftData = { ...eventData, ...parsedDraft, venue: parsedDraft.venue || venue, icon: currentSelectedIcon, workingGroupIds: parsedDraft.workingGroupIds || wgIdsToSet, recurrenceRule: parsedDraft.recurrenceRule || eventData.recurrenceRule || '' }; 
         } catch (e) { /* console.error("Failed to parse stored event form draft for edit:", e); */ }
       }
@@ -243,7 +234,7 @@ export default function EditEventPage() {
             const currentPath = window.location.pathname;
             window.history.replaceState({}, '', currentPath);
             if(isLoadingEvent) setIsLoadingEvent(false); 
-        } else if (storedDraft && Object.keys(formData).length <= 4 && !selectedIcon) { // Increased initial field count due to recurrenceRule
+        } else if (storedDraft && Object.keys(formData).length <= 4 && !selectedIcon) { 
             try { 
                 const parsedDraft = JSON.parse(storedDraft);
                 if (parsedDraft.workingGroupIds && !Array.isArray(parsedDraft.workingGroupIds)) {
@@ -302,6 +293,10 @@ export default function EditEventPage() {
     } else {
       setFormData(prev => ({ ...prev, [name]: type === 'number' ? parseInt(value, 10) : value }));
     }
+  };
+
+  const handleRRuleChange = (newRRule: string) => {
+    setFormData(prev => ({ ...prev, recurrenceRule: newRRule }));
   };
   
   const fetchUsers = async (query: string): Promise<UserSearchResult[]> => {
@@ -380,43 +375,36 @@ export default function EditEventPage() {
     if (new Date(formData.endTime) <= new Date(formData.dateTime)) {
         setError("End Date & Time must be after Start Date & Time."); return;
     }
-    if (formData.recurrenceRule && formData.recurrenceRule.trim() === "") {
-        setError("Recurrence rule, if entered, cannot be empty. Remove it or provide a valid rule.");
-        return;
-    }
 
     setError(null); setSuccessMessage(null); setSubmitting(true);
     if (!idToken) { setError("Authentication error."); setSubmitting(false); return; }
 
     try {
-      // Construct payload based on EventUpdate model
       const payloadToSend: any = {
         eventName: formData.eventName,
         eventType: formData.eventType || null,
         description: formData.description || null,
         dateTime: formData.dateTime ? new Date(formData.dateTime).toISOString() : null,
         endTime: formData.endTime ? new Date(formData.endTime).toISOString() : null,
-        venue: formData.venue || null, // Changed from location
+        venue: formData.venue || null, 
         volunteersRequired: formData.volunteersRequired,
         status: formData.status,
-        organizerUserId: formData.organizerUserId, // Can be null
+        organizerUserId: formData.organizerUserId, 
         icon: formData.icon || null,
         workingGroupIds: Array.isArray(formData.workingGroupIds) ? formData.workingGroupIds : [],
-        recurrence_rule: formData.recurrenceRule || null, // Use recurrence_rule for backend
+        recurrence_rule: formData.recurrenceRule || null, 
       };
       
-      // Remove undefined fields to respect exclude_unset=True on backend Pydantic model
       Object.keys(payloadToSend).forEach(key => {
         if (payloadToSend[key] === undefined) {
           delete payloadToSend[key]; 
         }
       });
-      // Explicitly send null if organizerUserId was cleared
       if ("organizerUserId" in formData && formData.organizerUserId === null) {
         payloadToSend.organizerUserId = null;
       }
-      if ("recurrenceRule" in formData && formData.recurrenceRule === "") {
-        payloadToSend.recurrence_rule = null; // Send null if cleared
+      if (formData.recurrenceRule === "") {
+        payloadToSend.recurrence_rule = null;
       }
 
 
@@ -441,7 +429,7 @@ export default function EditEventPage() {
       
       setSuccessMessage('Event updated successfully!');
       localStorage.removeItem(`eventFormDraft-${eventId}`); 
-      fetchEventData(false); // Re-fetch to show updated data before redirect
+      fetchEventData(false); 
       setTimeout(() => { router.push(`/dashboard/events/${eventId}`); }, 1500);
 
     } catch (err: any) { setError(err.message); } 
@@ -559,9 +547,7 @@ export default function EditEventPage() {
                 </div>
             </div>
             
-            {/* Section 2: Details */}
             <div className="space-y-6 pt-6 border-b border-gray-200 dark:border-gray-700 pb-6">
-                {/* 'purpose' field removed */}
                 <div>
                 <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
                 <textarea name="description" id="description" value={formData.description || ''} onChange={handleChange} rows={4}
@@ -569,7 +555,6 @@ export default function EditEventPage() {
                 </div>
             </div>
 
-            {/* Section 3: Date, Time, Location, Recurrence */}
             <div className="space-y-6 pt-6 border-b border-gray-200 dark:border-gray-700 pb-6">
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
@@ -584,33 +569,34 @@ export default function EditEventPage() {
                 </div>
                 </div>
                 <div>
-                  <label htmlFor="recurrenceRule" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                    Recurrence Rule (Optional)
+                  <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Recurrence (Optional)
                   </label>
-                  <input 
-                    type="text" 
-                    name="recurrenceRule" 
-                    id="recurrenceRule" 
-                    value={formData.recurrenceRule || ''} 
-                    onChange={handleChange}
-                    placeholder="e.g., FREQ=WEEKLY;BYDAY=MO;INTERVAL=1"
-                    className={defaultInputStyle} 
-                  />
+                  {formData.dateTime && (
+                    <CustomRRuleGenerator
+                        value={formData.recurrenceRule || ''}
+                        onChange={handleRRuleChange}
+                        eventStartDate={formData.dateTime}
+                    />
+                  )}
                   <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                    Enter an <a href="https://icalendar.org/iCalendar-RFC-5545/3-8-5-3-recurrence-rule.html" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline dark:text-indigo-400">RRULE</a> string. Clear to remove recurrence.
+                    Modify the recurrence pattern. Clear the pattern to make it a single event.
                   </p>
                 </div>
                 <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
                 <div>
                     <label htmlFor="venue" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Venue</label>
-                    <input type="text" name="venue" id="venue" value={formData.venue || ''} onChange={handleChange}
+                    <textarea 
+                        name="venue" 
+                        id="venue" 
+                        value={formData.venue || ''} 
+                        onChange={handleChange}
+                        rows={3}
                         className={defaultInputStyle} />
                 </div>
-                {/* 'point_of_contact' field removed */}
                 </div>
             </div>
             
-            {/* Section 4: Volunteers and Organizer */}
             <div className="space-y-6 pt-6">
                 <div>
                 <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Volunteers Required</label>

@@ -5,23 +5,21 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import apiClient from '@/lib/apiClient'; 
+import CustomRRuleGenerator from '@/components/events/CustomRRuleGenerator'; 
 
 interface EventFormData {
   eventName: string;
   eventType: string;
-  // purpose: string; // 'purpose' seems to be missing in backend EventCreate, using description
   description: string;
   dateTime: string; 
   endTime: string;   
-  // location: string; // Backend uses 'venue'
   venue: string; 
   volunteersRequired: number;
   status: string; 
   organizerUserId: string | null; 
   icon: string; 
-  // point_of_contact?: string; // Not in backend EventCreate
   workingGroupIds: string[]; 
-  recurrenceRule?: string; // Added for recurrence
+  recurrenceRule?: string;
 }
 
 interface UserSearchResult {
@@ -39,18 +37,16 @@ interface WorkingGroup {
 const initialFormData: EventFormData = {
   eventName: '',
   eventType: '',
-  // purpose: '', // 'purpose' seems to be missing in backend EventCreate
   description: '',
   dateTime: '', 
   endTime: '',   
-  venue: '', // Changed from location to venue
+  venue: '', 
   volunteersRequired: 1,
   status: 'draft',
   organizerUserId: null, 
   icon: 'event', 
-  // point_of_contact: '', // Not in backend EventCreate
   workingGroupIds: [], 
-  recurrenceRule: '', // Added
+  recurrenceRule: '',
 };
 
 const formatDateTimeForInput = (date: Date): string => {
@@ -157,7 +153,7 @@ export default function CreateEventPage() {
     }
 
     if (selectedIcon) {
-        setFormData(prev => ({ ...initialFormData, ...draftToApply, icon: selectedIcon, workingGroupIds: draftToApply.workingGroupIds || [] }));
+        setFormData(prev => ({ ...initialFormData, ...draftToApply, icon: selectedIcon, workingGroupIds: draftToApply.workingGroupIds || [], recurrenceRule: draftToApply.recurrenceRule || '' }));
         localStorage.removeItem('eventFormDraft');
         const currentPath = window.location.pathname;
         window.history.replaceState({}, '', currentPath);
@@ -196,11 +192,10 @@ export default function CreateEventPage() {
 
     if (name === 'dateTime') {
       const newDateTime = value;
-      let newEndTime = formData.endTime; // Keep existing endTime if already set and valid
+      let newEndTime = formData.endTime; 
       if (newDateTime) {
         const startDate = new Date(newDateTime);
         if (!isNaN(startDate.getTime())) {
-          // Only auto-set endTime if it's blank or earlier than new start + 1hr
           const currentEndDate = formData.endTime ? new Date(formData.endTime) : null;
           const suggestedEndDate = new Date(startDate.getTime() + 60 * 60 * 1000);
           if (!currentEndDate || currentEndDate <= startDate) {
@@ -219,6 +214,10 @@ export default function CreateEventPage() {
         [name]: type === 'number' ? parseInt(value, 10) : value,
       }));
     }
+  };
+
+  const handleRRuleChange = (newRRule: string) => {
+    setFormData(prev => ({ ...prev, recurrenceRule: newRRule }));
   };
 
   const fetchUsers = async (query: string): Promise<UserSearchResult[]> => {
@@ -292,13 +291,6 @@ export default function CreateEventPage() {
         setError("End Date & Time must be after Start Date & Time.");
         return;
     }
-    // Basic RRULE validation: if present, it should not be an empty string after trimming.
-    // More complex validation (like parsing) could be added here or rely on backend.
-    if (formData.recurrenceRule && formData.recurrenceRule.trim() === "") {
-        setError("Recurrence rule, if entered, cannot be empty. Remove it or provide a valid rule.");
-        return;
-    }
-
 
     setSubmitting(true);
 
@@ -308,20 +300,19 @@ export default function CreateEventPage() {
       return;
     }
     
-    // Aligning with backend EventCreate model
     const payload: any = { 
         eventName: formData.eventName,
-        eventType: formData.eventType || null, // Optional
-        description: formData.description || null, // Optional
+        eventType: formData.eventType || null, 
+        description: formData.description || null, 
         dateTime: new Date(formData.dateTime).toISOString(),
         endTime: new Date(formData.endTime).toISOString(),
-        venue: formData.venue || null, // Optional
+        venue: formData.venue || null, 
         volunteersRequired: formData.volunteersRequired,
         status: formData.status,
-        organizerUserId: formData.organizerUserId, // Optional
-        icon: formData.icon || null, // Optional
+        organizerUserId: formData.organizerUserId, 
+        icon: formData.icon || null, 
         workingGroupIds: formData.workingGroupIds,
-        recurrence_rule: formData.recurrenceRule || null // Use recurrence_rule for backend
+        recurrence_rule: formData.recurrenceRule || null 
     }; 
 
     try {
@@ -374,6 +365,8 @@ export default function CreateEventPage() {
     );
   }
 
+  const defaultInputStyle = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white";
+
   return (
     <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
       <div className="mb-6">
@@ -419,7 +412,7 @@ export default function CreateEventPage() {
                 <div>
                   <label htmlFor="eventName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Name</label>
                   <input type="text" name="eventName" id="eventName" value={formData.eventName} onChange={handleChange} required 
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                          className={defaultInputStyle} />
                 </div>
                 <div> 
                   <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Working Groups (select at least one)</label>
@@ -448,16 +441,14 @@ export default function CreateEventPage() {
                   <div>
                     <label htmlFor="eventType" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Event Type</label>
                     <input type="text" name="eventType" id="eventType" value={formData.eventType} onChange={handleChange} 
-                          className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                          className={defaultInputStyle} />
                   </div>
                   <div>
                     <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Status</label>
                     <select name="status" id="status" value={formData.status} onChange={handleChange} required
-                            className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white">
+                            className={defaultInputStyle}>
                       <option value="draft">Draft</option>
                       <option value="open_for_signup">Open for Signup</option>
-                      {/* <option value="completed">Completed</option> User should not create a completed event directly */}
-                      {/* <option value="cancelled">Cancelled</option> User should not create a cancelled event directly */}
                     </select>
                   </div>
                 </div>
@@ -465,63 +456,61 @@ export default function CreateEventPage() {
             </div>
           </div>
 
-          {/* Section 2: Details */}
           <div className="space-y-6 pt-6 border-b border-gray-200 dark:border-gray-700 pb-6">
-            {/* 'purpose' field removed as it's not in backend EventCreate model */}
             <div>
               <label htmlFor="description" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Description</label>
               <textarea name="description" id="description" value={formData.description} onChange={handleChange} rows={4}
-                        className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"></textarea>
+                        className={defaultInputStyle}></textarea>
             </div>
           </div>
 
-          {/* Section 3: Date, Time, Location, Recurrence */}
           <div className="space-y-6 pt-6 border-b border-gray-200 dark:border-gray-700 pb-6">
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="dateTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Start Date & Time</label>
                 <input type="datetime-local" name="dateTime" id="dateTime" value={formData.dateTime} onChange={handleChange} required
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                      className={defaultInputStyle} />
               </div>
               <div>
                 <label htmlFor="endTime" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">End Date & Time</label>
                 <input type="datetime-local" name="endTime" id="endTime" value={formData.endTime} onChange={handleChange} required
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                      className={defaultInputStyle} />
               </div>
             </div>
+            
             <div>
-              <label htmlFor="recurrenceRule" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
-                Recurrence Rule (Optional)
+              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                Recurrence (Optional)
               </label>
-              <input 
-                type="text" 
-                name="recurrenceRule" 
-                id="recurrenceRule" 
-                value={formData.recurrenceRule || ''} 
-                onChange={handleChange}
-                placeholder="e.g., FREQ=WEEKLY;BYDAY=MO;INTERVAL=1"
-                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" 
+              <CustomRRuleGenerator
+                value={formData.recurrenceRule || ''}
+                onChange={handleRRuleChange}
+                eventStartDate={formData.dateTime} 
               />
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Enter an <a href="https://icalendar.org/iCalendar-RFC-5545/3-8-5-3-recurrence-rule.html" target="_blank" rel="noopener noreferrer" className="text-indigo-600 hover:underline dark:text-indigo-400">RRULE</a> string (e.g., FREQ=WEEKLY;BYDAY=TU;UNTIL=20241231T000000Z).
+               <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                Define the recurrence pattern for this event. If no recurrence is set, it will be a single event.
               </p>
             </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-6">
               <div>
                 <label htmlFor="venue" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Venue</label>
-                <input type="text" name="venue" id="venue" value={formData.venue} onChange={handleChange}
-                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                <textarea 
+                    name="venue" 
+                    id="venue" 
+                    value={formData.venue} 
+                    onChange={handleChange}
+                    rows={3}
+                    className={defaultInputStyle} />
               </div>
-              {/* 'point_of_contact' field removed as it's not in backend EventCreate model */}
             </div>
           </div>
           
-          {/* Section 4: Volunteers and Organizer */}
           <div className="space-y-6 pt-6">
             <div>
               <label htmlFor="volunteersRequired" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Volunteers Required</label>
               <input type="number" name="volunteersRequired" id="volunteersRequired" value={formData.volunteersRequired} onChange={handleChange} min="0" required
-                    className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                    className={defaultInputStyle} />
             </div>
 
             <div>
@@ -544,7 +533,7 @@ export default function CreateEventPage() {
                   value={organizerSearchQuery}
                   onChange={handleOrganizerSearchChange}
                   placeholder="Search by name or email..."
-                  className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                  className={defaultInputStyle}
                 />
                 {isSearchingOrganizers && (
                   <div className="absolute top-full w-full mt-1 z-10">

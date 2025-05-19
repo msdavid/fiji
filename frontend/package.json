@@ -21,6 +21,7 @@
     "react-chartjs-2": "^5.2.0",
     "react-dom": "^19.0.0",
     "react-hot-toast": "^2.5.2",
+    "rrule": "^2.8.1",
     "tippy.js": "^6.3.7"
   },
   "devDependencies": {
