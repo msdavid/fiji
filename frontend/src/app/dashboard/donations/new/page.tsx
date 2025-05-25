@@ -402,7 +402,7 @@ const NewDonationPage = () => {
                     </div>
                     <div>
                         <label htmlFor="donorPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Phone <span className="text-red-500">*</span></label>
-                        <input type="tel" name="donorPhone" id="donorPhone" value={formData.donorPhone} onChange={handleInputChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        <input type="tel" name="donorPhone" id="donorPhone" value={formData.donorPhone} onChange={handleInputChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" placeholder="+65 9123 4567" />
                     </div>
                 </div>
             </div>
