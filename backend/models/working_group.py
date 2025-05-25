@@ -6,6 +6,7 @@ class WorkingGroupBase(BaseModel):
     groupName: str = Field(..., description="Name of the working group.")
     description: Optional[str] = Field(None, description="Optional description of the working group.")
     status: Literal["active", "archived"] = Field("active", description="Status of the working group.")
+    isGlobal: Optional[bool] = Field(False, description="Whether this is the global organization-wide working group.")
 
 class WorkingGroupCreate(WorkingGroupBase):
     pass
@@ -14,6 +15,7 @@ class WorkingGroupUpdate(BaseModel):
     groupName: Optional[str] = None
     description: Optional[str] = None
     status: Optional[Literal["active", "archived"]] = None
+    isGlobal: Optional[bool] = None
     updatedAt: datetime = Field(default_factory=datetime.utcnow)
 
 class WorkingGroupResponse(WorkingGroupBase):

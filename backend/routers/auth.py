@@ -13,6 +13,9 @@ from services.session_service import SessionService # Added SessionService impor
 USERS_COLLECTION = "users"
 ROLES_COLLECTION = "roles"
 INVITATIONS_COLLECTION = "registrationInvitations"
+ASSIGNMENTS_COLLECTION = "assignments"
+WORKING_GROUPS_COLLECTION = "workingGroups"
+GLOBAL_WG_ID = "organization-wide"  # Fixed ID for the global working group
 
 
 router = APIRouter(
@@ -109,6 +112,56 @@ async def _get_role_names_for_auth(db: firestore.AsyncClient, role_ids: List[str
             role_names.append(role_id)
     return role_names
 
+async def _assign_user_to_global_working_group(db: firestore.AsyncClient, user_id: str) -> None:
+    """
+    Automatically assign a new user to the global 'Organization Wide' working group.
+    This ensures all users can see and participate in global events.
+    """
+    try:
+        # Check if the global working group exists
+        global_wg_ref = db.collection(WORKING_GROUPS_COLLECTION).document(GLOBAL_WG_ID)
+        global_wg_doc = await global_wg_ref.get()
+        
+        if not global_wg_doc.exists:
+            print(f"Warning: Global working group '{GLOBAL_WG_ID}' does not exist. Skipping auto-assignment.")
+            return
+        
+        # Check if user is already assigned to avoid duplicates
+        existing_assignment_query = db.collection(ASSIGNMENTS_COLLECTION)\
+            .where("userId", "==", user_id)\
+            .where("assignableId", "==", GLOBAL_WG_ID)\
+            .where("assignableType", "==", "workingGroup")\
+            .limit(1)
+        
+        existing_assignments = await existing_assignment_query.get()
+        
+        if existing_assignments:
+            print(f"User {user_id} already assigned to global working group")
+            return
+        
+        # Create the assignment
+        assignment_data = {
+            "userId": user_id,
+            "assignableId": GLOBAL_WG_ID,
+            "assignableType": "workingGroup",
+            "status": "active",  # Auto-active for global WG
+            "role": "member",
+            "notes": "Automatically assigned to organization-wide working group during registration",
+            "assignedByUserId": "system",
+            "assignmentDate": firestore.SERVER_TIMESTAMP,
+            "createdAt": firestore.SERVER_TIMESTAMP,
+            "updatedAt": firestore.SERVER_TIMESTAMP
+        }
+        
+        assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document()
+        await assignment_ref.set(assignment_data)
+        
+        print(f"✅ Successfully assigned user {user_id} to global working group")
+        
+    except Exception as e:
+        print(f"Warning: Failed to assign user {user_id} to global working group: {str(e)}")
+        # Don't fail registration if global WG assignment fails
+
 async def _validate_invitation_for_registration(token: str, db: firestore.AsyncClient) -> Optional[dict]:
     from datetime import datetime, timezone # Moved import here as it's only used here now
     if not token:
@@ -194,6 +247,9 @@ async def register_user_with_invitation(
         except Exception as cleanup_e:
             print(f"CRITICAL ERROR: Failed to cleanup Firebase Auth user {firebase_user.uid} after Firestore save failure: {cleanup_e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save user profile after authentication creation.")
+
+    # Automatically assign new user to the global working group
+    await _assign_user_to_global_working_group(db, firebase_user.uid)
 
     try:
         invitation_doc_id = invitation_data["id"]

@@ -22,6 +22,7 @@ EVENTS_COLLECTION = "events"
 ASSIGNMENTS_COLLECTION = "assignments"
 USERS_COLLECTION = "users"
 WORKING_GROUPS_COLLECTION = "workingGroups"
+GLOBAL_WG_ID = "organization-wide"  # Fixed ID for the global working group
 MAX_FIRESTORE_IN_QUERY_LIMIT = 30
 
 
@@ -289,8 +290,14 @@ async def list_events(
             
             user_wg_ids_for_auth_filter = [doc.to_dict()["assignableId"] async for doc in user_wg_assignments_query.stream()]
 
+            # Always include the global working group for all authenticated users
+            # This ensures global events are visible to everyone
+            if GLOBAL_WG_ID not in user_wg_ids_for_auth_filter:
+                user_wg_ids_for_auth_filter.append(GLOBAL_WG_ID)
+
             if not user_wg_ids_for_auth_filter: 
-                return [] 
+                # Fallback: at minimum, users should see global events
+                user_wg_ids_for_auth_filter = [GLOBAL_WG_ID]
             
             if len(user_wg_ids_for_auth_filter) > MAX_FIRESTORE_IN_QUERY_LIMIT:
                  user_wg_ids_for_auth_filter = user_wg_ids_for_auth_filter[:MAX_FIRESTORE_IN_QUERY_LIMIT]
@@ -298,7 +305,11 @@ async def list_events(
             if working_group_id and working_group_id in user_wg_ids_for_auth_filter:
                 user_wg_ids_for_auth_filter = [working_group_id] 
             elif working_group_id and working_group_id not in user_wg_ids_for_auth_filter:
-                return [] 
+                # Special case: if they're requesting global events specifically, allow it
+                if working_group_id == GLOBAL_WG_ID:
+                    user_wg_ids_for_auth_filter = [GLOBAL_WG_ID]
+                else:
+                    return [] 
 
             query = query.where(filter=FieldFilter("workingGroupIds", "array_contains_any", user_wg_ids_for_auth_filter))
         

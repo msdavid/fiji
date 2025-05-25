@@ -37,6 +37,34 @@ python link_orphan_donations.py --dry-run --email=user@example.com
 - Error handling for individual donation updates
 - Summary report of matched/unmatched donations
 
+### `create_global_working_group.py`
+
+Creates the global "Organization Wide" working group and assigns all existing users to it. This enables:
+- Global events that all users can see and participate in
+- Organization-wide announcements and activities
+- Automatic assignment of new users to the global working group
+
+**Usage:**
+```bash
+# Create global working group and assign all users
+python utils/create_global_working_group.py
+
+# Or use the simplified script
+python setup_global_working_group.py
+```
+
+**What it does:**
+- Creates "Organization Wide" working group with fixed ID `organization-wide`
+- Assigns all existing users to this working group as active members
+- Sets up automatic assignment for new users during registration
+- Provides guidance for using the global working group
+
+**Safety Features:**
+- Checks for existing global working group before creating
+- Skips users already assigned to avoid duplicates  
+- Detailed logging of all operations
+- Non-destructive - only adds new assignments
+
 ---
 
 ## Development Notes

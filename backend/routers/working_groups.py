@@ -20,6 +20,7 @@ router = APIRouter(
 WORKING_GROUPS_COLLECTION = "workingGroups"
 USERS_COLLECTION = "users"
 ASSIGNMENTS_COLLECTION = "assignments"
+GLOBAL_WG_ID = "organization-wide"  # Fixed ID for the global working group
 
 async def _get_user_details(db: firestore.AsyncClient, user_id: str) -> Optional[dict]:
     """Helper function to fetch user details."""
@@ -30,6 +31,38 @@ async def _get_user_details(db: firestore.AsyncClient, user_id: str) -> Optional
     if user_doc.exists:
         return user_doc.to_dict()
     return None
+
+async def _ensure_global_working_group_exists(db: firestore.AsyncClient) -> None:
+    """
+    Ensure the global working group exists. Creates it if missing.
+    This is called automatically when listing working groups to ensure
+    the global working group is always available.
+    """
+    try:
+        # Check if global working group exists
+        global_wg_ref = db.collection(WORKING_GROUPS_COLLECTION).document(GLOBAL_WG_ID)
+        global_wg_doc = await global_wg_ref.get()
+        
+        if not global_wg_doc.exists:
+            print(f"Creating missing global working group: {GLOBAL_WG_ID}")
+            
+            # Create the global working group
+            global_wg_data = {
+                "groupName": "Organization Wide",
+                "description": "Default organization-wide working group. All users are automatically members of this group to enable global events and announcements.",
+                "status": "active",
+                "createdByUserId": "system",
+                "createdAt": firestore.SERVER_TIMESTAMP,
+                "updatedAt": firestore.SERVER_TIMESTAMP,
+                "isGlobal": True
+            }
+            
+            await global_wg_ref.set(global_wg_data)
+            print(f"✅ Created global working group: Organization Wide")
+        
+    except Exception as e:
+        print(f"Warning: Failed to ensure global working group exists: {str(e)}")
+        # Don't fail the request if global WG creation fails
 
 @router.post(
     "",
@@ -68,12 +101,33 @@ async def create_working_group(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 
+async def _check_working_groups_access(
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
+) -> RBACUser:
+    """
+    Custom permission check for working groups endpoint.
+    Allows access if user has either:
+    - working_groups.view permission (for general working group management)
+    - events.create permission (for event creation requiring working group selection)
+    """
+    if (current_rbac_user.has_permission("working_groups", "view") or 
+        current_rbac_user.has_permission("events", "create")):
+        return current_rbac_user
+    
+    raise HTTPException(
+        status_code=status.HTTP_403_FORBIDDEN,
+        detail="User does not have permission to view working groups. Requires either 'working_groups:view' or 'events:create' permission."
+    )
+
 @router.get("", response_model=List[WorkingGroupResponse])
 async def list_working_groups(
     db: firestore.AsyncClient = Depends(get_db),
-    current_rbac_user: RBACUser = Depends(require_permission("working_groups", "view"))
+    current_rbac_user: RBACUser = Depends(_check_working_groups_access)
 ):
     try:
+        # Ensure global working group exists (auto-create if missing)
+        await _ensure_global_working_group_exists(db)
+        
         # Check if user is sysadmin
         is_privileged_user = current_rbac_user.is_sysadmin if current_rbac_user else False
         
@@ -86,7 +140,15 @@ async def list_working_groups(
             
             allowed_wg_ids = [doc.to_dict()["assignableId"] async for doc in user_wg_assignments_query.stream()]
             
-            # If user has no working group assignments, return empty list
+            # Always include the global working group for all authenticated users
+            # This ensures the global working group is available in forms and lists
+            # since all users are automatically members of the global working group
+            if GLOBAL_WG_ID not in allowed_wg_ids:
+                allowed_wg_ids.append(GLOBAL_WG_ID)
+            
+            print(f"DEBUG: User {current_rbac_user.uid} allowed working groups: {allowed_wg_ids}")
+            
+            # If user has no working group assignments and no event permissions, return empty list
             if not allowed_wg_ids:
                 return []
         
@@ -95,10 +157,12 @@ async def list_working_groups(
         
         groups_list = []
         user_details_cache = {}
+        all_groups_debug = []
 
         async for doc in docs_snapshot:
             group_data = doc.to_dict()
             group_data['id'] = doc.id
+            all_groups_debug.append(f"{doc.id}:{group_data.get('groupName')}")
             
             # Filter by user assignments for non-sysadmin users
             if not is_privileged_user and doc.id not in allowed_wg_ids:
@@ -114,6 +178,9 @@ async def list_working_groups(
                     group_data["creatorLastName"] = creator_details.get("lastName")
 
             groups_list.append(WorkingGroupResponse(**group_data))
+        
+        print(f"DEBUG: All working groups in DB: {all_groups_debug}")
+        print(f"DEBUG: Returning {len(groups_list)} working groups for user")
         return groups_list
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
