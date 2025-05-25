@@ -123,3 +123,5 @@ Desktop.ini
 *.bak
 *.tmp
 *.temp
+.claude/
+.Q/sessions/
