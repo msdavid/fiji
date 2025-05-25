@@ -8,7 +8,7 @@ import json
 from dateutil import rrule 
 
 from dependencies.database import get_db
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission, is_sysadmin_check
+from dependencies.rbac import RBACUser, require_permission, is_sysadmin_check
 from dependencies.auth import get_current_session_user_with_rbac 
 from models.event import EventCreate, EventUpdate, EventResponse, EventWithSignupStatus
 from models.assignment import AssignmentCreate, AssignmentResponse, AssignmentUpdate 

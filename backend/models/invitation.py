@@ -4,11 +4,12 @@ from datetime import datetime
 
 class InvitationBase(BaseModel):
     email: EmailStr = Field(..., description="Email address of the invited user.")
-    assignedRoleIds: Optional[List[str]] = Field(default_factory=list, description="List of role IDs to be assigned upon registration.")
+    assignedRoleIds: List[str] = Field(..., description="List of role IDs to be assigned upon registration. Always includes Associate role.")
 
-class InvitationCreate(InvitationBase):
+class InvitationCreate(BaseModel):
     """Payload for creating a new invitation."""
-    pass
+    email: EmailStr = Field(..., description="Email address of the invited user.")
+    # assignedRoleIds is not included - backend automatically assigns Associate role
 
 class InvitationInDB(InvitationBase):
     id: str = Field(..., description="Unique ID of the invitation document.")
@@ -35,7 +36,7 @@ class InvitationListResponse(BaseModel):
     expiresAt: datetime
     createdByUserId: str
     createdAt: datetime
-    assignedRoleIds: Optional[List[str]] = Field(default_factory=list)
+    assignedRoleIds: List[str] = Field(..., description="List of role IDs assigned with this invitation.")
     # New fields to be populated by the backend
     creatorName: Optional[str] = Field(None, description="Name of the user who created the invitation.")
     assignedRoleNames: Optional[List[str]] = Field(default_factory=list, description="Names of roles pre-assigned with this invitation.")
@@ -47,4 +48,4 @@ class InvitationValidateResponse(BaseModel):
     isValid: bool
     email: Optional[EmailStr] = None 
     message: str
-    assignedRoleIds: Optional[List[str]] = None 
+    assignedRoleIds: List[str] = Field(..., description="List of role IDs to be assigned upon registration.") 

@@ -43,12 +43,23 @@ interface VolunteerActivityReport {
   totalVolunteers?: number;
 }
 
+interface UserDonation {
+  id: string;
+  donationType: 'monetary' | 'in_kind' | 'time_contribution';
+  amount?: number;
+  currency?: string;
+  description: string;
+  donationDate: string;
+  createdAt: string;
+}
+
 
 export default function DashboardPage() {
   const { user, idToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege, logout } = useAuth(); 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<Assignment[]>([]);
   const [activeWorkingGroups, setActiveWorkingGroups] = useState<Assignment[]>([]);
+  const [userDonations, setUserDonations] = useState<UserDonation[]>([]);
   const [userTotalHours, setUserTotalHours] = useState<number | null>(null);
   const [statsAvailability, setStatsAvailability] = useState<'loading' | 'available' | 'unavailable' | 'error'>('loading');
   const [loadingData, setLoadingData] = useState(true);
@@ -131,7 +142,37 @@ export default function DashboardPage() {
     }
     if (criticalErrorOccurred) { setLoadingData(false); return; }
 
-    // 4. Fetch Volunteer Activity Stats (conditionally based on permission)
+    // 4. Fetch User Donations/Contributions
+    try {
+      const donationsResult = await apiClient<UserDonation[]>({
+        method: 'GET',
+        path: '/donations/my-contributions?limit=5',
+        token: idToken,
+      });
+      if (!donationsResult.ok) {
+        console.error('Failed to load user donations:', donationsResult.error);
+        if (donationsResult.status === 401) { 
+          await logout(); 
+          criticalErrorOccurred = true; 
+        } else {
+          // Log error but don't fail the dashboard load for donations
+          console.warn('User donations unavailable, continuing without them');
+          setUserDonations([]);
+        }
+      } else if (donationsResult.data) {
+        console.log('User donations loaded:', donationsResult.data);
+        setUserDonations(donationsResult.data);
+      } else {
+        console.log('No donation data returned');
+        setUserDonations([]);
+      }
+    } catch (donationsError) {
+      console.error('Exception fetching user donations:', donationsError);
+      setUserDonations([]); // Graceful fallback
+    }
+    if (criticalErrorOccurred) { setLoadingData(false); return; }
+
+    // 5. Fetch Volunteer Activity Stats (conditionally based on permission)
     setUserTotalHours(null); 
     if (authUserProfile && hasPrivilege && hasPrivilege('admin', 'view_summary')) {
         setStatsAvailability('loading');
@@ -289,6 +330,10 @@ export default function DashboardPage() {
               Active Working Groups: 
               <span className="font-bold text-indigo-600 dark:text-indigo-400 ml-1">{activeWorkingGroups.length}</span>
             </p>
+            <p className="text-gray-600 dark:text-gray-300">
+              My Contributions: 
+              <span className="font-bold text-indigo-600 dark:text-indigo-400 ml-1">{userDonations.length}</span>
+            </p>
           </div>
           <Link href="/dashboard/profile" className="mt-4 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium">
             View My Profile →
@@ -368,6 +413,60 @@ export default function DashboardPage() {
         )}
          <Link href="/dashboard/admin/working-groups" className="mt-4 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium">
           View All Working Groups →
+        </Link>
+      </section>
+
+      {/* My Contributions Section */}
+      <section className="bg-white dark:bg-gray-800 p-6 rounded-xl shadow-lg">
+        <h2 className="text-xl font-semibold text-gray-800 dark:text-white mb-4 inline-flex items-center">
+            <span className="material-icons mr-2 text-orange-500 dark:text-orange-400">volunteer_activism</span>
+            My Contributions
+        </h2>
+        {userDonations.length > 0 ? (
+          <ul className="space-y-3">
+            {userDonations.map(donation => {
+              const formatAmount = () => {
+                if (donation.donationType === 'monetary' && donation.amount && donation.currency) {
+                  return `${donation.currency} ${donation.amount.toFixed(2)}`;
+                }
+                return null;
+              };
+              
+              const getTypeIcon = () => {
+                switch (donation.donationType) {
+                  case 'monetary': return 'payments';
+                  case 'in_kind': return 'inventory';
+                  case 'time_contribution': return 'schedule';
+                  default: return 'volunteer_activism';
+                }
+              };
+
+              return (
+                <li key={donation.id} className="p-3 bg-gray-50 dark:bg-gray-700/50 rounded-lg hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors duration-200">
+                  <Link href={`/dashboard/donations/${donation.id}`} className="block">
+                    <div className="flex justify-between items-start">
+                      <div className="flex-1">
+                        <div className="flex items-center mb-1">
+                          <span className="material-icons text-sm mr-2 text-orange-500">{getTypeIcon()}</span>
+                          <span className="font-medium text-gray-700 dark:text-gray-200">{donation.description}</span>
+                        </div>
+                        <div className="flex items-center text-xs text-gray-500 dark:text-gray-400 space-x-3">
+                          <span>{format(parseISO(donation.donationDate), 'MMM d, yyyy')}</span>
+                          <span className="capitalize">{donation.donationType.replace('_', ' ')}</span>
+                          {formatAmount() && <span className="font-medium">{formatAmount()}</span>}
+                        </div>
+                      </div>
+                    </div>
+                  </Link>
+                </li>
+              );
+            })}
+          </ul>
+        ) : (
+          <p className="text-sm text-gray-500 dark:text-gray-400">You haven't made any contributions yet.</p>
+        )}
+        <Link href="/dashboard/donations" className="mt-4 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium">
+          View All Donations →
         </Link>
       </section>
     </div>

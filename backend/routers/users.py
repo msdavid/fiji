@@ -11,7 +11,8 @@ from models.user import (
 from dependencies.database import get_db
 # Updated imports for auth dependencies
 from dependencies.auth import get_current_session_user # For /me routes
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission # For other admin routes
+from dependencies.rbac import RBACUser, require_permission # For other admin routes
+from dependencies.auth import get_current_session_user_with_rbac # For session-based auth
 from utils.password_generator import generate_random_password
 
 router = APIRouter(
@@ -262,10 +263,8 @@ async def update_user_by_admin(
     user_id: str,
     user_update_data: UserUpdate,
     db: firestore.AsyncClient = Depends(get_db),
-    # This still uses get_current_user_with_rbac for the admin performing the action
-    # If get_current_user_with_rbac depends on get_firebase_user, it might need to be updated
-    # to a new get_current_session_admin_with_rbac if admins also use the new session token.
-    current_admin_user: RBACUser = Depends(get_current_user_with_rbac) 
+    # Updated to use session-based authentication for admins
+    current_admin_user: RBACUser = Depends(get_current_session_user_with_rbac) 
 ):
     user_ref = db.collection(USERS_COLLECTION).document(user_id)
     user_doc_snap = await user_ref.get()
@@ -301,7 +300,7 @@ async def update_user_by_admin(
 async def delete_user_by_admin(
     user_id: str,
     db: firestore.AsyncClient = Depends(get_db),
-    current_admin_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_admin_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     if user_id == current_admin_user.uid:
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins cannot delete their own accounts.")

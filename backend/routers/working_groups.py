@@ -5,7 +5,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import BaseModel, Field
 
 from dependencies.database import get_db
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission, is_sysadmin_check
+from dependencies.rbac import RBACUser, require_permission, is_sysadmin_check
 from dependencies.auth import get_current_session_user_with_rbac, get_current_session_user
 from models.working_group import WorkingGroupCreate, WorkingGroupUpdate, WorkingGroupResponse
 from models.assignment import AssignmentCreate, AssignmentResponse, AssignmentUpdate # Using AssignmentResponse from models

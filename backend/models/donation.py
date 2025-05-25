@@ -4,8 +4,9 @@ from datetime import datetime, date # Keep 'date' for strptime validation
 
 class DonationBase(BaseModel):
     donorName: str = Field(..., description="Name of the donor (individual or organization).")
-    donorEmail: Optional[EmailStr] = Field(None, description="Email address of the donor.")
-    donorPhone: Optional[str] = Field(None, description="Phone number of the donor.")
+    donorEmail: EmailStr = Field(..., description="Email address of the donor.")
+    donorPhone: str = Field(..., description="Phone number of the donor.")
+    donorUserId: Optional[str] = Field(None, description="User ID if donor is a registered user.")
     donationType: Literal["monetary", "in_kind", "time_contribution"] = Field(..., description="Type of the donation.")
     amount: Optional[float] = Field(None, ge=0, description="Monetary amount of the donation (if applicable).")
     currency: Optional[str] = Field(None, max_length=3, description="Currency code (e.g., SGD, USD) if monetary.")

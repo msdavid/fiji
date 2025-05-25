@@ -232,7 +232,7 @@ export default function EditWorkingGroupPage() {
                  <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-3">Danger Zone</h3>
                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Deleting this working group is permanent and cannot be undone. All associated member assignments will also be removed.</p>
                 <button onClick={handleDeleteWorkingGroup} disabled={isDeleting || isSubmitting} className="py-2 px-4 bg-red-600 hover:bg-red-700 text-white font-medium rounded-md shadow-sm inline-flex items-center disabled:opacity-50">
-                    <span className="material-icons text-lg mr-2">delete_forever</span>{isDeleting ? 'Deleting...' : 'Delete This Working Group'}
+                    <span className={`material-icons text-lg mr-2 ${isDeleting ? 'animate-spin' : ''}`}>{isDeleting ? 'sync' : 'delete_forever'}</span>{isDeleting ? 'Deleting...' : 'Delete This Working Group'}
                 </button>
                 {deleteError && <div className="mt-3 p-3 text-sm text-red-600 bg-red-50 dark:bg-red-900/30 rounded-md flex items-center" role="alert"><span className="material-icons text-lg mr-2">error_outline</span>{deleteError}</div>}
             </div>

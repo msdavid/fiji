@@ -1,6 +1,6 @@
 "use client";
 
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
@@ -13,6 +13,7 @@ interface NewDonationFormData {
   donorName: string;
   donorEmail: string; 
   donorPhone: string; 
+  donorUserId: string;
   donationType: DonationType;
   amount: string; 
   currency: string;
@@ -21,13 +22,21 @@ interface NewDonationFormData {
   notes: string;
 }
 
+interface UserSearchResult {
+  id: string;
+  firstName?: string;
+  lastName?: string;
+  email: string;
+}
+
 const initialFormData: NewDonationFormData = {
     donorName: '',
     donorEmail: '',
     donorPhone: '',
+    donorUserId: '',
     donationType: 'monetary',
     amount: '',
-    currency: 'USD', 
+    currency: 'SGD', 
     description: '',
     donationDate: format(new Date(), 'yyyy-MM-dd'), 
     notes: '',
@@ -41,6 +50,14 @@ const NewDonationPage = () => {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
+  
+  // User search state
+  const [userSearchQuery, setUserSearchQuery] = useState('');
+  const [userSearchResults, setUserSearchResults] = useState<UserSearchResult[]>([]);
+  const [isSearching, setIsSearching] = useState(false);
+  const [showUserResults, setShowUserResults] = useState(false);
+  const [selectedUser, setSelectedUser] = useState<UserSearchResult | null>(null);
+  const searchRef = useRef<HTMLDivElement>(null);
 
   const canCreateDonations = userProfile && (hasPrivilege ? hasPrivilege('donations', 'create') : userProfile.assignedRoleIds?.includes('sysadmin'));
 
@@ -57,10 +74,116 @@ const NewDonationPage = () => {
     }
   }, [authLoading, user, userProfile, fetchUserProfile, canCreateDonations, router]);
 
+  // Close search results when clicking outside
+  useEffect(() => {
+    const handleClickOutside = (event: MouseEvent) => {
+      if (searchRef.current && !searchRef.current.contains(event.target as Node)) {
+        setShowUserResults(false);
+      }
+    };
+
+    document.addEventListener('mousedown', handleClickOutside);
+    return () => document.removeEventListener('mousedown', handleClickOutside);
+  }, []);
+
+  // User search functionality
+  const searchUsers = async (query: string) => {
+    if (query.length < 2) {
+      setUserSearchResults([]);
+      return;
+    }
+
+    setIsSearching(true);
+    try {
+      const result = await apiClient<UserSearchResult[]>({
+        path: `/users/search?q=${encodeURIComponent(query)}`,
+        token: idToken,
+        method: 'GET',
+      });
+
+      if (result.ok) {
+        setUserSearchResults(result.data || []);
+      } else {
+        console.error('Failed to search users:', result.error);
+        setUserSearchResults([]);
+      }
+    } catch (error) {
+      console.error('Error searching users:', error);
+      setUserSearchResults([]);
+    } finally {
+      setIsSearching(false);
+    }
+  };
+
+  const handleUserSearchChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const query = e.target.value;
+    setUserSearchQuery(query);
+    setShowUserResults(true);
+    
+    if (query.length >= 2) {
+      searchUsers(query);
+    } else {
+      setUserSearchResults([]);
+    }
+  };
+
+  const selectUser = async (user: UserSearchResult) => {
+    const fullName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+    
+    setSelectedUser(user);
+    setFormData(prev => ({
+      ...prev,
+      donorUserId: user.id,
+      donorName: fullName,
+      donorEmail: user.email,
+    }));
+    setUserSearchQuery(fullName);
+    setShowUserResults(false);
+
+    // Fetch full user profile to get phone number
+    try {
+      const result = await apiClient<any>({
+        path: `/users/${user.id}`,
+        token: idToken,
+        method: 'GET',
+      });
+
+      if (result.ok && result.data?.phone) {
+        setFormData(prev => ({
+          ...prev,
+          donorPhone: result.data.phone,
+        }));
+      }
+    } catch (error) {
+      console.error('Failed to fetch user phone:', error);
+      // Don't show error to user, just continue without phone
+    }
+  };
+
+  const clearUserSelection = () => {
+    setSelectedUser(null);
+    setFormData(prev => ({
+      ...prev,
+      donorUserId: '',
+      donorName: '',
+      donorEmail: '',
+      donorPhone: '',
+    }));
+    setUserSearchQuery('');
+    setShowUserResults(false);
+  };
 
   const handleInputChange = (e: React.ChangeEvent<HTMLInputElement | HTMLSelectElement | HTMLTextAreaElement>) => {
     const { name, value } = e.target;
-    setFormData(prev => ({ ...prev, [name]: value }));
+    
+    // If user manually edits donor info, clear the user selection
+    if ((name === 'donorName' || name === 'donorEmail' || name === 'donorPhone') && selectedUser) {
+      setSelectedUser(null);
+      setFormData(prev => ({ ...prev, [name]: value, donorUserId: '' }));
+    } else {
+      setFormData(prev => ({ ...prev, [name]: value }));
+    }
+    
     if (name === "donationType" && value !== "monetary") {
         setFormData(prev => ({ ...prev, amount: '', currency: '' }));
     }
@@ -78,8 +201,7 @@ const NewDonationPage = () => {
 
     const payload: any = { 
         ...formData,
-        donorEmail: formData.donorEmail.trim() === '' ? null : formData.donorEmail,
-        donorPhone: formData.donorPhone.trim() === '' ? null : formData.donorPhone,
+        donorUserId: formData.donorUserId.trim() === '' ? null : formData.donorUserId,
         notes: formData.notes.trim() === '' ? null : formData.notes,
      };
 
@@ -103,6 +225,18 @@ const NewDonationPage = () => {
 
     if (!formData.description.trim()) { 
         setError("Description is required.");
+        setIsSubmitting(false);
+        return;
+    }
+    
+    if (!formData.donorPhone.trim()) {
+        setError("Donor phone number is required.");
+        setIsSubmitting(false);
+        return;
+    }
+    
+    if (!formData.donorEmail.trim()) {
+        setError("Donor email is required.");
         setIsSubmitting(false);
         return;
     }
@@ -192,18 +326,83 @@ const NewDonationPage = () => {
             {/* Donor Information Section */}
             <div className="border-b border-gray-200 dark:border-gray-700 pb-6">
                 <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Donor Information</h2>
+                
+                {/* User Search */}
+                <div className="mb-4">
+                  <label htmlFor="userSearch" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    Search Existing User (Optional)
+                  </label>
+                  <div className="relative" ref={searchRef}>
+                    <input
+                      type="text"
+                      id="userSearch"
+                      value={userSearchQuery}
+                      onChange={handleUserSearchChange}
+                      onFocus={() => setShowUserResults(true)}
+                      placeholder="Type name or email to search users..."
+                      className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                    />
+                    {isSearching && (
+                      <div className="absolute right-3 top-3">
+                        <span className="material-icons animate-spin text-gray-400">sync</span>
+                      </div>
+                    )}
+                    
+                    {/* Search Results Dropdown */}
+                    {showUserResults && userSearchQuery.length >= 2 && (
+                      <div className="absolute z-10 w-full mt-1 bg-white dark:bg-gray-800 border border-gray-300 dark:border-gray-600 rounded-md shadow-lg max-h-48 overflow-y-auto">
+                        {userSearchResults.length === 0 && !isSearching ? (
+                          <div className="px-3 py-2 text-sm text-gray-500 dark:text-gray-400">No users found</div>
+                        ) : (
+                          userSearchResults.map((user) => {
+                            const displayName = `${user.firstName || ''} ${user.lastName || ''}`.trim() || user.email;
+                            return (
+                              <div
+                                key={user.id}
+                                onClick={() => selectUser(user)}
+                                className="px-3 py-2 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 border-b border-gray-200 dark:border-gray-600 last:border-b-0"
+                              >
+                                <div className="text-sm font-medium text-gray-900 dark:text-white">{displayName}</div>
+                                <div className="text-xs text-gray-500 dark:text-gray-400">{user.email}</div>
+                              </div>
+                            );
+                          })
+                        )}
+                      </div>
+                    )}
+                  </div>
+                  
+                  {selectedUser && (
+                    <div className="mt-2 p-2 bg-green-50 dark:bg-green-900/30 border border-green-200 dark:border-green-700 rounded-md flex items-center justify-between">
+                      <div className="flex items-center">
+                        <span className="material-icons text-green-500 text-sm mr-2">check_circle</span>
+                        <span className="text-sm text-green-700 dark:text-green-300">
+                          Selected: {`${selectedUser.firstName || ''} ${selectedUser.lastName || ''}`.trim() || selectedUser.email}
+                        </span>
+                      </div>
+                      <button
+                        type="button"
+                        onClick={clearUserSelection}
+                        className="text-green-600 hover:text-green-800 dark:text-green-400 dark:hover:text-green-200"
+                      >
+                        <span className="material-icons text-sm">close</span>
+                      </button>
+                    </div>
+                  )}
+                </div>
+
                 <div className="space-y-4">
                     <div>
                         <label htmlFor="donorName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Name <span className="text-red-500">*</span></label>
                         <input type="text" name="donorName" id="donorName" value={formData.donorName} onChange={handleInputChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                     </div>
                     <div>
-                        <label htmlFor="donorEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Email</label>
-                        <input type="email" name="donorEmail" id="donorEmail" value={formData.donorEmail} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        <label htmlFor="donorEmail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Email <span className="text-red-500">*</span></label>
+                        <input type="email" name="donorEmail" id="donorEmail" value={formData.donorEmail} onChange={handleInputChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                     </div>
                     <div>
-                        <label htmlFor="donorPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Phone</label>
-                        <input type="tel" name="donorPhone" id="donorPhone" value={formData.donorPhone} onChange={handleInputChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        <label htmlFor="donorPhone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Donor Phone <span className="text-red-500">*</span></label>
+                        <input type="tel" name="donorPhone" id="donorPhone" value={formData.donorPhone} onChange={handleInputChange} required className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                     </div>
                 </div>
             </div>
@@ -231,7 +430,7 @@ const NewDonationPage = () => {
                         </div>
                         <div>
                             <label htmlFor="currency" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Currency <span className="text-red-500">*</span></label>
-                            <input type="text" name="currency" id="currency" value={formData.currency} onChange={handleInputChange} required maxLength={3} placeholder="e.g., USD" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                            <input type="text" name="currency" id="currency" value={formData.currency} onChange={handleInputChange} required maxLength={3} placeholder="e.g., SGD" className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
                         </div>
                     </div>
                 )}
@@ -256,7 +455,7 @@ const NewDonationPage = () => {
                     Cancel
                 </Link>
                 <button type="submit" disabled={isSubmitting || !canCreateDonations} className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center">
-                    <span className="material-icons mr-2 text-base">{isSubmitting ? 'hourglass_empty' : 'add_circle_outline'}</span>
+                    <span className={`material-icons mr-2 text-base ${isSubmitting ? 'animate-spin' : ''}`}>{isSubmitting ? 'sync' : 'add_circle_outline'}</span>
                     {isSubmitting ? 'Submitting...' : 'Record Donation'}
                 </button>
             </div>

@@ -6,14 +6,8 @@ import Link from 'next/link';
 import { useAuth } from '@/context/AuthContext';
 import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 
-interface Role {
-  id: string; 
-  roleName: string;
-}
-
 interface InvitationCreatePayload {
   email: string;
-  assignedRoleIds?: string[];
 }
 
 interface InvitationCreateResponse {
@@ -29,8 +23,6 @@ export default function CreateInvitationPage() {
   const { user: adminAuthUser, idToken, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege, logout } = useAuth(); // Added logout
 
   const [email, setEmail] = useState('');
-  const [selectedRoleIds, setSelectedRoleIds] = useState<string[]>([]);
-  const [allRoles, setAllRoles] = useState<Role[]>([]);
   
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [pageError, setPageError] = useState<string | null>(null); 
@@ -38,29 +30,8 @@ export default function CreateInvitationPage() {
   const [submitSuccess, setSubmitSuccess] = useState<string | null>(null);
 
   const canCreateInvitations = adminUserProfile && (hasPrivilege ? hasPrivilege('invitations', 'create') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
+  const canListInvitations = adminUserProfile && (hasPrivilege ? hasPrivilege('invitations', 'list') : adminUserProfile.assignedRoleIds?.includes('sysadmin'));
 
-  const fetchAllRoles = useCallback(async () => {
-    if (!adminAuthUser || !idToken || !canCreateInvitations) {
-        return;
-    }
-    
-    const result: ApiResponse<Role[]> = await apiClient<Role[]>({
-        path: '/roles',
-        token: idToken,
-        method: 'GET',
-    });
-
-    if (result.ok && result.data) {
-        setAllRoles(result.data);
-    } else {
-        console.error("Fetch all roles error:", result.error);
-        if (result.status === 401) {
-            await logout();
-            return;
-        }
-        setPageError(prev => prev ? `${prev}\\nFailed to load roles.` : result.error?.message || 'Failed to load roles for pre-assignment.');
-    }
-  }, [adminAuthUser, idToken, canCreateInvitations, logout]); // Added logout
 
   useEffect(() => {
     if (!authLoading && !adminAuthUser) { /* router.push('/login'); // Handled by layout/context */ return; }
@@ -68,18 +39,10 @@ export default function CreateInvitationPage() {
     if (adminAuthUser && adminUserProfile) {
         if (!canCreateInvitations) {
             setPageError("You don't have permission to create user invitations.");
-        } else {
-            fetchAllRoles();
         }
     }
-  }, [adminAuthUser, authLoading, adminUserProfile, fetchUserProfile, router, canCreateInvitations, fetchAllRoles]);
+  }, [adminAuthUser, authLoading, adminUserProfile, fetchUserProfile, router, canCreateInvitations]);
 
-  const handleRoleChange = (roleId: string, checked: boolean) => {
-    setSelectedRoleIds(prev => {
-        if (checked) { return prev.includes(roleId) ? prev : [...prev, roleId]; } 
-        else { return prev.filter(id => id !== roleId); }
-    });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -94,7 +57,6 @@ export default function CreateInvitationPage() {
 
     const payload: InvitationCreatePayload = {
       email: email.trim(),
-      assignedRoleIds: selectedRoleIds.length > 0 ? selectedRoleIds : undefined,
     };
 
     const result: ApiResponse<InvitationCreateResponse> = await apiClient<InvitationCreateResponse>({ 
@@ -108,8 +70,7 @@ export default function CreateInvitationPage() {
 
     if (result.ok) {
       setSubmitSuccess(`Invitation successfully sent to ${payload.email}.`);
-      setEmail(''); 
-      setSelectedRoleIds([]);
+      setEmail('');
     } else {
       console.error("Create invitation error:", result.error);
       if (result.status === 401) {
@@ -145,15 +106,21 @@ export default function CreateInvitationPage() {
     );
   }
 
-  const displayableRoles = allRoles.filter(role => role.id !== 'sysadmin');
 
   return (
     <main className="max-w-xl mx-auto py-8 px-4 sm:px-6 lg:px-8">
       <div className="mb-6">
-        <Link href="/dashboard/admin/invitations" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
-          <span className="material-icons text-lg mr-1">arrow_back_ios</span>
-          Back to Invitations List
-        </Link>
+        {canListInvitations ? (
+          <Link href="/dashboard/admin/invitations" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+            <span className="material-icons text-lg mr-1">arrow_back_ios</span>
+            Back to Invitations List
+          </Link>
+        ) : (
+          <Link href="/dashboard" className="inline-flex items-center text-sm font-medium text-indigo-600 hover:text-indigo-500 dark:text-indigo-400 dark:hover:text-indigo-300">
+            <span className="material-icons text-lg mr-1">arrow_back_ios</span>
+            Back to Dashboard
+          </Link>
+        )}
       </div>
 
       <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">Create New User Invitation</h1>
@@ -162,7 +129,7 @@ export default function CreateInvitationPage() {
         <form onSubmit={handleSubmit} className="space-y-6">
           <p className="text-sm text-gray-600 dark:text-gray-400">
             An invitation email with a unique registration link will be sent to the specified address.
-            You can optionally pre-assign roles that will be applied upon successful registration.
+            All new users will be assigned the "Associate" role upon successful registration.
           </p>
           
           <div>
@@ -176,25 +143,19 @@ export default function CreateInvitationPage() {
             />
           </div>
 
-          {displayableRoles.length > 0 && (
-            <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                    Pre-assign Roles (Optional)
-                </label>
-                <div className="space-y-2 max-h-60 overflow-y-auto p-3 border border-gray-200 dark:border-gray-700 rounded-md">
-                    {displayableRoles.map(role => (
-                        <label key={role.id} className="flex items-center space-x-2 cursor-pointer p-1 hover:bg-gray-50 dark:hover:bg-gray-800 rounded">
-                            <input
-                            type="checkbox" checked={selectedRoleIds.includes(role.id)}
-                            onChange={(e) => handleRoleChange(role.id, e.target.checked)}
-                            className="h-4 w-4 text-indigo-600 border-gray-300 dark:border-gray-600 rounded focus:ring-indigo-500 dark:bg-gray-600 dark:checked:bg-indigo-500"
-                            />
-                            <span className="text-sm text-gray-700 dark:text-gray-300">{role.roleName}</span>
-                        </label>
-                    ))}
-                </div>
+          <div className="bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-md p-4">
+            <div className="flex items-center">
+              <span className="material-icons text-blue-500 text-lg mr-2">info</span>
+              <div>
+                <p className="text-sm text-blue-700 dark:text-blue-300 font-medium">
+                  Default Role Assignment
+                </p>
+                <p className="text-xs text-blue-600 dark:text-blue-400 mt-1">
+                  New users will automatically receive the "Associate" role with basic event viewing permissions.
+                </p>
+              </div>
             </div>
-          )}
+          </div>
           {pageError && canCreateInvitations && ( 
              <div className="my-2 p-2 text-sm text-yellow-700 bg-yellow-50 dark:bg-yellow-900/30 rounded-md flex items-center" role="alert">
                 <span className="material-icons text-lg mr-2">warning_amber</span>

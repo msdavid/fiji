@@ -6,7 +6,8 @@ from datetime import datetime, timedelta, timezone
 
 from models.invitation import InvitationCreate, InvitationResponse, InvitationListResponse, InvitationValidateResponse
 from dependencies.database import get_db
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
+from dependencies.rbac import RBACUser, require_permission
+from dependencies.auth import get_current_session_user_with_rbac
 from utils.token_generator import generate_secure_token
 from services.email_service import EmailService # Import EmailService
 
@@ -21,8 +22,42 @@ public_router = APIRouter(
 )
 
 INVITATIONS_COLLECTION = "registrationInvitations"
-USERS_COLLECTION = "users"
-ROLES_COLLECTION = "roles" 
+ROLES_COLLECTION = "roles"
+
+async def ensure_associate_role_exists(db: firestore.AsyncClient) -> str:
+    """
+    Ensures that an 'Associate' role exists in the database.
+    If it doesn't exist, creates it with default permissions.
+    Returns the role ID.
+    """
+    # Query for existing Associate role
+    associate_roles_query = db.collection(ROLES_COLLECTION).where("roleName", "==", "Associate").limit(1)
+    associate_roles_snap = await associate_roles_query.get()
+    
+    if associate_roles_snap:
+        # Role already exists, return its ID
+        for role_doc in associate_roles_snap:
+            return role_doc.id
+    
+    # Role doesn't exist, create it
+    associate_role_data = {
+        "roleName": "Associate",
+        "description": "Default role for new users",
+        "privileges": {
+            "events": ["list", "view"]
+        },
+        "createdAt": firestore.SERVER_TIMESTAMP,
+        "updatedAt": firestore.SERVER_TIMESTAMP
+    }
+    
+    # Create the role document
+    role_doc_ref = db.collection(ROLES_COLLECTION).document()
+    await role_doc_ref.set(associate_role_data)
+    
+    print(f"Created Associate role with ID: {role_doc_ref.id}")
+    return role_doc_ref.id
+
+USERS_COLLECTION = "users" 
 
 # Initialize EmailService instance
 # For a production app, consider FastAPI dependency injection for EmailService
@@ -123,7 +158,7 @@ async def create_invitation(
     invitation_data: InvitationCreate,
     background_tasks: BackgroundTasks,
     db: firestore.AsyncClient = Depends(get_db),
-    current_admin_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_admin_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     target_email_lower = invitation_data.email.lower()
 
@@ -137,6 +172,9 @@ async def create_invitation(
     except auth.UserNotFoundError:
         # User does not exist, proceed
         pass 
+    except HTTPException:
+        # Re-raise HTTPException (like the 409 above)
+        raise
     except Exception as e: # Catch other potential Firebase errors
         print(f"Error checking user in Firebase Auth: {e}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Error verifying user existence.")
@@ -163,6 +201,9 @@ async def create_invitation(
                         detail=f"A pending invitation already exists for '{invitation_data.email}' and has not expired yet."
                     )
 
+    # Ensure Associate role exists and get its ID
+    associate_role_id = await ensure_associate_role_exists(db)
+    
     token = generate_secure_token(32)
     expires_at = datetime.now(timezone.utc) + timedelta(days=7) 
 
@@ -173,7 +214,7 @@ async def create_invitation(
         "email": target_email_lower,
         "token": token, 
         "status": "pending", # initial status
-        "assignedRoleIds": invitation_data.assignedRoleIds or [],
+        "assignedRoleIds": [associate_role_id],  # Always assign Associate role
         "createdByUserId": current_admin_user.uid, 
         "createdAt": firestore.SERVER_TIMESTAMP,
         "updatedAt": firestore.SERVER_TIMESTAMP,

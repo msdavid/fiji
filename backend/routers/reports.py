@@ -8,7 +8,7 @@ from collections import defaultdict
 import asyncio 
 
 from dependencies.database import get_db
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
+from dependencies.rbac import RBACUser, require_permission
 from dependencies.auth import get_current_session_user_with_rbac 
 from models.donation import DonationResponse 
 

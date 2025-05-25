@@ -5,7 +5,7 @@ from firebase_admin import firestore
 from models.donation import DonationCreate, DonationUpdate, DonationResponse
 # Removed: from models.user import UserAvailability 
 from dependencies.database import get_db
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
+from dependencies.rbac import RBACUser, require_permission
 from dependencies.auth import get_current_session_user_with_rbac
 
 router = APIRouter(
@@ -47,6 +47,37 @@ async def create_donation(
         new_donation_dict["createdAt"] = firestore.SERVER_TIMESTAMP
         new_donation_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
 
+        # Auto-link: If donorUserId is provided, also update any existing donations with the same email
+        donor_user_id = new_donation_dict.get("donorUserId")
+        donor_email = new_donation_dict.get("donorEmail")
+        
+        if donor_user_id and donor_email:
+            try:
+                # Find existing donations with the same email but no donorUserId
+                existing_donations_query = db.collection(DONATIONS_COLLECTION)\
+                    .where("donorEmail", "==", donor_email)\
+                    .where("donorUserId", "==", None)
+                
+                existing_docs = existing_donations_query.stream()
+                
+                # Update existing donations to link them to this user
+                link_count = 0
+                async for existing_doc in existing_docs:
+                    try:
+                        await db.collection(DONATIONS_COLLECTION).document(existing_doc.id).update({
+                            "donorUserId": donor_user_id
+                        })
+                        link_count += 1
+                    except Exception as update_error:
+                        print(f"Warning: Could not link existing donation {existing_doc.id}: {update_error}")
+                
+                if link_count > 0:
+                    print(f"Auto-linked {link_count} existing donations for user {donor_user_id}")
+                    
+            except Exception as linking_error:
+                print(f"Warning: Auto-linking failed: {linking_error}")
+                # Don't fail the donation creation if linking fails
+
         # Validate donationType and amount/currency consistency
         if new_donation_dict["donationType"] == "monetary":
             if new_donation_dict.get("amount") is None or new_donation_dict.get("currency") is None:
@@ -83,6 +114,117 @@ async def create_donation(
         raise http_exc
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get("/my-contributions", response_model=List[DonationResponse])
+async def get_my_donations(
+    db: firestore.AsyncClient = Depends(get_db),
+    current_user: RBACUser = Depends(get_current_session_user_with_rbac),
+    limit: int = Query(default=10, le=50, description="Maximum number of donations to return")
+):
+    """Get donations made by the current user (by donorUserId or email)"""
+    try:
+        print(f"DEBUG: Fetching donations for user {current_user.uid} ({current_user.email})")
+        donations_list = []
+        user_details_cache = {}
+        
+        # First, try to find donations by donorUserId
+        try:
+            query_by_id = db.collection(DONATIONS_COLLECTION).where("donorUserId", "==", current_user.uid)
+            query_by_id = query_by_id.order_by("createdAt", direction=firestore.Query.DESCENDING)
+            query_by_id = query_by_id.limit(limit)
+            
+            docs_by_id = query_by_id.stream()
+            async for doc in docs_by_id:
+                try:
+                    donation_data = doc.to_dict()
+                    donation_data['id'] = doc.id
+                    
+                    recorded_by_user_id = donation_data.get("recordedByUserId")
+                    if recorded_by_user_id:
+                        if recorded_by_user_id not in user_details_cache:
+                            user_details_cache[recorded_by_user_id] = await _get_user_details_for_donation(db, recorded_by_user_id)
+                        recorder_details = user_details_cache[recorded_by_user_id]
+                        donation_data["recordedByUserFirstName"] = recorder_details.get("firstName")
+                        donation_data["recordedByUserLastName"] = recorder_details.get("lastName")
+
+                    donations_list.append(DonationResponse(**donation_data))
+                except Exception as doc_error:
+                    print(f"Error processing donation document by ID {doc.id}: {doc_error}")
+                    continue
+        except Exception as query_error:
+            print(f"Warning: Error querying donations by donorUserId: {query_error}")
+        
+        print(f"DEBUG: Found {len(donations_list)} donations by donorUserId")
+        
+        # If we haven't reached the limit, also search by email for legacy donations
+        if len(donations_list) < limit and current_user.email:
+            remaining_limit = limit - len(donations_list)
+            try:
+                query_by_email = db.collection(DONATIONS_COLLECTION).where("donorEmail", "==", current_user.email)
+                query_by_email = query_by_email.order_by("createdAt", direction=firestore.Query.DESCENDING)
+                query_by_email = query_by_email.limit(remaining_limit)
+                
+                # Track IDs we already added to avoid duplicates
+                existing_ids = {donation.id for donation in donations_list}
+                
+                docs_by_email = query_by_email.stream()
+                async for doc in docs_by_email:
+                    if doc.id not in existing_ids:  # Avoid duplicates
+                        try:
+                            donation_data = doc.to_dict()
+                            donation_data['id'] = doc.id
+                            
+                            recorded_by_user_id = donation_data.get("recordedByUserId")
+                            if recorded_by_user_id:
+                                if recorded_by_user_id not in user_details_cache:
+                                    user_details_cache[recorded_by_user_id] = await _get_user_details_for_donation(db, recorded_by_user_id)
+                                recorder_details = user_details_cache[recorded_by_user_id]
+                                donation_data["recordedByUserFirstName"] = recorder_details.get("firstName")
+                                donation_data["recordedByUserLastName"] = recorder_details.get("lastName")
+
+                            donations_list.append(DonationResponse(**donation_data))
+                        except Exception as doc_error:
+                            print(f"Error processing donation document by email {doc.id}: {doc_error}")
+                            continue
+            except Exception as email_query_error:
+                print(f"Warning: Error querying donations by email: {email_query_error}")
+        
+        print(f"DEBUG: Total donations found: {len(donations_list)}")
+        
+        # Sort the combined results by creation date (most recent first)
+        donations_list.sort(key=lambda x: x.createdAt, reverse=True)
+        
+        result = donations_list[:limit]  # Ensure we don't exceed the limit
+        print(f"DEBUG: Returning {len(result)} donations to frontend")
+        return result
+        
+    except Exception as e:
+        print(f"Error in get_my_donations: {str(e)}")
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.get("/debug-all", dependencies=[Depends(require_permission("donations", "list"))])
+async def debug_all_donations(db: firestore.AsyncClient = Depends(get_db)):
+    """Debug endpoint to see all donations in the database"""
+    try:
+        query = db.collection(DONATIONS_COLLECTION).limit(10)
+        docs = query.stream()
+        
+        donations_debug = []
+        async for doc in docs:
+            data = doc.to_dict()
+            donations_debug.append({
+                "id": doc.id,
+                "donorEmail": data.get("donorEmail"),
+                "donorUserId": data.get("donorUserId"),
+                "donorName": data.get("donorName"),
+                "description": data.get("description", "")[:30] + "...",
+                "donationType": data.get("donationType"),
+                "createdAt": str(data.get("createdAt"))
+            })
+        
+        return {"total_found": len(donations_debug), "donations": donations_debug}
+    except Exception as e:
+        return {"error": str(e)}
 
 @router.get("", response_model=List[DonationResponse], dependencies=[Depends(require_permission("donations", "list"))])
 async def list_donations(
