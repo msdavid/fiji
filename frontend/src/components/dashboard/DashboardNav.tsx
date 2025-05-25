@@ -310,6 +310,16 @@ export default function DashboardNav() {
                   Invitations
                 </Link>
               )}
+              {userProfile?.assignedRoleIds?.includes('sysadmin') && (
+                <Link 
+                  href="/dashboard/admin/organization" 
+                  className={getDropdownLinkClassName("/dashboard/admin/organization")}
+                  onClick={() => { setIsAdminDropdownOpen(false); setIsDropdownOpen(false); }}
+                >
+                  <span className="material-icons mr-2 text-sm">business</span>
+                  Organization
+                </Link>
+              )}
             </div>
           </div>
         )}
@@ -467,6 +477,16 @@ export default function DashboardNav() {
                                   >
                                     <span className="material-icons mr-2 text-sm">mail</span>
                                     Invitations
+                                  </Link>
+                                )}
+                                {userProfile?.assignedRoleIds?.includes('sysadmin') && (
+                                  <Link 
+                                    href="/dashboard/admin/organization" 
+                                    className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    onClick={() => setIsDropdownOpen(false)}
+                                  >
+                                    <span className="material-icons mr-2 text-sm">business</span>
+                                    Organization
                                   </Link>
                                 )}
                               </div>

@@ -17,7 +17,8 @@ from routers import donations as donations_router
 from routers import assignments as assignments_router
 from routers import reports as reports_router 
 from routers.auth import router as auth_router
-from routers import two_factor as two_factor_router 
+from routers import two_factor as two_factor_router
+from routers import organization as organization_router 
 
 load_dotenv()
 
@@ -126,7 +127,8 @@ app.include_router(events_router.router)
 app.include_router(working_groups_router.router)
 app.include_router(donations_router.router)
 app.include_router(assignments_router.router)
-app.include_router(reports_router.router) 
+app.include_router(reports_router.router)
+app.include_router(organization_router.router) 
 
 
 @app.get("/")
