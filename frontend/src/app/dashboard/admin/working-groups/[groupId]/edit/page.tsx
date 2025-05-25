@@ -44,6 +44,11 @@ export default function EditWorkingGroupPage() {
     if (!user || !idToken || !groupId ) { 
       setIsLoading(false); return;
     }
+    // Check if this is the protected global working group
+    if (groupId === 'organization-wide') {
+        setError("The 'Organization Wide' working group is a system group and cannot be edited.");
+        setIsLoading(false); return;
+    }
     // Permission check moved after fetching userProfile ensures it's available
     if (userProfile && !canEdit) {
         setError("You don't have permission to edit this working group.");
@@ -227,7 +232,7 @@ export default function EditWorkingGroupPage() {
                     </button>
                 </div>
             </form>
-            {canDelete && originalGroup && (
+            {canDelete && originalGroup && groupId !== 'organization-wide' && (
             <div className="mt-10 pt-6 border-t border-red-300 dark:border-red-700">
                  <h3 className="text-lg font-semibold text-red-600 dark:text-red-400 mb-3">Danger Zone</h3>
                  <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">Deleting this working group is permanent and cannot be undone. All associated member assignments will also be removed.</p>

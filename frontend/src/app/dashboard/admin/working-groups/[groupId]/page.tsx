@@ -239,13 +239,21 @@ export default function WorkingGroupDetailPage() {
                 <span className="material-icons text-3xl text-indigo-600 dark:text-indigo-400 mr-3">workspaces</span>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">{workingGroup.groupName}</h1>
             </div>
-            {canEdit && (
+            {canEdit && groupId !== 'organization-wide' && (
                 <Link href={`/dashboard/admin/working-groups/${groupId}/edit`} className="shrink-0">
                     <button className="inline-flex items-center py-2 px-4 bg-yellow-500 hover:bg-yellow-600 text-white text-sm font-medium rounded-md shadow-sm">
                         <span className="material-icons mr-2 text-base">edit</span>
                         Edit Group
                     </button>
                 </Link>
+            )}
+            {groupId === 'organization-wide' && (
+                <div className="shrink-0">
+                    <span className="inline-flex items-center py-2 px-4 bg-gray-100 text-gray-500 text-sm font-medium rounded-md shadow-sm">
+                        <span className="material-icons mr-2 text-base">lock</span>
+                        System Group
+                    </span>
+                </div>
             )}
           </div>
 
@@ -278,7 +286,25 @@ export default function WorkingGroupDetailPage() {
             />
           </div>
           
-          {canManageAssignments && (
+          {groupId === 'organization-wide' && (
+            <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
+              <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Membership</h2>
+              <div className="p-4 bg-blue-50 dark:bg-blue-900/30 rounded-lg shadow-sm">
+                <div className="flex items-start">
+                  <span className="material-icons text-2xl text-blue-500 dark:text-blue-400 mr-3 mt-0.5">info</span>
+                  <div>
+                    <h3 className="text-lg font-medium text-blue-800 dark:text-blue-200 mb-2">Automatic Membership</h3>
+                    <p className="text-blue-700 dark:text-blue-300 text-sm">
+                      All users in the organization are automatically members of this working group. 
+                      Membership cannot be manually managed for this system group.
+                    </p>
+                  </div>
+                </div>
+              </div>
+            </div>
+          )}
+          
+          {canManageAssignments && groupId !== 'organization-wide' && (
             <div className="mt-8 pt-6 border-t border-gray-200 dark:border-gray-700">
               <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4">Manage Members</h2>
               <form onSubmit={handleAssignUser} className="mb-6 p-4 bg-gray-50 dark:bg-gray-800/50 rounded-lg shadow-sm">

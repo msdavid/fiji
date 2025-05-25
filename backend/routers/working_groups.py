@@ -216,6 +216,13 @@ async def update_working_group(
     db: firestore.AsyncClient = Depends(get_db)
 ):
     try:
+        # Protect the global working group from being edited
+        if group_id == GLOBAL_WG_ID:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="The 'Organization Wide' working group is a system group and cannot be edited."
+            )
+            
         doc_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
         group_doc_snapshot = await doc_ref.get()
         if not group_doc_snapshot.exists:
@@ -248,6 +255,13 @@ async def update_working_group(
 )
 async def delete_working_group(group_id: str, db: firestore.AsyncClient = Depends(get_db)):
     try:
+        # Protect the global working group from being deleted
+        if group_id == GLOBAL_WG_ID:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="The 'Organization Wide' working group is a system group and cannot be deleted."
+            )
+            
         group_doc_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
         group_doc = await group_doc_ref.get()
         if not group_doc.exists:
@@ -288,6 +302,13 @@ async def assign_user_to_working_group(
     db: firestore.AsyncClient = Depends(get_db),
     current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
+    # Protect the global working group from manual assignment management
+    if group_id == GLOBAL_WG_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="The 'Organization Wide' working group has automatic membership. Users cannot be manually assigned."
+        )
+        
     group_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
     group_doc = await group_ref.get()
     if not group_doc.exists:
@@ -389,6 +410,13 @@ async def remove_user_from_working_group(
     assignment_id: str,
     db: firestore.AsyncClient = Depends(get_db)
 ):
+    # Protect the global working group from manual assignment management
+    if group_id == GLOBAL_WG_ID:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, 
+            detail="The 'Organization Wide' working group has automatic membership. Users cannot be manually removed."
+        )
+        
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document(assignment_id)
     assignment_doc = await assignment_ref.get()
     if not assignment_doc.exists:

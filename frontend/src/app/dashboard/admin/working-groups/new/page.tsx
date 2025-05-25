@@ -57,12 +57,13 @@ export default function NewWorkingGroupPage() {
     };
 
     try {
-      const token = await user.getIdToken();
+      const idToken = await user.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || idToken;
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const response = await fetch(`${backendUrl}/working-groups`, {
         method: 'POST',
         headers: {
-          'Authorization': `Bearer ${token}`,
+          'Authorization': `Bearer ${authToken}`,
           'Content-Type': 'application/json',
         },
         body: JSON.stringify(payload),
