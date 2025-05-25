@@ -106,11 +106,19 @@ async def list_assignments(
     db: firestore.AsyncClient = Depends(get_db),
     current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
+    # Add validation for current_rbac_user
+    if not current_rbac_user or not current_rbac_user.uid:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid user authentication.")
+    
     actual_user_id = current_rbac_user.uid if user_id == "me" else user_id
 
     if actual_user_id and actual_user_id != current_rbac_user.uid:
         if not current_rbac_user.has_permission("assignments", "list_others_by_user"): 
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to list assignments for other users.")
+    elif actual_user_id and actual_user_id == current_rbac_user.uid:
+        # User is requesting their own assignments
+        if not current_rbac_user.has_permission("assignments", "view_own"): 
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to view your own assignments.")
     elif assignable_id and not actual_user_id: 
         if not current_rbac_user.has_permission("assignments", "list_others_by_entity"): 
             raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Not authorized to list assignments for this entity.")

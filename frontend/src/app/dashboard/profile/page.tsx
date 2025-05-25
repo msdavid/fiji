@@ -144,7 +144,7 @@ const ProfilePage = () => {
     if (profileResult.data.id) { 
       setIsLoadingAssignments(true);
       const assignmentsResult: ApiResponse<UserWorkingGroupAssignment[]> = await apiClient<UserWorkingGroupAssignment[]>({
-        method: 'GET', path: `/assignments?userId=me&assignableType=workingGroup`, token: idToken,
+        method: 'GET', path: `/assignments?user_id=me&assignable_type=workingGroup`, token: idToken,
       });
       setIsLoadingAssignments(false);
 
