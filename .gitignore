@@ -125,3 +125,4 @@ Desktop.ini
 *.temp
 .claude/
 .Q/sessions/
+.Q/sessions/*
