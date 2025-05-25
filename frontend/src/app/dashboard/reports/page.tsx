@@ -7,7 +7,8 @@ import Head from 'next/head';
 import VolunteerActivitySection from '@/components/reports/VolunteerActivitySection';
 import EventPerformanceSection from '@/components/reports/EventPerformanceSection';
 import DonationInsightsSection from '@/components/reports/DonationInsightsSection';
-import UsersReportSection from '@/components/reports/UsersReportSection'; 
+import UsersReportSection from '@/components/reports/UsersReportSection';
+import { format } from 'date-fns'; 
 
 // --- Data Interfaces ---
 interface AdminSummaryStats {
@@ -105,6 +106,11 @@ const ReportsPage: NextPage = () => {
   
   const [currentError, setCurrentError] = useState<string | null>(null);
 
+  // Date range filter states
+  const [fromDate, setFromDate] = useState<string>('');
+  const [toDate, setToDate] = useState<string>('');
+  const [dateRangeEnabled, setDateRangeEnabled] = useState<boolean>(false);
+
   const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
   const canViewReports = hasPrivilege('admin', 'view_summary');
 
@@ -163,17 +169,25 @@ const ReportsPage: NextPage = () => {
     };
     
     if (canViewReports) {
+        // Build query parameters based on date range
+        const buildDateRangeParams = () => {
+          if (!dateRangeEnabled || !fromDate || !toDate) return '';
+          return `&from_date=${fromDate}&to_date=${toDate}`;
+        };
+        
+        const dateParams = buildDateRangeParams();
+        
         fetchApiData("/api/reports/admin-summary", setSummaryStats, setLoadingSummary, "Summary");
-        fetchApiData("/api/reports/volunteer-activity?period=all_time", setVolunteerActivityReport, setLoadingVolunteerActivity, "Volunteer Activity");
-        fetchApiData("/api/reports/event-performance?date_range=all", setEventPerformanceReport, setLoadingEventPerformance, "Event Performance");
-        fetchApiData("/api/reports/donation-insights?period=all_time", setDonationInsightsReport, setLoadingDonationInsights, "Donation Insights");
+        fetchApiData(`/api/reports/volunteer-activity?period=${dateRangeEnabled ? 'custom' : 'all_time'}${dateParams}`, setVolunteerActivityReport, setLoadingVolunteerActivity, "Volunteer Activity");
+        fetchApiData(`/api/reports/event-performance?date_range=${dateRangeEnabled ? 'custom' : 'all'}${dateParams}`, setEventPerformanceReport, setLoadingEventPerformance, "Event Performance");
+        fetchApiData(`/api/reports/donation-insights?period=${dateRangeEnabled ? 'custom' : 'all_time'}${dateParams}`, setDonationInsightsReport, setLoadingDonationInsights, "Donation Insights");
         fetchApiData("/api/reports/users-list", setUsersReport, setLoadingUsersReport, "Users List"); 
     } else if (!authLoading) {
         setCurrentError("You do not have permission to view these reports.");
         allLoadersFalse();
     }
 
-  }, [idToken, backendUrl, canViewReports, authLoading]);
+  }, [idToken, backendUrl, canViewReports, authLoading, fromDate, toDate, dateRangeEnabled]);
 
   const overallLoading = authLoading || loadingSummary || loadingVolunteerActivity || loadingEventPerformance || loadingDonationInsights || loadingUsersReport;
 
@@ -229,6 +243,62 @@ const ReportsPage: NextPage = () => {
             Comprehensive insights and analytics for your organization
           </p>
         </div>
+
+        {/* Date Range Filter Section */}
+        <section className="mb-8 p-6 bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+            <span className="material-icons mr-2 text-blue-600 dark:text-blue-400">date_range</span>
+            Date Range Filters
+          </h2>
+          <div className="space-y-4">
+            <div className="flex items-center space-x-2">
+              <input
+                type="checkbox"
+                id="enableDateRange"
+                checked={dateRangeEnabled}
+                onChange={(e) => setDateRangeEnabled(e.target.checked)}
+                className="h-4 w-4 text-indigo-600 focus:ring-indigo-500 border-gray-300 rounded"
+              />
+              <label htmlFor="enableDateRange" className="text-sm font-medium text-gray-700 dark:text-gray-300">
+                Enable custom date range filtering
+              </label>
+            </div>
+            {dateRangeEnabled && (
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label htmlFor="fromDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    From Date
+                  </label>
+                  <input
+                    type="date"
+                    id="fromDate"
+                    value={fromDate}
+                    onChange={(e) => setFromDate(e.target.value)}
+                    className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                  />
+                </div>
+                <div>
+                  <label htmlFor="toDate" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                    To Date
+                  </label>
+                  <input
+                    type="date"
+                    id="toDate"
+                    value={toDate}
+                    onChange={(e) => setToDate(e.target.value)}
+                    className="block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 dark:bg-gray-700 dark:text-white sm:text-sm"
+                  />
+                </div>
+              </div>
+            )}
+            {dateRangeEnabled && fromDate && toDate && (
+              <div className="text-sm text-gray-600 dark:text-gray-400">
+                <span className="material-icons text-sm mr-1">info</span>
+                Filtering data from {format(new Date(fromDate), 'MMM dd, yyyy')} to {format(new Date(toDate), 'MMM dd, yyyy')}
+              </div>
+            )}
+          </div>
+        </section>
 
         {/* Overall Summary Section */}
         <section className="mb-10">
@@ -303,6 +373,7 @@ const ReportsPage: NextPage = () => {
           <VolunteerActivitySection 
             report={volunteerActivityReport} 
             isLoading={loadingVolunteerActivity}
+            dateRange={dateRangeEnabled ? { from: fromDate, to: toDate } : null}
           />
         </section>
 
@@ -314,7 +385,8 @@ const ReportsPage: NextPage = () => {
           </h2>
           <EventPerformanceSection 
             report={eventPerformanceReport} 
-            isLoading={loadingEventPerformance} 
+            isLoading={loadingEventPerformance}
+            dateRange={dateRangeEnabled ? { from: fromDate, to: toDate } : null}
           />
         </section>
 
@@ -326,7 +398,8 @@ const ReportsPage: NextPage = () => {
           </h2>
           <DonationInsightsSection 
             report={donationInsightsReport} 
-            isLoading={loadingDonationInsights} 
+            isLoading={loadingDonationInsights}
+            dateRange={dateRangeEnabled ? { from: fromDate, to: toDate } : null}
           />
         </section>
       </main>

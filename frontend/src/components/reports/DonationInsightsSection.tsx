@@ -66,6 +66,7 @@ interface DonationInsightsSectionProps {
   report: DonationInsightsReport | null;
   isLoading: boolean;
   error?: string | null;
+  dateRange?: { from: string; to: string } | null;
 }
 
 ChartJS.register(
@@ -100,7 +101,7 @@ const getChartColors = (isDark: boolean) => ({
 });
 
 
-const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ report, isLoading, error }) => {
+const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ report, isLoading, error, dateRange }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
   const [isDarkMode, setIsDarkMode] = React.useState(false);
@@ -342,6 +343,14 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
 
   return (
     <div>
+      {dateRange && (
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+          <div className="flex items-center text-sm text-blue-700 dark:text-blue-300">
+            <span className="material-icons text-sm mr-2">filter_alt</span>
+            Date filter active: {dateRange.from} to {dateRange.to}
+          </div>
+        </div>
+      )}
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
         <div className="h-80 md:h-96 bg-gray-50 dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
           <Pie options={commonChartOptions('Donation Types (by Count)')} data={pieChartData} />

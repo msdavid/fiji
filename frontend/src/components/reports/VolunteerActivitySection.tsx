@@ -41,6 +41,7 @@ interface VolunteerActivitySectionProps {
   report: VolunteerActivityReport | null;
   isLoading: boolean;
   error?: string | null;
+  dateRange?: { from: string; to: string } | null;
 }
 
 ChartJS.register(
@@ -60,7 +61,7 @@ const fuzzyFilter: FilterFn<any> = (row: Row<any>, columnId: string, value: any,
 };
 
 
-const VolunteerActivitySection: React.FC<VolunteerActivitySectionProps> = ({ report, isLoading, error }) => {
+const VolunteerActivitySection: React.FC<VolunteerActivitySectionProps> = ({ report, isLoading, error, dateRange }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
   const [isDarkMode, setIsDarkMode] = React.useState(false);
@@ -273,6 +274,14 @@ const VolunteerActivitySection: React.FC<VolunteerActivitySectionProps> = ({ rep
 
   return (
     <div>
+      {dateRange && (
+        <div className="mb-4 p-3 bg-blue-50 dark:bg-blue-900/30 border border-blue-200 dark:border-blue-700 rounded-lg">
+          <div className="flex items-center text-sm text-blue-700 dark:text-blue-300">
+            <span className="material-icons text-sm mr-2">filter_alt</span>
+            Date filter active: {dateRange.from} to {dateRange.to}
+          </div>
+        </div>
+      )}
       {/* Chart */}
       <div className="mb-8 h-96 bg-gray-50 dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
         <Bar options={chartOptions} data={leaderboardData} />

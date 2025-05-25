@@ -117,16 +117,32 @@ async def get_admin_summary_stats(
 )
 async def get_volunteer_activity_report(
     db: firestore.AsyncClient = Depends(get_db),
-    period: Optional[str] = Query("all_time", enum=["last_30_days", "last_90_days", "year_to_date", "all_time"])
+    period: Optional[str] = Query("all_time", enum=["last_30_days", "last_90_days", "year_to_date", "all_time", "custom"]),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None)
 ):
     try:
         query = db.collection("assignments").where("assignableType", "==", "event")
         now = datetime.datetime.now(datetime.timezone.utc)
         start_date_filter = None
-        if period == "last_30_days": start_date_filter = now - datetime.timedelta(days=30)
-        elif period == "last_90_days": start_date_filter = now - datetime.timedelta(days=90)
-        elif period == "year_to_date": start_date_filter = datetime.datetime(now.year, 1, 1, tzinfo=datetime.timezone.utc)
-        if start_date_filter: query = query.where("createdAt", ">=", start_date_filter)
+        end_date_filter = None
+        if period == "last_30_days": 
+            start_date_filter = now - datetime.timedelta(days=30)
+        elif period == "last_90_days": 
+            start_date_filter = now - datetime.timedelta(days=90)
+        elif period == "year_to_date": 
+            start_date_filter = datetime.datetime(now.year, 1, 1, tzinfo=datetime.timezone.utc)
+        elif period == "custom" and from_date and to_date:
+            try:
+                start_date_filter = datetime.datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
+                end_date_filter = datetime.datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=datetime.timezone.utc)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+        
+        if start_date_filter: 
+            query = query.where("createdAt", ">=", start_date_filter)
+        if end_date_filter:
+            query = query.where("createdAt", "<=", end_date_filter)
 
         volunteer_stats: Dict[str, Dict[str, Any]] = {}
         total_hours_overall = 0.0
@@ -173,16 +189,29 @@ async def get_volunteer_activity_report(
 )
 async def get_event_performance_report(
     db: firestore.AsyncClient = Depends(get_db),
-    date_range: Optional[str] = Query("all", enum=["all", "upcoming", "past", "last_30_days", "next_30_days"])
+    date_range: Optional[str] = Query("all", enum=["all", "upcoming", "past", "last_30_days", "next_30_days", "custom"]),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None)
 ):
     try:
         events_ref = db.collection("events")
         now = datetime.datetime.now(datetime.timezone.utc)
         query = events_ref
-        if date_range == "upcoming": query = query.where("dateTime", ">", now)
-        elif date_range == "past": query = query.where("endTime", "<", now)
-        elif date_range == "last_30_days": query = query.where("dateTime", ">=", now - datetime.timedelta(days=30)).where("dateTime", "<=", now)
-        elif date_range == "next_30_days": query = query.where("dateTime", ">=", now).where("dateTime", "<=", now + datetime.timedelta(days=30))
+        if date_range == "upcoming": 
+            query = query.where("dateTime", ">", now)
+        elif date_range == "past": 
+            query = query.where("endTime", "<", now)
+        elif date_range == "last_30_days": 
+            query = query.where("dateTime", ">=", now - datetime.timedelta(days=30)).where("dateTime", "<=", now)
+        elif date_range == "next_30_days": 
+            query = query.where("dateTime", ">=", now).where("dateTime", "<=", now + datetime.timedelta(days=30))
+        elif date_range == "custom" and from_date and to_date:
+            try:
+                start_date_filter = datetime.datetime.strptime(from_date, "%Y-%m-%d").replace(tzinfo=datetime.timezone.utc)
+                end_date_filter = datetime.datetime.strptime(to_date, "%Y-%m-%d").replace(hour=23, minute=59, second=59, tzinfo=datetime.timezone.utc)
+                query = query.where("dateTime", ">=", start_date_filter).where("dateTime", "<=", end_date_filter)
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
 
         report_entries: List[EventPerformanceEntry] = []
         events_stream = query.where("recurrence_rule", "==", None).order_by("dateTime", direction=firestore.Query.DESCENDING).limit(50).stream()
@@ -218,17 +247,33 @@ async def get_event_performance_report(
 )
 async def get_donation_insights_report(
     db: firestore.AsyncClient = Depends(get_db),
-    period: Optional[str] = Query("all_time", enum=["last_30_days", "last_90_days", "year_to_date", "all_time"])
+    period: Optional[str] = Query("all_time", enum=["last_30_days", "last_90_days", "year_to_date", "all_time", "custom"]),
+    from_date: Optional[str] = Query(None),
+    to_date: Optional[str] = Query(None)
 ):
     try:
         donations_ref = db.collection("donations")
         query = donations_ref
         now = datetime.datetime.now(datetime.timezone.utc)
         start_date_filter = None
-        if period == "last_30_days": start_date_filter = now - datetime.timedelta(days=30)
-        elif period == "last_90_days": start_date_filter = now - datetime.timedelta(days=90)
-        elif period == "year_to_date": start_date_filter = datetime.datetime(now.year, 1, 1, tzinfo=datetime.timezone.utc)
-        if start_date_filter: query = query.where("donationDate", ">=", start_date_filter.strftime("%Y-%m-%d")) 
+        end_date_filter = None
+        if period == "last_30_days": 
+            start_date_filter = now - datetime.timedelta(days=30)
+        elif period == "last_90_days": 
+            start_date_filter = now - datetime.timedelta(days=90)
+        elif period == "year_to_date": 
+            start_date_filter = datetime.datetime(now.year, 1, 1, tzinfo=datetime.timezone.utc)
+        elif period == "custom" and from_date and to_date:
+            try:
+                start_date_filter = datetime.datetime.strptime(from_date, "%Y-%m-%d")
+                end_date_filter = datetime.datetime.strptime(to_date, "%Y-%m-%d")
+            except ValueError:
+                raise HTTPException(status_code=400, detail="Invalid date format. Use YYYY-MM-DD.")
+        
+        if start_date_filter: 
+            query = query.where("donationDate", ">=", start_date_filter.strftime("%Y-%m-%d"))
+        if end_date_filter:
+            query = query.where("donationDate", "<=", end_date_filter.strftime("%Y-%m-%d")) 
 
         recent_donations_list: List[DonationResponse] = [] 
         type_summary: Dict[str, Dict[str, Any]] = defaultdict(lambda: {"count": 0, "totalAmount": 0.0})
