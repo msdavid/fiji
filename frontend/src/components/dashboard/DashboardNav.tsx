@@ -6,12 +6,18 @@ import { signOut, sendPasswordResetEmail } from 'firebase/auth'; // Added sendPa
 import { auth } from '@/lib/firebaseConfig';
 import { useAuth } from '@/context/AuthContext';
 import React, { useState, useEffect, useRef } from 'react';
+import apiClient from '@/lib/apiClient';
 
 // Simple toast notification state
 interface ToastMessage {
   id: number;
   message: string;
   type: 'success' | 'error';
+}
+
+interface OrganizationConfig {
+  id: string;
+  donations_url?: string;
 }
 
 export default function DashboardNav() {
@@ -25,6 +31,7 @@ export default function DashboardNav() {
   const donationsDropdownRef = useRef<HTMLDivElement>(null);
   const adminDropdownRef = useRef<HTMLDivElement>(null);
   const [toastMessages, setToastMessages] = useState<ToastMessage[]>([]);
+  const [organizationConfig, setOrganizationConfig] = useState<OrganizationConfig | null>(null);
 
   const addToast = (message: string, type: 'success' | 'error') => {
     const id = Date.now();
@@ -64,6 +71,37 @@ export default function DashboardNav() {
     }
     setIsDropdownOpen(false);
   };
+
+  const handleDonateClick = () => {
+    if (organizationConfig?.donations_url) {
+      // Open external donations URL in new tab
+      window.open(organizationConfig.donations_url, '_blank', 'noopener,noreferrer');
+    } else {
+      // Fallback to internal donate page
+      router.push('/dashboard/donate');
+    }
+    setIsDonationsDropdownOpen(false);
+    setIsDropdownOpen(false);
+  };
+
+  // Fetch organization settings
+  useEffect(() => {
+    const fetchOrganizationConfig = async () => {
+      try {
+        // Use public endpoint - no authentication required
+        const response = await fetch('/api/organization/public');
+        if (response.ok) {
+          const data = await response.json();
+          setOrganizationConfig(data);
+        }
+      } catch (error) {
+        // Silently fail - organization settings are optional
+        console.log('Could not fetch organization settings:', error);
+      }
+    };
+
+    fetchOrganizationConfig();
+  }, []); // Remove user dependency since we're using public endpoint
 
   useEffect(() => {
     const handleClickOutside = (event: MouseEvent) => {
@@ -206,12 +244,21 @@ export default function DashboardNav() {
       {isDonationsDropdownOpen && (
         <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-gray-200 dark:ring-gray-700 z-50">
           <div className="py-1">
+            {organizationConfig?.donations_url && (
+              <button 
+                onClick={handleDonateClick}
+                className="flex items-center w-full text-left px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white"
+              >
+                <span className="material-icons mr-2 text-sm">volunteer_activism</span>
+                Donate
+              </button>
+            )}
             <Link 
               href="/dashboard/donate" 
               className={getDropdownLinkClassName("/dashboard/donate")}
               onClick={() => { setIsDonationsDropdownOpen(false); setIsDropdownOpen(false); }}
             >
-              <span className="material-icons mr-2 text-sm">volunteer_activism</span>
+              <span className="material-icons mr-2 text-sm">receipt_long</span>
               Declare Donation
             </Link>
             <Link 
@@ -404,12 +451,21 @@ export default function DashboardNav() {
                                 <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
                                   Donations
                                 </div>
+                                {organizationConfig?.donations_url && (
+                                  <button 
+                                    onClick={handleDonateClick}
+                                    className="flex items-center w-full text-left px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  >
+                                    <span className="material-icons mr-2 text-sm">volunteer_activism</span>
+                                    Donate
+                                  </button>
+                                )}
                                 <Link 
                                   href="/dashboard/donate" 
                                   className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
                                   onClick={() => setIsDropdownOpen(false)}
                                 >
-                                  <span className="material-icons mr-2 text-sm">volunteer_activism</span>
+                                  <span className="material-icons mr-2 text-sm">receipt_long</span>
                                   Declare Donation
                                 </Link>
                                 <Link 

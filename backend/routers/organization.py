@@ -50,6 +50,32 @@ async def test_organization_data(
         print(f"DEBUG: Model validation failed: {e}")
         return {"status": "error", "error": str(e)}
 
+@router.get("/public")
+async def get_public_organization_settings(
+    db: firestore.AsyncClient = Depends(get_db)
+):
+    """
+    Get public organization settings (donations_url, website_url, etc.). 
+    No authentication required.
+    """
+    try:
+        config_doc = await db.collection(ORGANIZATION_COLLECTION).document(MAIN_CONFIG_DOC_ID).get()
+        
+        if not config_doc.exists:
+            return {"donations_url": None, "website_url": None, "name": None}
+        
+        config_data = config_doc.to_dict()
+        # Only return public fields
+        return {
+            "donations_url": config_data.get("donations_url"),
+            "website_url": config_data.get("website_url"),
+            "name": config_data.get("name")
+        }
+        
+    except Exception as e:
+        print(f"ERROR in get_public_organization_settings: {e}")
+        return {"donations_url": None, "website_url": None, "name": None}
+
 @router.get("/", response_model=OrganizationConfiguration)
 async def get_organization_settings(
     current_user: RBACUser = Depends(require_sysadmin),

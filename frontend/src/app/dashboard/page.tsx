@@ -5,6 +5,7 @@ import { useAuth } from '@/context/AuthContext';
 import apiClient, { ApiResponse } from '@/lib/apiClient'; 
 import Link from 'next/link';
 import { format, parseISO, isFuture, isValid } from 'date-fns';
+import { useRouter } from 'next/navigation';
 
 interface UserProfile {
   id: string;
@@ -43,6 +44,11 @@ interface VolunteerActivityReport {
   totalVolunteers?: number;
 }
 
+interface OrganizationConfig {
+  id: string;
+  donations_url?: string;
+}
+
 interface UserDonation {
   id: string;
   donationType: 'monetary' | 'in_kind' | 'time_contribution';
@@ -56,6 +62,7 @@ interface UserDonation {
 
 export default function DashboardPage() {
   const { user, idToken, sessionToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege, logout } = useAuth(); 
+  const router = useRouter();
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<Assignment[]>([]);
   const [activeWorkingGroups, setActiveWorkingGroups] = useState<Assignment[]>([]);
@@ -64,7 +71,8 @@ export default function DashboardPage() {
   const [statsAvailability, setStatsAvailability] = useState<'loading' | 'available' | 'unavailable' | 'error'>('loading');
   const [loadingData, setLoadingData] = useState(true);
   // loadingStats is now part of statsAvailability
-  const [error, setError] = useState<string | null>(null); 
+  const [error, setError] = useState<string | null>(null);
+  const [organizationConfig, setOrganizationConfig] = useState<OrganizationConfig | null>(null); 
 
   const fetchData = useCallback(async () => {
     if (!idToken || !sessionToken || !user) {
@@ -232,6 +240,31 @@ export default function DashboardPage() {
     }
   }, [authContextLoading, user, authUserProfile, fetchData]);
 
+  // Fetch organization settings
+  useEffect(() => {
+    const fetchOrganizationConfig = async () => {
+      try {
+        const response = await fetch('/api/organization/public');
+        if (response.ok) {
+          const data = await response.json();
+          setOrganizationConfig(data);
+        }
+      } catch (error) {
+        console.log('Could not fetch organization settings:', error);
+      }
+    };
+
+    fetchOrganizationConfig();
+  }, []);
+
+  const handleDonateClick = () => {
+    if (organizationConfig?.donations_url) {
+      window.open(organizationConfig.donations_url, '_blank', 'noopener,noreferrer');
+    } else {
+      router.push('/dashboard/donate');
+    }
+  };
+
   const allQuickLinks: QuickLinkItem[] = [
     { href: '/dashboard/donate', label: 'Declare a Donation', icon: 'volunteer_activism' }, // Available to all users
     { href: '/dashboard/events/new', label: 'Create New Event', icon: 'add_circle_outline', privilege: { resource: 'events', action: 'create' } },
@@ -318,12 +351,12 @@ export default function DashboardPage() {
               <p className="text-xs text-gray-500 dark:text-gray-400">Help us make a positive impact in our community</p>
             </div>
           </div>
-          <Link 
-            href="/dashboard/donate"
+          <button 
+            onClick={handleDonateClick}
             className="inline-flex items-center px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-md hover:bg-orange-600 transition-colors duration-200"
           >
-            Donate
-          </Link>
+            {organizationConfig?.donations_url ? 'Donate' : 'Declare Donation'}
+          </button>
         </div>
       </div>
 
