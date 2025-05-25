@@ -123,6 +123,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
         // setError(null); // Clear general errors, specific errors handled below
 
         if (currentUser) {
+          // If this is a different user than before, clear any existing session token
+          if (user && user.uid !== currentUser.uid) {
+            console.log('AuthContext: Different user detected, clearing session token');
+            setSessionToken(null);
+            localStorage.removeItem('sessionToken');
+          }
+          
           setUser(currentUser); // Optimistically set user
           setError(null); // Clear previous errors if we have a current user now
 
@@ -142,6 +149,25 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
 
             // Check if we have a valid session token first
             let currentSessionToken = sessionToken || localStorage.getItem('sessionToken');
+            
+            // If we have a session token, verify it belongs to the current user
+            if (currentSessionToken) {
+              try {
+                // Decode the JWT token to check if it matches the current user
+                const payload = JSON.parse(atob(currentSessionToken.split('.')[1]));
+                if (payload.sub !== currentUser.uid) {
+                  console.log('AuthContext: Session token belongs to different user, clearing');
+                  currentSessionToken = null;
+                  setSessionToken(null);
+                  localStorage.removeItem('sessionToken');
+                }
+              } catch (jwtError) {
+                console.warn('AuthContext: Invalid session token format, clearing');
+                currentSessionToken = null;
+                setSessionToken(null);
+                localStorage.removeItem('sessionToken');
+              }
+            }
             
             if (!currentSessionToken) {
               // No session token, need to perform session login
