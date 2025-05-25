@@ -91,7 +91,7 @@ async def session_login(
 
 class RegistrationPayload(BaseModel):
     email: EmailStr
-    password: str = Field(..., min_length=6)
+    password: str = Field(..., min_length=8)
     firstName: str = Field(..., min_length=1)
     lastName: str = Field(..., min_length=1)
     invitationToken: str
