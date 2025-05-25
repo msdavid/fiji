@@ -253,6 +253,14 @@ const ProfilePage = () => {
     }
   };
 
+  const handleRemoveProfilePicture = () => {
+    // Clear the profile picture URL from form data
+    setFormData(prev => ({ ...prev, profilePictureUrl: '' }));
+    
+    // Clear any upload errors
+    setUploadError(null);
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!idToken) { setError("Authentication token is missing for update."); return; }
@@ -473,18 +481,30 @@ const ProfilePage = () => {
                 </div>
               )}
               <div className="mt-3 w-full flex flex-col items-center space-y-2">
-                <label htmlFor="profile-picture-upload" className="cursor-pointer inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
-                  <span className="material-icons text-sm mr-1">{isUploadingImage ? 'sync' : 'photo_camera'}</span>
-                  {isUploadingImage ? 'Uploading...' : 'Change Photo'}
-                  <input
-                    id="profile-picture-upload"
-                    type="file"
-                    accept="image/jpeg,image/png,image/webp"
-                    onChange={handleImageUpload}
-                    disabled={isUploadingImage}
-                    className="sr-only"
-                  />
-                </label>
+                <div className="flex space-x-2">
+                  <label htmlFor="profile-picture-upload" className="cursor-pointer inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                    <span className="material-icons text-sm mr-1">{isUploadingImage ? 'sync' : 'photo_camera'}</span>
+                    {isUploadingImage ? 'Uploading...' : 'Change Photo'}
+                    <input
+                      id="profile-picture-upload"
+                      type="file"
+                      accept="image/jpeg,image/png,image/webp"
+                      onChange={handleImageUpload}
+                      disabled={isUploadingImage}
+                      className="sr-only"
+                    />
+                  </label>
+                  {(formData.profilePictureUrl || currentProfileData.profilePictureUrl) && (
+                    <button
+                      type="button"
+                      onClick={handleRemoveProfilePicture}
+                      disabled={isUploadingImage}
+                      className="inline-flex items-center px-2 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-sm text-xs font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                    >
+                      <span className="material-icons text-sm">delete</span>
+                    </button>
+                  )}
+                </div>
                 {uploadError && (
                   <p className="text-xs text-red-600 dark:text-red-400 text-center">{uploadError}</p>
                 )}
@@ -500,7 +520,7 @@ const ProfilePage = () => {
                         <div><label htmlFor="firstName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">First Name <span className="text-red-500">*</span></label><input type="text" name="firstName" id="firstName" value={formData.firstName} onChange={handleInputChange} className={baseInputStyles} required /></div>
                         <div><label htmlFor="lastName" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Last Name <span className="text-red-500">*</span></label><input type="text" name="lastName" id="lastName" value={formData.lastName} onChange={handleInputChange} className={baseInputStyles} required /></div>
                         <div><label htmlFor="email" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Email</label><input type="email" name="email" id="email" value={formData.email} readOnly className={disabledInputStyles} /></div>
-                        <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={baseInputStyles} /></div>
+                        <div><label htmlFor="phone" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Phone</label><input type="tel" name="phone" id="phone" value={formData.phone || ''} onChange={handleInputChange} className={baseInputStyles} placeholder="+65 9123 4567" /></div>
                         <div><label htmlFor="emergencyContactDetails" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Emergency Contact Details</label><textarea name="emergencyContactDetails" id="emergencyContactDetails" value={formData.emergencyContactDetails || ''} onChange={handleInputChange} rows={3} className={baseInputStyles} placeholder="e.g., Name, Relation, Phone Number"/></div>
                         <div><label htmlFor="skills" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Skills (one per line)</label><textarea name="skills" id="skills" value={formData.skills || ''} onChange={handleInputChange} rows={3} className={baseInputStyles} /></div>
                         <div><label htmlFor="qualifications" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Qualifications (one per line)</label><textarea name="qualifications" id="qualifications" value={formData.qualifications || ''} onChange={handleInputChange} rows={3} className={baseInputStyles} /></div>

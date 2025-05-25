@@ -171,3 +171,112 @@ async def upload_profile_picture(
     finally:
         # Ensure file is closed
         await file.close()
+
+@router.post("/organization-logo")
+async def upload_organization_logo(
+    file: UploadFile = File(...),
+    current_user: RBACUser = Depends(get_current_session_user_with_rbac),
+    db: firestore.AsyncClient = Depends(get_db)
+):
+    """
+    Upload and process a logo for the organization.
+    Returns a public URL from Firebase Storage and updates organization settings.
+    Only sysadmins can upload organization logos.
+    """
+    try:
+        # Check if user is sysadmin
+        if not current_user.is_sysadmin:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="Only system administrators can upload organization logos"
+            )
+        
+        # Validate the uploaded file
+        validate_image_file(file)
+        
+        # Read file content
+        file_content = await file.read()
+        
+        # Additional size check after reading
+        if len(file_content) > MAX_FILE_SIZE:
+            raise HTTPException(
+                status_code=status.HTTP_413_REQUEST_ENTITY_TOO_LARGE,
+                detail=f"File size exceeds maximum allowed size of {MAX_FILE_SIZE // (1024*1024)}MB"
+            )
+        
+        # Process the image (logos might need different dimensions)
+        processed_image_data = process_image(file_content)
+        
+        # Upload to Firebase Storage in a different path for organization assets
+        try:
+            # Get the default bucket
+            bucket = storage.bucket()
+            
+            # Create a unique filename for organization logo
+            file_extension = "jpg"  # We always convert to JPEG
+            unique_filename = f"organization/logo-{uuid.uuid4().hex}.{file_extension}"
+            
+            # Create blob and upload
+            blob = bucket.blob(unique_filename)
+            blob.upload_from_string(
+                processed_image_data,
+                content_type='image/jpeg'
+            )
+            
+            # Make the blob publicly accessible
+            blob.make_public()
+            
+            # Get the public URL
+            public_url = blob.public_url
+            
+        except Exception as e:
+            raise HTTPException(
+                status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+                detail=f"Failed to upload to Firebase Storage: {str(e)}"
+            )
+        
+        # Update organization settings with new logo URL
+        try:
+            # Get the organization document (assuming there's only one)
+            org_collection = db.collection("organization")
+            docs = [doc async for doc in org_collection.limit(1).stream()]
+            
+            if docs:
+                # Update existing organization document
+                org_doc_ref = docs[0].reference
+                await org_doc_ref.update({
+                    "logo_url": public_url,
+                    "updated_at": firestore.SERVER_TIMESTAMP
+                })
+            else:
+                # Create new organization document if none exists
+                org_doc_ref = org_collection.document()
+                await org_doc_ref.set({
+                    "logo_url": public_url,
+                    "created_at": firestore.SERVER_TIMESTAMP,
+                    "updated_at": firestore.SERVER_TIMESTAMP
+                })
+                
+        except Exception as e:
+            # Log the error but don't fail the upload
+            print(f"Warning: Failed to update organization settings with new logo URL: {str(e)}")
+        
+        return JSONResponse(
+            status_code=status.HTTP_200_OK,
+            content={
+                "success": True,
+                "logo_url": public_url,
+                "message": "Organization logo uploaded and updated successfully"
+            }
+        )
+        
+    except HTTPException:
+        raise
+    except Exception as e:
+        raise HTTPException(
+            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
+            detail=f"Failed to upload organization logo: {str(e)}"
+        )
+    finally:
+        # Ensure file is closed
+        await file.close()

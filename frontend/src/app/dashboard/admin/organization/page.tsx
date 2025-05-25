@@ -31,6 +31,8 @@ export default function OrganizationSettingsPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
   const [formData, setFormData] = useState<Partial<OrganizationConfig>>({});
+  const [isUploadingLogo, setIsUploadingLogo] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
 
   useEffect(() => {
     if (!user || !userProfile) return;
@@ -117,6 +119,82 @@ export default function OrganizationSettingsPage() {
     }));
   };
 
+  const handleLogoUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !user) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError('Please select a valid image file (JPEG, PNG, or WebP)');
+      return;
+    }
+
+    // Validate file size (5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setUploadError('Image file size must be less than 5MB');
+      return;
+    }
+
+    setIsUploadingLogo(true);
+    setUploadError(null);
+
+    try {
+      const token = await user.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || token;
+      const uploadFormData = new FormData();
+      uploadFormData.append('file', file);
+
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/uploads/organization-logo`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: uploadFormData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to upload logo');
+      }
+
+      const result = await response.json();
+      
+      // Update the form data with the new logo URL
+      setFormData(prev => ({ ...prev, logo_url: result.logo_url }));
+      
+      // Update the config state to reflect the change immediately
+      setConfig(prev => prev ? { ...prev, logo_url: result.logo_url } : null);
+      
+      // Clear the file input
+      event.target.value = '';
+      
+      toast.success('Logo uploaded successfully');
+      
+    } catch (err: any) {
+      setUploadError(err.message);
+      console.error('Logo upload error:', err);
+      toast.error('Failed to upload logo');
+    } finally {
+      setIsUploadingLogo(false);
+    }
+  };
+
+  const handleRemoveLogo = () => {
+    // Clear the logo URL from form data
+    setFormData(prev => ({ ...prev, logo_url: undefined }));
+    
+    // Clear the logo URL from config state to update preview immediately
+    setConfig(prev => prev ? { ...prev, logo_url: undefined } : null);
+    
+    // Clear any upload errors
+    setUploadError(null);
+    
+    toast.success('Logo removed. Save settings to apply changes.');
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center min-h-[400px]">
@@ -155,15 +233,65 @@ export default function OrganizationSettingsPage() {
 
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Logo URL
+                Organization Logo
               </label>
-              <input
-                type="url"
-                value={formData.logo_url || ''}
-                onChange={(e) => handleInputChange('logo_url', e.target.value)}
-                className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                placeholder="https://example.com/logo.png"
-              />
+              <div className="flex items-start space-x-4">
+                <div className="flex-shrink-0">
+                  {formData.logo_url ? (
+                    <img 
+                      src={formData.logo_url} 
+                      alt="Organization Logo" 
+                      className="w-16 h-16 object-contain border border-gray-300 dark:border-gray-600 rounded-md bg-white"
+                    />
+                  ) : (
+                    <div className="w-16 h-16 border border-gray-300 dark:border-gray-600 rounded-md bg-gray-50 dark:bg-gray-800 flex items-center justify-center">
+                      <span className="material-icons text-gray-400 dark:text-gray-500">business</span>
+                    </div>
+                  )}
+                </div>
+                <div className="flex-grow">
+                  <div className="flex flex-col space-y-2">
+                    <div className="flex space-x-2">
+                      <label htmlFor="logo-upload" className="cursor-pointer inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                        <span className="material-icons text-sm mr-2">{isUploadingLogo ? 'sync' : 'upload'}</span>
+                        {isUploadingLogo ? 'Uploading...' : 'Upload Logo'}
+                        <input
+                          id="logo-upload"
+                          type="file"
+                          accept="image/jpeg,image/png,image/webp"
+                          onChange={handleLogoUpload}
+                          disabled={isUploadingLogo}
+                          className="sr-only"
+                        />
+                      </label>
+                      {formData.logo_url && (
+                        <button
+                          type="button"
+                          onClick={handleRemoveLogo}
+                          disabled={isUploadingLogo}
+                          className="inline-flex items-center px-3 py-2 border border-red-300 dark:border-red-600 rounded-md shadow-sm text-sm font-medium text-red-700 dark:text-red-300 bg-white dark:bg-gray-700 hover:bg-red-50 dark:hover:bg-red-900/30 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-red-500 disabled:opacity-50"
+                        >
+                          <span className="material-icons text-sm mr-2">delete</span>
+                          Remove
+                        </button>
+                      )}
+                    </div>
+                    <p className="text-xs text-gray-500 dark:text-gray-400">Max 5MB, JPEG/PNG/WebP</p>
+                    {uploadError && (
+                      <p className="text-xs text-red-600 dark:text-red-400">{uploadError}</p>
+                    )}
+                  </div>
+                  <div className="mt-2">
+                    <input
+                      type="url"
+                      value={formData.logo_url || ''}
+                      onChange={(e) => handleInputChange('logo_url', e.target.value)}
+                      className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white text-xs"
+                      placeholder="Or enter logo URL manually"
+                    />
+                  </div>
+                </div>
+              </div>
             </div>
           </div>
 
@@ -191,7 +319,7 @@ export default function OrganizationSettingsPage() {
                 value={formData.phone || ''}
                 onChange={(e) => handleInputChange('phone', e.target.value)}
                 className="w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md focus:outline-none focus:ring-2 focus:ring-indigo-500 dark:bg-gray-700 dark:text-white"
-                placeholder="+1 (555) 123-4567"
+                placeholder="+65 9123 4567"
               />
             </div>
           </div>
