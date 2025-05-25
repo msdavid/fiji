@@ -213,38 +213,46 @@ const DonationsPage = () => {
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-700">
               <thead className="bg-gray-50 dark:bg-gray-800">
                 <tr>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Donor</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amount/Details</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Recorded By</th>
-                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Date</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Donor</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amount/Details</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Recorded By</th>
+                  <th scope="col" className="px-3 py-2 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
                 {filteredDonations.map((donation) => (
                   <tr key={donation.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150">
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{format(parseISO(donation.donationDate), 'PPP')}</td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                      {donation.donorName}
-                      {donation.donorEmail && <div className="text-xs text-gray-500 dark:text-gray-400">{donation.donorEmail}</div>}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900 dark:text-gray-100">{format(parseISO(donation.donationDate), 'MMM d, yyyy')}</td>
+                    <td className="px-3 py-2 text-xs text-gray-900 dark:text-gray-100">
+                      <div className="font-medium">{donation.donorName}</div>
+                      {donation.donorEmail && <div className="text-xs text-gray-500 dark:text-gray-400 truncate max-w-[120px]" title={donation.donorEmail}>{donation.donorEmail}</div>}
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 capitalize">{donation.donationType.replace('_', ' ')}</td>
-                    <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
-                      {donation.donationType === 'monetary' && donation.amount ? `${donation.amount.toFixed(2)} ${donation.currency || ''}`.trim() : donation.description}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900 dark:text-gray-100 capitalize">{donation.donationType.replace('_', ' ')}</td>
+                    <td className="px-3 py-2 text-xs text-gray-900 dark:text-gray-100">
+                      <div className="max-w-[200px]">
+                        {donation.donationType === 'monetary' && donation.amount ? (
+                          <span className="font-medium">{donation.amount.toFixed(2)} {donation.currency || ''}</span>
+                        ) : (
+                          <div className="truncate" title={donation.description}>{donation.description}</div>
+                        )}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap">
-                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusColors[donation.status]}`}>
+                    <td className="px-3 py-2 whitespace-nowrap">
+                      <span className={`inline-flex px-1.5 py-0.5 text-xs font-semibold rounded-full ${statusColors[donation.status]}`}>
                         {statusLabels[donation.status]}
                       </span>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
-                      {donation.recordedByUserFirstName || donation.recordedByUserId} {donation.recordedByUserLastName || ''}
+                    <td className="px-3 py-2 whitespace-nowrap text-xs text-gray-900 dark:text-gray-100">
+                      <div className="truncate max-w-[100px]" title={`${donation.recordedByUserFirstName || donation.recordedByUserId} ${donation.recordedByUserLastName || ''}`.trim()}>
+                        {donation.recordedByUserFirstName || donation.recordedByUserId} {donation.recordedByUserLastName || ''}
+                      </div>
                     </td>
-                    <td className="px-6 py-4 whitespace-nowrap text-sm font-medium">
+                    <td className="px-3 py-2 whitespace-nowrap text-xs font-medium">
                       <Link href={`/dashboard/donations/${donation.id}`} className="text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-200 inline-flex items-center">
-                          <span className="material-icons mr-1 text-sm">visibility</span>View
+                          <span className="material-icons text-sm">visibility</span>
                       </Link>
                     </td>
                   </tr>
