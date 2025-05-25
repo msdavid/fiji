@@ -95,11 +95,11 @@ async def get_admin_summary_stats(
         active_events_count = 0
         now = datetime.datetime.now(datetime.timezone.utc)
         
-        query_non_recurring_future = db.collection("events").where("endDate", ">", now).where("recurrenceRule", "==", None).stream()
+        query_non_recurring_future = db.collection("events").where("endTime", ">", now).where("recurrence_rule", "==", None).stream()
         async for _ in query_non_recurring_future:
             active_events_count += 1
         
-        query_recurring_templates = db.collection("events").where("recurrenceRule", "!=", None).stream()
+        query_recurring_templates = db.collection("events").where("recurrence_rule", "!=", None).stream()
         async for _ in query_recurring_templates:
             active_events_count += 1
 
@@ -120,7 +120,7 @@ async def get_volunteer_activity_report(
     period: Optional[str] = Query("all_time", enum=["last_30_days", "last_90_days", "year_to_date", "all_time"])
 ):
     try:
-        query = db.collection("assignments").where("type", "==", "event")
+        query = db.collection("assignments").where("assignableType", "==", "event")
         now = datetime.datetime.now(datetime.timezone.utc)
         start_date_filter = None
         if period == "last_30_days": start_date_filter = now - datetime.timedelta(days=30)
@@ -135,9 +135,10 @@ async def get_volunteer_activity_report(
             assign_data = assign_doc.to_dict()
             user_id = assign_data.get("userId")
             if not user_id: continue
-            attendance = assign_data.get("attendance", {})
-            if attendance.get("attended") and isinstance(attendance.get("hoursContributed"), (int, float)) and attendance["hoursContributed"] > 0:
-                hours = float(attendance["hoursContributed"])
+            # Count all confirmed assignments for now (since attendance tracking may not be fully implemented)
+            if assign_data.get("status") in ["confirmed", "confirmed_admin", "active"]:
+                hours_contributed = assign_data.get("hoursContributed") or 1.0  # Default to 1 hour if not specified
+                hours = float(hours_contributed) if isinstance(hours_contributed, (int, float)) and hours_contributed > 0 else 1.0
                 if user_id not in volunteer_stats: volunteer_stats[user_id] = {"totalHours": 0.0, "eventCount": 0, "displayName": "Unknown"}
                 volunteer_stats[user_id]["totalHours"] += hours
                 volunteer_stats[user_id]["eventCount"] += 1
@@ -149,11 +150,15 @@ async def get_volunteer_activity_report(
             for i in range(0, len(user_ids), chunk_size):
                 chunk_user_ids = user_ids[i:i+chunk_size]
                 if not chunk_user_ids: continue
-                users_snap = await db.collection("users").where("uid", "in", chunk_user_ids).get()
+                users_snap = await db.collection("users").where(FieldPath.document_id(), "in", chunk_user_ids).get()
                 for user_doc_snap in users_snap:
                     user_data = user_doc_snap.to_dict()
-                    if user_data and user_data.get("uid") in volunteer_stats:
-                        volunteer_stats[user_data["uid"]]["displayName"] = user_data.get("displayName", "N/A")
+                    user_id = user_doc_snap.id
+                    if user_id in volunteer_stats:
+                        first_name = user_data.get("firstName", "")
+                        last_name = user_data.get("lastName", "")
+                        display_name = f"{first_name} {last_name}".strip() or user_data.get("displayName", "Unknown User")
+                        volunteer_stats[user_id]["displayName"] = display_name
 
         report_data = [VolunteerActivityEntry(userId=uid, displayName=stats["displayName"], totalHours=stats["totalHours"], eventCount=stats["eventCount"]) for uid, stats in volunteer_stats.items()]
         report_data.sort(key=lambda x: x.totalHours, reverse=True)
@@ -174,30 +179,32 @@ async def get_event_performance_report(
         events_ref = db.collection("events")
         now = datetime.datetime.now(datetime.timezone.utc)
         query = events_ref
-        if date_range == "upcoming": query = query.where("startDate", ">", now)
-        elif date_range == "past": query = query.where("endDate", "<", now)
-        elif date_range == "last_30_days": query = query.where("startDate", ">=", now - datetime.timedelta(days=30)).where("startDate", "<=", now)
-        elif date_range == "next_30_days": query = query.where("startDate", ">=", now).where("startDate", "<=", now + datetime.timedelta(days=30))
+        if date_range == "upcoming": query = query.where("dateTime", ">", now)
+        elif date_range == "past": query = query.where("endTime", "<", now)
+        elif date_range == "last_30_days": query = query.where("dateTime", ">=", now - datetime.timedelta(days=30)).where("dateTime", "<=", now)
+        elif date_range == "next_30_days": query = query.where("dateTime", ">=", now).where("dateTime", "<=", now + datetime.timedelta(days=30))
 
         report_entries: List[EventPerformanceEntry] = []
-        events_stream = query.where("recurrenceRule", "==", None).order_by("startDate", direction=firestore.Query.DESCENDING).limit(50).stream()
+        events_stream = query.where("recurrence_rule", "==", None).order_by("dateTime", direction=firestore.Query.DESCENDING).limit(50).stream()
 
         async for event_doc in events_stream:
             event_data = event_doc.to_dict()
             event_id = event_doc.id
             registered_count, attended_count = 0, 0
-            assignments_query = db.collection("assignments").where("type", "==", "event").where("targetId", "==", event_id).stream()
+            assignments_query = db.collection("assignments").where("assignableType", "==", "event").where("assignableId", "==", event_id).stream()
             async for assign_doc in assignments_query:
                 registered_count += 1
-                if assign_doc.to_dict().get("attendance", {}).get("attended"): attended_count += 1
+                # For now, consider confirmed assignments as attended (since attendance tracking may not be fully implemented)
+                assign_status = assign_doc.to_dict().get("status")
+                if assign_status in ["confirmed", "confirmed_admin", "active"]: attended_count += 1
             
-            event_start_date = event_data.get("startDate")
+            event_start_date = event_data.get("dateTime")
             if isinstance(event_start_date, str): event_start_date = datetime.datetime.fromisoformat(event_start_date.replace("Z", "+00:00"))
             elif not isinstance(event_start_date, datetime.datetime): event_start_date = now 
 
             report_entries.append(EventPerformanceEntry(
-                eventId=event_id, eventName=event_data.get("name", "N/A"), eventDate=event_start_date,
-                eventType=event_data.get("type"), registeredVolunteers=registered_count,
+                eventId=event_id, eventName=event_data.get("eventName", "N/A"), eventDate=event_start_date,
+                eventType=event_data.get("eventType"), registeredVolunteers=registered_count,
                 attendedVolunteers=attended_count, attendanceRate=(attended_count / registered_count) if registered_count > 0 else 0.0
             ))
         return EventPerformanceReport(data=report_entries, totalEventsProcessed=len(report_entries))

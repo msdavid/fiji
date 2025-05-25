@@ -130,17 +130,23 @@ async def get_my_donations(
         donations_list = []
         user_details_cache = {}
         
-        # First, try to find donations by donorUserId
+        # First, try to find donations by donorUserId and filter for verified status
         try:
             query_by_id = db.collection(DONATIONS_COLLECTION).where("donorUserId", "==", current_user.uid)
             query_by_id = query_by_id.order_by("createdAt", direction=firestore.Query.DESCENDING)
-            query_by_id = query_by_id.limit(limit)
             
             docs_by_id = query_by_id.stream()
             async for doc in docs_by_id:
+                if len(donations_list) >= limit:
+                    break
                 try:
                     donation_data = doc.to_dict()
                     donation_data['id'] = doc.id
+                    
+                    # Only include verified donations
+                    donation_status = donation_data.get("status", "pending_verification")
+                    if donation_status != "verified":
+                        continue
                     
                     recorded_by_user_id = donation_data.get("recordedByUserId")
                     if recorded_by_user_id:
@@ -159,23 +165,28 @@ async def get_my_donations(
         
         print(f"DEBUG: Found {len(donations_list)} donations by donorUserId")
         
-        # If we haven't reached the limit, also search by email for legacy donations
+        # If we haven't reached the limit, also search by email for legacy verified donations
         if len(donations_list) < limit and current_user.email:
-            remaining_limit = limit - len(donations_list)
             try:
                 query_by_email = db.collection(DONATIONS_COLLECTION).where("donorEmail", "==", current_user.email)
                 query_by_email = query_by_email.order_by("createdAt", direction=firestore.Query.DESCENDING)
-                query_by_email = query_by_email.limit(remaining_limit)
                 
                 # Track IDs we already added to avoid duplicates
                 existing_ids = {donation.id for donation in donations_list}
                 
                 docs_by_email = query_by_email.stream()
                 async for doc in docs_by_email:
+                    if len(donations_list) >= limit:
+                        break
                     if doc.id not in existing_ids:  # Avoid duplicates
                         try:
                             donation_data = doc.to_dict()
                             donation_data['id'] = doc.id
+                            
+                            # Only include verified donations
+                            donation_status = donation_data.get("status", "pending_verification")
+                            if donation_status != "verified":
+                                continue
                             
                             recorded_by_user_id = donation_data.get("recordedByUserId")
                             if recorded_by_user_id:
@@ -463,6 +474,54 @@ async def withdraw_my_donation(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
+# ===== ADMIN DONATION MANAGEMENT ENDPOINTS =====
+
+@router.get("/pending-verification", response_model=List[DonationResponse], dependencies=[Depends(require_permission("donations", "list"))])
+async def get_pending_donations(
+    db: firestore.AsyncClient = Depends(get_db),
+    limit: int = Query(default=20, le=100, description="Maximum number of donations to return")
+):
+    """Admin endpoint to get donations pending verification"""
+    try:
+        # First, get all donations and filter client-side for those with pending_verification status
+        # This is necessary because some old donations might not have the status field
+        query = db.collection(DONATIONS_COLLECTION)\
+            .order_by("createdAt", direction=firestore.Query.ASCENDING)
+            # Removed the where clause to get all donations first
+        
+        docs = query.stream()
+        donations_list = []
+        user_details_cache = {}
+        
+        async for doc in docs:
+            donation_data = doc.to_dict()
+            donation_data['id'] = doc.id
+            
+            # Filter for pending_verification status, or if status is missing (old donations), treat as pending
+            donation_status = donation_data.get("status", "pending_verification")
+            if donation_status != "pending_verification":
+                continue
+            
+            # Get user details for the person who recorded the donation
+            recorded_by_user_id = donation_data.get("recordedByUserId")
+            if recorded_by_user_id and recorded_by_user_id not in user_details_cache:
+                user_details_cache[recorded_by_user_id] = await _get_user_details_for_donation(db, recorded_by_user_id)
+            
+            if recorded_by_user_id in user_details_cache:
+                user_details = user_details_cache[recorded_by_user_id]
+                donation_data["recordedByUserFirstName"] = user_details.get("firstName")
+                donation_data["recordedByUserLastName"] = user_details.get("lastName")
+            
+            donations_list.append(DonationResponse(**donation_data))
+            
+            # Limit the results
+            if len(donations_list) >= limit:
+                break
+        
+        return donations_list
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
 @router.get("/{donation_id}", response_model=DonationResponse, dependencies=[Depends(require_permission("donations", "view"))])
 async def get_donation(donation_id: str, db: firestore.AsyncClient = Depends(get_db)):
     try:
@@ -557,55 +616,6 @@ async def delete_donation(donation_id: str, db: firestore.AsyncClient = Depends(
             raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Donation '{donation_id}' not found")
         
         await doc_ref.delete()
-    except Exception as e:
-        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
-
-# ===== ADMIN DONATION MANAGEMENT ENDPOINTS =====
-
-@router.get("/pending-verification", response_model=List[DonationResponse], dependencies=[Depends(require_permission("donations", "list"))])
-async def get_pending_donations(
-    db: firestore.AsyncClient = Depends(get_db),
-    limit: int = Query(default=20, le=100, description="Maximum number of donations to return")
-):
-    """Admin endpoint to get donations pending verification"""
-    try:
-        # First, get all donations and filter client-side for those with pending_verification status
-        # This is necessary because some old donations might not have the status field
-        query = db.collection(DONATIONS_COLLECTION)\
-            .order_by("createdAt", direction=firestore.Query.ASCENDING)
-            # Removed the where clause to get all donations first
-        
-        docs = query.stream()
-        donations_list = []
-        user_details_cache = {}
-        
-        async for doc in docs:
-            donation_data = doc.to_dict()
-            donation_data['id'] = doc.id
-            
-            # Filter for pending_verification status, or if status is missing (old donations), treat as pending
-            donation_status = donation_data.get("status", "pending_verification")
-            if donation_status != "pending_verification":
-                continue
-                
-            # Ensure status field exists in the data
-            donation_data["status"] = donation_status
-            
-            recorded_by_user_id = donation_data.get("recordedByUserId")
-            if recorded_by_user_id:
-                if recorded_by_user_id not in user_details_cache:
-                    user_details_cache[recorded_by_user_id] = await _get_user_details_for_donation(db, recorded_by_user_id)
-                recorder_details = user_details_cache[recorded_by_user_id]
-                donation_data["recordedByUserFirstName"] = recorder_details.get("firstName")
-                donation_data["recordedByUserLastName"] = recorder_details.get("lastName")
-            
-            donations_list.append(DonationResponse(**donation_data))
-            
-            # Stop when we reach the limit
-            if len(donations_list) >= limit:
-                break
-        
-        return donations_list
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 

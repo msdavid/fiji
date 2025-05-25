@@ -63,6 +63,39 @@ const fuzzyFilter: FilterFn<any> = (row: Row<any>, columnId: string, value: any,
 const VolunteerActivitySection: React.FC<VolunteerActivitySectionProps> = ({ report, isLoading, error }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const updateDarkMode = () => {
+        const darkModeActive = document.documentElement.classList.contains('dark');
+        setIsDarkMode(darkModeActive);
+        
+        // Set Chart.js global defaults based on dark mode
+        if (darkModeActive) {
+          ChartJS.defaults.color = '#FFFFFF'; // White text for dark mode
+          ChartJS.defaults.borderColor = 'rgba(55, 65, 81, 0.3)';
+          ChartJS.defaults.backgroundColor = 'rgba(55, 65, 81, 0.1)';
+        } else {
+          ChartJS.defaults.color = '#111827'; // Dark text for light mode
+          ChartJS.defaults.borderColor = 'rgba(229, 231, 235, 0.3)';
+          ChartJS.defaults.backgroundColor = 'rgba(229, 231, 235, 0.1)';
+        }
+      };
+      
+      // Initial check
+      updateDarkMode();
+      
+      // Watch for changes
+      const observer = new MutationObserver(updateDarkMode);
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+      
+      return () => observer.disconnect();
+    }
+  }, []);
 
   const columns = useMemo<ColumnDef<VolunteerActivityEntry>[]>(
     () => [
@@ -115,27 +148,50 @@ const VolunteerActivitySection: React.FC<VolunteerActivitySectionProps> = ({ rep
         {
           label: 'Total Hours Contributed',
           data: sortedData.map(v => v.totalHours),
-          backgroundColor: 'rgba(79, 70, 229, 0.8)', // indigo-600
-          borderColor: 'rgba(79, 70, 229, 1)',
+          backgroundColor: isDarkMode ? 'rgba(129, 140, 248, 0.8)' : 'rgba(79, 70, 229, 0.8)',
+          borderColor: isDarkMode ? 'rgba(129, 140, 248, 1)' : 'rgba(79, 70, 229, 1)',
           borderWidth: 1,
         },
       ],
     };
-  }, [report]);
+  }, [report, isDarkMode]);
 
-  const chartOptions = {
+  const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
       legend: {
         position: 'top' as const,
+        labels: {
+          color: isDarkMode ? '#111827' : '#FFFFFF',
+          font: {
+            family: 'Inter, sans-serif',
+            size: 12
+          },
+          padding: 20
+        }
       },
       title: {
         display: true,
         text: 'Top 10 Volunteers by Hours Contributed',
-        color: document.documentElement.classList.contains('dark') ? '#FFFFFF' : '#374151', // Adjust for dark mode
+        color: isDarkMode ? '#111827' : '#FFFFFF',
+        font: {
+          family: 'Inter, sans-serif',
+          size: 14,
+          weight: 'bold'
+        },
+        padding: {
+          top: 10,
+          bottom: 20
+        }
       },
       tooltip: {
+        backgroundColor: isDarkMode ? 'rgba(255, 255, 255, 0.95)' : 'rgba(17, 24, 39, 0.95)',
+        titleColor: isDarkMode ? '#111827' : '#FFFFFF',
+        bodyColor: isDarkMode ? '#111827' : '#FFFFFF',
+        borderColor: isDarkMode ? 'rgba(17, 24, 39, 0.2)' : 'rgba(255, 255, 255, 0.2)',
+        borderWidth: 1,
+        cornerRadius: 8,
         callbacks: {
             label: function(context: any) {
                 let label = context.dataset.label || '';
@@ -152,14 +208,34 @@ const VolunteerActivitySection: React.FC<VolunteerActivitySectionProps> = ({ rep
     },
     scales: {
         x: {
-            ticks: { color: document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#4B5563' } // gray-300 dark / gray-600 light
+          ticks: {
+            color: isDarkMode ? '#111827' : '#FFFFFF',
+            font: {
+              family: 'Inter, sans-serif',
+              size: 11
+            }
+          },
+          grid: {
+            color: isDarkMode ? 'rgba(17, 24, 39, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+            drawBorder: false
+          }
         },
         y: {
             beginAtZero: true,
-            ticks: { color: document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#4B5563' }
+            ticks: {
+              color: isDarkMode ? '#111827' : '#FFFFFF',
+              font: {
+                family: 'Inter, sans-serif',
+                size: 11
+              }
+            },
+            grid: {
+              color: isDarkMode ? 'rgba(17, 24, 39, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+              drawBorder: false
+            }
         }
     }
-  };
+  }), [isDarkMode]);
   
   // Function to export table data to CSV
   const exportToCsv = () => {
@@ -198,7 +274,7 @@ const VolunteerActivitySection: React.FC<VolunteerActivitySectionProps> = ({ rep
   return (
     <div>
       {/* Chart */}
-      <div className="mb-8 h-96 bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+      <div className="mb-8 h-96 bg-gray-50 dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
         <Bar options={chartOptions} data={leaderboardData} />
       </div>
 

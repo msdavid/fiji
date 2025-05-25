@@ -40,10 +40,11 @@ const UserSearchInput: React.FC<UserSearchInputProps> = ({
     setIsLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
+      const idToken = await user.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || idToken;
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const response = await fetch(`${backendUrl}/users/search?q=${encodeURIComponent(query)}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${authToken}` },
       });
       if (!response.ok) {
         const errData = await response.json();

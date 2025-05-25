@@ -219,15 +219,22 @@ const ReportsPage: NextPage = () => {
       <Head>
         <title>Reports Dashboard - Fiji</title>
       </Head>
-      <main className="max-w-7xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-8">
-          Reports Dashboard
-        </h1>
+      <main className="max-w-7xl mx-auto py-6 px-4 sm:px-6 lg:px-8"> 
+        {/* Header Section */}
+        <div className="mb-8">
+          <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">
+            Reports Dashboard
+          </h1>
+          <p className="text-gray-600 dark:text-gray-400">
+            Comprehensive insights and analytics for your organization
+          </p>
+        </div>
 
         {/* Overall Summary Section */}
-        <section className="mb-12">
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
-            Overall Summary
+        <section className="mb-10">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 flex items-center">
+            <span className="material-icons mr-2 text-indigo-600 dark:text-indigo-400">analytics</span>
+            Key Metrics
           </h2>
           {(loadingSummary || loadingDonationInsights) && !(summaryStats && donationInsightsReport) && <p className="text-gray-600 dark:text-gray-400">Loading summary...</p>}
           {(summaryStats || donationInsightsReport) && ( 
@@ -276,8 +283,9 @@ const ReportsPage: NextPage = () => {
         </section>
 
         {/* Users Report Section */}
-        <section className="mb-12 p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl">
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
+        <section className="mb-8 p-6 bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-6 flex items-center">
+            <span className="material-icons mr-2 text-blue-600 dark:text-blue-400">people</span>
             Users Overview
           </h2>
           <UsersReportSection 
@@ -287,8 +295,9 @@ const ReportsPage: NextPage = () => {
         </section>
 
         {/* Volunteer Activity Section */}
-        <section className="mb-12 p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl">
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
+        <section className="mb-8 p-6 bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-6 flex items-center">
+            <span className="material-icons mr-2 text-green-600 dark:text-green-400">volunteer_activism</span>
             Volunteer Activity
           </h2>
           <VolunteerActivitySection 
@@ -298,8 +307,9 @@ const ReportsPage: NextPage = () => {
         </section>
 
         {/* Event Performance Section */}
-        <section className="mb-12 p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl">
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
+        <section className="mb-8 p-6 bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl">
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-6 flex items-center">
+            <span className="material-icons mr-2 text-purple-600 dark:text-purple-400">event_note</span>
             Event Performance
           </h2>
           <EventPerformanceSection 
@@ -309,8 +319,9 @@ const ReportsPage: NextPage = () => {
         </section>
 
         {/* Donation Insights Section */}
-        <section className="p-6 bg-white dark:bg-gray-900 shadow-lg rounded-xl"> 
-          <h2 className="text-2xl font-semibold text-gray-800 dark:text-gray-200 mb-6">
+        <section className="p-6 bg-white dark:bg-gray-900 shadow-sm border border-gray-200 dark:border-gray-700 rounded-xl"> 
+          <h2 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-6 flex items-center">
+            <span className="material-icons mr-2 text-emerald-600 dark:text-emerald-400">payments</span>
             Donation Insights
           </h2>
           <DonationInsightsSection 

@@ -141,20 +141,16 @@ const DonationsPage = () => {
                   )}
                 </p>
             </div>
-            <div className="flex space-x-3">
+            <div className="flex space-x-2">
               {canCreateDonations && (
-                <Link href="/dashboard/donations/new">
-                    <button className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm inline-flex items-center text-sm">
-                        <span className="material-icons mr-2 text-base">add_circle_outline</span>
-                        Record New Donation
-                    </button>
+                <Link href="/dashboard/donations/new" className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-indigo-600 hover:bg-indigo-700 rounded-md shadow-sm transition-colors">
+                  <span className="material-icons mr-1 text-sm">add</span>
+                  Record New
                 </Link>
               )}
-              <Link href="/dashboard/donations/pending-verification">
-                  <button className="py-2 px-4 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-md shadow-sm inline-flex items-center text-sm">
-                      <span className="material-icons mr-2 text-base">pending_actions</span>
-                      Review Pending ({pendingCount})
-                  </button>
+              <Link href="/dashboard/donations/pending-verification" className="inline-flex items-center px-3 py-1.5 text-xs font-medium text-white bg-yellow-600 hover:bg-yellow-700 rounded-md shadow-sm transition-colors">
+                <span className="material-icons mr-1 text-sm">pending_actions</span>
+                Review Pending ({pendingCount})
               </Link>
             </div>
         </div>

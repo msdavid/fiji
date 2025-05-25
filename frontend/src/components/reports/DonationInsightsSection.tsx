@@ -86,17 +86,17 @@ const fuzzyFilter: FilterFn<any> = (row: Row<any>, columnId: string, value: any,
 };
 
 const getChartColors = (isDark: boolean) => ({
-    text: isDark ? '#FFFFFF' : '#374151',
-    ticks: isDark ? '#D1D5DB' : '#4B5563',
+    text: isDark ? '#FFFFFF' : '#111827',
+    ticks: isDark ? '#E5E7EB' : '#374151',
     pieSliceColors: [
-        isDark ? 'rgba(99, 102, 241, 0.7)' : 'rgba(99, 102, 241, 0.9)',   
-        isDark ? 'rgba(22, 163, 74, 0.7)' : 'rgba(22, 163, 74, 0.9)',    
-        isDark ? 'rgba(234, 179, 8, 0.7)' : 'rgba(234, 179, 8, 0.9)',     
-        isDark ? 'rgba(244, 63, 94, 0.7)' : 'rgba(244, 63, 94, 0.9)',     
-        isDark ? 'rgba(59, 130, 246, 0.7)' : 'rgba(59, 130, 246, 0.9)',   
+        isDark ? 'rgba(99, 102, 241, 0.9)' : 'rgba(99, 102, 241, 0.9)',   
+        isDark ? 'rgba(22, 163, 74, 0.9)' : 'rgba(22, 163, 74, 0.9)',    
+        isDark ? 'rgba(234, 179, 8, 0.9)' : 'rgba(234, 179, 8, 0.9)',     
+        isDark ? 'rgba(244, 63, 94, 0.9)' : 'rgba(244, 63, 94, 0.9)',     
+        isDark ? 'rgba(59, 130, 246, 0.9)' : 'rgba(59, 130, 246, 0.9)',   
     ],
-    lineChartBorder: isDark ? 'rgba(79, 70, 229, 1)' : 'rgba(79, 70, 229, 1)',
-    lineChartBackground: isDark ? 'rgba(79, 70, 229, 0.5)' : 'rgba(79, 70, 229, 0.5)',
+    lineChartBorder: isDark ? 'rgba(129, 140, 248, 1)' : 'rgba(79, 70, 229, 1)',
+    lineChartBackground: isDark ? 'rgba(129, 140, 248, 0.6)' : 'rgba(79, 70, 229, 0.5)',
 });
 
 
@@ -107,7 +107,33 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
 
   React.useEffect(() => {
     if (typeof window !== 'undefined') {
-        setIsDarkMode(document.documentElement.classList.contains('dark'));
+      const updateDarkMode = () => {
+        const darkModeActive = document.documentElement.classList.contains('dark');
+        setIsDarkMode(darkModeActive);
+        
+        // Set Chart.js global defaults based on dark mode
+        if (darkModeActive) {
+          ChartJS.defaults.color = '#FFFFFF'; // White text for dark mode
+          ChartJS.defaults.borderColor = 'rgba(55, 65, 81, 0.3)';
+          ChartJS.defaults.backgroundColor = 'rgba(55, 65, 81, 0.1)';
+        } else {
+          ChartJS.defaults.color = '#111827'; // Dark text for light mode
+          ChartJS.defaults.borderColor = 'rgba(229, 231, 235, 0.3)';
+          ChartJS.defaults.backgroundColor = 'rgba(229, 231, 235, 0.1)';
+        }
+      };
+      
+      // Initial check
+      updateDarkMode();
+      
+      // Watch for changes
+      const observer = new MutationObserver(updateDarkMode);
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+      
+      return () => observer.disconnect();
     }
   }, []);
   
@@ -199,16 +225,67 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'top' as const, labels: { color: chartColors.text } },
-      title: { display: true, text: titleText, color: chartColors.text },
+      legend: { 
+        position: 'top' as const,
+        labels: {
+          color: isDarkMode ? '#111827' : '#FFFFFF',
+          font: {
+            family: 'Inter, sans-serif',
+            size: 12
+          },
+          padding: 20,
+          usePointStyle: true,
+          pointStyle: 'circle'
+        }
+      },
+      title: { 
+        display: true, 
+        text: titleText,
+        color: isDarkMode ? '#111827' : '#FFFFFF',
+        font: {
+          family: 'Inter, sans-serif',
+          size: 14,
+          weight: 'bold'
+        },
+        padding: {
+          top: 10,
+          bottom: 20
+        }
+      },
     },
   });
   
   const lineChartOptionsSpecific = {
       ...commonChartOptions('Monthly Monetary Donations Trend'),
       scales: {
-        x: { ticks: { color: chartColors.ticks } },
-        y: { beginAtZero: true, ticks: { color: chartColors.ticks, callback: (value: any) => `$${value}` } },
+        x: {
+          ticks: {
+            color: isDarkMode ? '#111827' : '#FFFFFF',
+            font: {
+              family: 'Inter, sans-serif',
+              size: 11
+            }
+          },
+          grid: {
+            color: isDarkMode ? 'rgba(17, 24, 39, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+            drawBorder: false
+          }
+        },
+        y: { 
+          beginAtZero: true, 
+          ticks: { 
+            color: isDarkMode ? '#111827' : '#FFFFFF',
+            font: {
+              family: 'Inter, sans-serif',
+              size: 11
+            },
+            callback: (value: any) => `$${value}` 
+          },
+          grid: {
+            color: isDarkMode ? 'rgba(17, 24, 39, 0.1)' : 'rgba(255, 255, 255, 0.1)',
+            drawBorder: false
+          }
+        },
       },
   };
 
@@ -265,16 +342,19 @@ const DonationInsightsSection: React.FC<DonationInsightsSectionProps> = ({ repor
 
   return (
     <div>
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-8 mb-8">
-        <div className="h-80 md:h-96 bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6 mb-8">
+        <div className="h-80 md:h-96 bg-gray-50 dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
           <Pie options={commonChartOptions('Donation Types (by Count)')} data={pieChartData} />
         </div>
-        <div className="h-80 md:h-96 bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+        <div className="h-80 md:h-96 bg-gray-50 dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
           <Line options={lineChartOptionsSpecific} data={lineChartData} />
         </div>
       </div>
 
-      <h3 className="text-xl font-semibold text-gray-800 dark:text-gray-200 mb-4 mt-8">Recent Donations</h3>
+      <h3 className="text-lg font-semibold text-gray-800 dark:text-gray-200 mb-4 mt-8 flex items-center">
+        <span className="material-icons mr-2 text-gray-600 dark:text-gray-400">list</span>
+        Recent Donations
+      </h3>
       <div className="mb-4 flex flex-col sm:flex-row justify-between items-center gap-4">
         <input
           type="text"

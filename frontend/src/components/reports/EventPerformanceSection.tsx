@@ -63,6 +63,39 @@ const fuzzyFilter: FilterFn<any> = (row: Row<any>, columnId: string, value: any,
 const EventPerformanceSection: React.FC<EventPerformanceSectionProps> = ({ report, isLoading, error }) => {
   const [sorting, setSorting] = React.useState<SortingState>([]);
   const [globalFilter, setGlobalFilter] = React.useState('');
+  const [isDarkMode, setIsDarkMode] = React.useState(false);
+
+  React.useEffect(() => {
+    if (typeof window !== 'undefined') {
+      const updateDarkMode = () => {
+        const darkModeActive = document.documentElement.classList.contains('dark');
+        setIsDarkMode(darkModeActive);
+        
+        // Set Chart.js global defaults based on dark mode
+        if (darkModeActive) {
+          ChartJS.defaults.color = '#FFFFFF'; // White text for dark mode
+          ChartJS.defaults.borderColor = 'rgba(55, 65, 81, 0.3)';
+          ChartJS.defaults.backgroundColor = 'rgba(55, 65, 81, 0.1)';
+        } else {
+          ChartJS.defaults.color = '#111827'; // Dark text for light mode
+          ChartJS.defaults.borderColor = 'rgba(229, 231, 235, 0.3)';
+          ChartJS.defaults.backgroundColor = 'rgba(229, 231, 235, 0.1)';
+        }
+      };
+      
+      // Initial check
+      updateDarkMode();
+      
+      // Watch for changes
+      const observer = new MutationObserver(updateDarkMode);
+      observer.observe(document.documentElement, {
+        attributes: true,
+        attributeFilter: ['class']
+      });
+      
+      return () => observer.disconnect();
+    }
+  }, []);
 
   const columns = useMemo<ColumnDef<EventPerformanceEntry>[]>(
     () => [
@@ -129,37 +162,58 @@ const EventPerformanceSection: React.FC<EventPerformanceSectionProps> = ({ repor
         {
           label: 'Registered Volunteers',
           data: chartEvents.map(e => e.registeredVolunteers),
-          backgroundColor: 'rgba(59, 130, 246, 0.7)', // blue-500
-          borderColor: 'rgba(59, 130, 246, 1)',
+          backgroundColor: isDarkMode ? 'rgba(96, 165, 250, 0.7)' : 'rgba(59, 130, 246, 0.7)',
+          borderColor: isDarkMode ? 'rgba(96, 165, 250, 1)' : 'rgba(59, 130, 246, 1)',
           borderWidth: 1,
         },
         {
           label: 'Attended Volunteers',
           data: chartEvents.map(e => e.attendedVolunteers),
-          backgroundColor: 'rgba(16, 185, 129, 0.7)', // emerald-500
-          borderColor: 'rgba(16, 185, 129, 1)',
+          backgroundColor: isDarkMode ? 'rgba(52, 211, 153, 0.7)' : 'rgba(16, 185, 129, 0.7)',
+          borderColor: isDarkMode ? 'rgba(52, 211, 153, 1)' : 'rgba(16, 185, 129, 1)',
           borderWidth: 1,
         },
       ],
     };
-  }, [report]);
+  }, [report, isDarkMode]);
 
-  const chartOptions = {
+  const chartOptions = useMemo(() => ({
     responsive: true,
     maintainAspectRatio: false,
     plugins: {
-      legend: { position: 'top' as const },
+      legend: { 
+        position: 'top' as const,
+        labels: {
+          color: isDarkMode ? '#111827' : '#FFFFFF',
+          font: {
+            family: 'Inter, sans-serif'
+          }
+        }
+      },
       title: {
         display: true,
         text: 'Event Participation (Recent Events)',
-        color: document.documentElement.classList.contains('dark') ? '#FFFFFF' : '#374151',
+        color: isDarkMode ? '#111827' : '#FFFFFF',
+        font: {
+          family: 'Inter, sans-serif',
+          size: 16
+        }
       },
     },
     scales: {
-      x: { ticks: { color: document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#4B5563' } },
-      y: { beginAtZero: true, ticks: { color: document.documentElement.classList.contains('dark') ? '#D1D5DB' : '#4B5563' } },
+      x: {
+        ticks: {
+          color: isDarkMode ? '#111827' : '#FFFFFF'
+        }
+      },
+      y: { 
+        beginAtZero: true,
+        ticks: {
+          color: isDarkMode ? '#111827' : '#FFFFFF'
+        }
+      },
     },
-  };
+  }), [isDarkMode]);
 
   const exportToCsv = () => {
     if (!report?.data) return;
@@ -191,7 +245,7 @@ const EventPerformanceSection: React.FC<EventPerformanceSectionProps> = ({ repor
 
   return (
     <div>
-      <div className="mb-8 h-96 bg-white dark:bg-gray-800 p-4 rounded-lg shadow">
+      <div className="mb-8 h-96 bg-gray-50 dark:bg-gray-800 p-6 rounded-xl border border-gray-200 dark:border-gray-700">
         <Bar options={chartOptions} data={chartData} />
       </div>
       <div className="mb-4 flex flex-col sm:flex-row justify-between items-center gap-4">

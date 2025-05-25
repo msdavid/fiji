@@ -1,0 +1,83 @@
+{
+  "indexes": [
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "recurrence_rule",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateTime",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION", 
+      "fields": [
+        {
+          "fieldPath": "dateTime",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "recurrence_rule",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateTime",
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "events",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "endTime",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "recurrence_rule",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "dateTime", 
+          "order": "DESCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "assignments",
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "assignableType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "assignableId",
+          "order": "ASCENDING"
+        }
+      ]
+    },
+    {
+      "collectionGroup": "assignments", 
+      "queryScope": "COLLECTION",
+      "fields": [
+        {
+          "fieldPath": "assignableType",
+          "order": "ASCENDING"
+        },
+        {
+          "fieldPath": "createdAt",
+          "order": "ASCENDING"
+        }
+      ]
+    }
+  ],
+  "fieldOverrides": []
+}

@@ -82,10 +82,11 @@ export default function WorkingGroupDetailPage() {
     }
     setIsLoading(true); setError(null);
     try {
-      const token = await user.getIdToken();
+      const idToken = await user.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || idToken;
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const response = await fetch(`${backendUrl}/working-groups/${groupId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'Failed to fetch working group details');
       setWorkingGroup(await response.json());
@@ -97,10 +98,11 @@ export default function WorkingGroupDetailPage() {
     if (!user || !groupId || !canManageAssignments) return;
     setActionInProgress(true); setAssignmentsError(null); 
     try {
-      const token = await user.getIdToken();
+      const idToken = await user.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || idToken;
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const response = await fetch(`${backendUrl}/working-groups/${groupId}/assignments`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${authToken}` },
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'Failed to fetch assignments');
       setAssignments(await response.json());
@@ -125,12 +127,13 @@ export default function WorkingGroupDetailPage() {
     }
     setActionInProgress(true); setAssignmentsError(null);
     try {
-      const token = await user.getIdToken();
+      const idToken = await user.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || idToken;
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const payload = { userId: selectedUserToAssign.id, assignableId: groupId, assignableType: 'workingGroup', status: 'active' };
       const response = await fetch(`${backendUrl}/working-groups/${groupId}/assignments`, {
         method: 'POST',
-        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+        headers: { 'Authorization': `Bearer ${authToken}`, 'Content-Type': 'application/json' },
         body: JSON.stringify(payload),
       });
       if (!response.ok) throw new Error((await response.json()).detail || 'Failed to assign user');
@@ -144,11 +147,12 @@ export default function WorkingGroupDetailPage() {
     if (!user || !groupId || !canManageAssignments || !confirm("Remove this user from the group?")) return;
     setActionInProgress(true); setAssignmentsError(null);
     try {
-      const token = await user.getIdToken();
+      const idToken = await user.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || idToken;
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const response = await fetch(`${backendUrl}/working-groups/${groupId}/assignments/${assignmentId}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${authToken}` },
       });
       if (!response.ok && response.status !== 204) { 
         const errorData = await response.json().catch(() => ({ detail: 'Failed to remove user from group' }));

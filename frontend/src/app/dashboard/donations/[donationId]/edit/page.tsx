@@ -17,6 +17,7 @@ interface DonationFormData {
   description: string;
   donationDate: string; // YYYY-MM-DD
   notes: string | null;
+  status?: 'pending_verification' | 'verified' | 'rejected' | 'could_not_verify' | 'dropped';
 }
 
 interface Donation extends DonationFormData {
@@ -43,6 +44,7 @@ export default function EditDonationPage() {
     description: '',
     donationDate: format(new Date(), 'yyyy-MM-dd'), 
     notes: null,
+    status: 'pending_verification',
   });
   const [originalDonation, setOriginalDonation] = useState<Donation | null>(null);
   const [isLoading, setIsLoading] = useState(true);
@@ -82,6 +84,7 @@ export default function EditDonationPage() {
         description: result.data.description,
         donationDate: result.data.donationDate ? format(parseISO(result.data.donationDate), 'yyyy-MM-dd') : format(new Date(), 'yyyy-MM-dd'),
         notes: result.data.notes || null,
+        status: result.data.status || 'pending_verification',
       });
     } else {
       console.error('Failed to fetch donation details:', result.error);
@@ -352,6 +355,28 @@ export default function EditDonationPage() {
                         <div>
                             <label htmlFor="notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Notes</label>
                             <textarea name="notes" id="notes" rows={3} value={formData.notes || ''} onChange={handleChange} className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white" />
+                        </div>
+                        <div>
+                            <label htmlFor="status" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
+                                Status 
+                                <span className="material-icons text-sm ml-1 text-gray-400" title="Only users with edit permissions can modify this field">info</span>
+                            </label>
+                            <select 
+                                name="status" 
+                                id="status" 
+                                value={formData.status || 'pending_verification'} 
+                                onChange={handleChange} 
+                                className="mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white"
+                            >
+                                <option value="pending_verification">Pending Verification</option>
+                                <option value="verified">Verified</option>
+                                <option value="rejected">Rejected</option>
+                                <option value="could_not_verify">Could Not Verify</option>
+                                <option value="dropped">Dropped</option>
+                            </select>
+                            <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
+                                Change the verification status of this donation. Only verified donations appear in user contributions.
+                            </p>
                         </div>
                     </div>
                     
