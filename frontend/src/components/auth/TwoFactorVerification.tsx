@@ -30,6 +30,7 @@ export default function TwoFactorVerification({
   onVerificationError,
   onCancel
 }: TwoFactorVerificationProps) {
+  console.log('TwoFactorVerification: Component mounting/rendering for user:', userEmail);
   const [code, setCode] = useState(['', '', '', '', '', '']);
   const [loading, setLoading] = useState(false);
   const [codeSent, setCodeSent] = useState(false);
@@ -38,11 +39,15 @@ export default function TwoFactorVerification({
   const [resendCooldown, setResendCooldown] = useState(0);
   
   const inputRefs = useRef<(HTMLInputElement | null)[]>([]);
+  const hasInitialized = useRef(false);
   const router = useRouter();
 
   useEffect(() => {
-    // Send initial code when component mounts
-    sendVerificationCode();
+    // Send initial code when component mounts (only once, even with React Strict Mode)
+    if (!hasInitialized.current) {
+      hasInitialized.current = true;
+      sendVerificationCode();
+    }
   }, []);
 
   useEffect(() => {
@@ -68,6 +73,7 @@ export default function TwoFactorVerification({
   }, [resendCooldown]);
 
   const sendVerificationCode = async () => {
+    console.log('TwoFactorVerification: sendVerificationCode called', new Error().stack);
     setLoading(true);
     try {
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
