@@ -78,7 +78,7 @@ const baseInputStyles = "mt-1 block w-full px-3 py-2 border border-gray-300 dark
 const disabledInputStyles = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm bg-gray-100 dark:bg-gray-700/50 sm:text-sm text-gray-700 dark:text-gray-400 cursor-not-allowed";
 
 const ProfilePage = () => {
-  const { user, loading: authLoading, idToken, logout } = useAuth(); // Added logout
+  const { user, loading: authLoading, idToken, logout, fetchUserProfile } = useAuth(); // Added logout and fetchUserProfile
   const router = useRouter();
 
   const [profile, setProfile] = useState<UserDataFromBackend | null>(null);
@@ -87,6 +87,8 @@ const ProfilePage = () => {
   const [isLoadingAssignments, setIsLoadingAssignments] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [isEditing, setIsEditing] = useState(false);
+  const [isUploadingImage, setIsUploadingImage] = useState(false);
+  const [uploadError, setUploadError] = useState<string | null>(null);
   
   const initialFormData: EditableUserProfile = {
     firstName: '', lastName: '', email: '', phone: '', emergencyContactDetails: '', 
@@ -187,6 +189,70 @@ const ProfilePage = () => {
   const addSpecificSlot = () => setFormData(prev => ({ ...prev, availability: { ...prev.availability, specific_slots: [...prev.availability.specific_slots, { id: Math.random().toString(36).substr(2, 9), date: new Date().toISOString().split('T')[0], slot_type: 'unavailable', from_time: '', to_time: '' }] }}));
   const removeSpecificSlot = (idToRemove?: string) => { if(!idToRemove) return; setFormData(prev => ({ ...prev, availability: { ...prev.availability, specific_slots: prev.availability.specific_slots.filter(slot => slot.id !== idToRemove) }})); };
 
+  const handleImageUpload = async (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file || !idToken) return;
+
+    // Validate file type
+    const allowedTypes = ['image/jpeg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      setUploadError('Please select a valid image file (JPEG, PNG, or WebP)');
+      return;
+    }
+
+    // Validate file size (5MB)
+    const maxSize = 5 * 1024 * 1024;
+    if (file.size > maxSize) {
+      setUploadError('Image file size must be less than 5MB');
+      return;
+    }
+
+    setIsUploadingImage(true);
+    setUploadError(null);
+
+    try {
+      const authToken = localStorage.getItem('sessionToken') || idToken;
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      const response = await fetch(`${backendUrl}/uploads/profile-picture`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${authToken}`,
+        },
+        body: formData,
+      });
+
+      if (!response.ok) {
+        const errorData = await response.json();
+        throw new Error(errorData.detail || 'Failed to upload image');
+      }
+
+      const result = await response.json();
+      
+      // Update the form data with the new profile picture URL
+      setFormData(prev => ({ ...prev, profilePictureUrl: result.profilePictureUrl }));
+      
+      // Update the current profile data to show the new image immediately
+      if (profile) {
+        setProfile(prev => prev ? { ...prev, profilePictureUrl: result.profilePictureUrl } : null);
+      }
+      
+      // Refresh the user profile in AuthContext to update the navbar
+      await fetchUserProfile();
+      
+      // Clear the file input
+      event.target.value = '';
+      
+    } catch (err: any) {
+      setUploadError(err.message);
+      console.error('Image upload error:', err);
+    } finally {
+      setIsUploadingImage(false);
+    }
+  };
+
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!idToken) { setError("Authentication token is missing for update."); return; }
@@ -217,7 +283,8 @@ const ProfilePage = () => {
     } = {
       firstName: formData.firstName, lastName: formData.lastName, phone: formData.phone,
       emergencyContactDetails: formData.emergencyContactDetails || undefined, 
-      preferences: formData.preferences || undefined, availability: availabilityPayload, 
+      preferences: formData.preferences || undefined, availability: availabilityPayload,
+      profilePictureUrl: formData.profilePictureUrl || undefined,
     };
     if (typeof formData.skills === 'string') updatePayload.skills = formData.skills.split('\\n').map(s => s.trim()).filter(s => s);
     if (typeof formData.qualifications === 'string') updatePayload.qualifications = formData.qualifications.split('\\n').map(q => q.trim()).filter(q => q);
@@ -306,7 +373,7 @@ const ProfilePage = () => {
           {isEditing ? `Editing Profile: ${pageTitle}` : pageTitle}
         </h1>
         {!isEditing && currentProfileData && currentProfileData.id && (
-          <button onClick={() => { setIsEditing(true); if(profile) initializeFormData(profile); setError(null); }}
+          <button onClick={() => { setIsEditing(true); if(profile) initializeFormData(profile); setError(null); setUploadError(null); }}
             className="mt-4 sm:mt-0 py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center justify-center">
             <span className="material-icons mr-2 text-base">edit</span>
             Edit Profile
@@ -398,14 +465,31 @@ const ProfilePage = () => {
         ) : !isLoading && isEditing && currentProfileData && currentProfileData.id ? ( 
           <div className="md:flex md:space-x-6">
             <div className="flex-shrink-0 mb-6 md:mb-0 md:w-1/4 flex flex-col items-center md:items-start">
-              {currentProfileData.profilePictureUrl ? (
-                <img src={currentProfileData.profilePictureUrl} alt="Profile" className="w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"/>
+              {formData.profilePictureUrl || currentProfileData.profilePictureUrl ? (
+                <img src={formData.profilePictureUrl || currentProfileData.profilePictureUrl} alt="Profile" className="w-32 h-32 sm:w-40 sm:h-40 rounded-full object-cover border-2 border-gray-300 dark:border-gray-600"/>
               ) : (
                 <div className="w-32 h-32 sm:w-40 sm:h-40 rounded-full bg-gray-200 dark:bg-gray-700 flex items-center justify-center text-gray-500 dark:text-gray-400 border-2 border-gray-300 dark:border-gray-600">
                   <span className="material-icons text-5xl">person</span>
                 </div>
               )}
-              <p className="mt-2 text-xs text-gray-500 dark:text-gray-400 text-center md:text-left">Profile picture can be updated via Gravatar or future upload feature.</p>
+              <div className="mt-3 w-full flex flex-col items-center space-y-2">
+                <label htmlFor="profile-picture-upload" className="cursor-pointer inline-flex items-center px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-xs font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus-within:ring-2 focus-within:ring-offset-2 focus-within:ring-indigo-500">
+                  <span className="material-icons text-sm mr-1">{isUploadingImage ? 'sync' : 'photo_camera'}</span>
+                  {isUploadingImage ? 'Uploading...' : 'Change Photo'}
+                  <input
+                    id="profile-picture-upload"
+                    type="file"
+                    accept="image/jpeg,image/png,image/webp"
+                    onChange={handleImageUpload}
+                    disabled={isUploadingImage}
+                    className="sr-only"
+                  />
+                </label>
+                {uploadError && (
+                  <p className="text-xs text-red-600 dark:text-red-400 text-center">{uploadError}</p>
+                )}
+                <p className="text-xs text-gray-500 dark:text-gray-400 text-center">Max 5MB, JPEG/PNG/WebP</p>
+              </div>
             </div>
             <div className="hidden md:block border-l border-gray-300 dark:border-gray-600 mx-3 self-stretch"></div>
             <div className="flex-grow">
@@ -458,7 +542,7 @@ const ProfilePage = () => {
                   </div>
                 </div>
                 <div className="flex items-center justify-end space-x-3 pt-8 mt-6 border-t border-gray-200 dark:border-gray-700">
-                  <button type="button" onClick={() => { setIsEditing(false); if (profile) initializeFormData(profile); setError(null); }} className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center justify-center"><span className="material-icons mr-2 text-base">cancel</span>Cancel</button>
+                  <button type="button" onClick={() => { setIsEditing(false); if (profile) initializeFormData(profile); setError(null); setUploadError(null); }} className="py-2 px-4 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm text-sm font-medium text-gray-700 dark:text-gray-300 bg-white dark:bg-gray-700 hover:bg-gray-50 dark:hover:bg-gray-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 inline-flex items-center justify-center"><span className="material-icons mr-2 text-base">cancel</span>Cancel</button>
                   <button type="submit" disabled={isLoading} className="py-2 px-4 border border-transparent rounded-md shadow-sm text-sm font-medium text-white bg-indigo-600 hover:bg-indigo-700 disabled:hover:bg-indigo-600 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500 disabled:opacity-50 inline-flex items-center justify-center"><span className={`material-icons mr-2 text-base ${isLoading ? 'animate-spin' : ''}`}>{isLoading ? 'sync' : 'save'}</span>{isLoading ? 'Saving...' : 'Save Changes'}</button>
                 </div>
               </form>

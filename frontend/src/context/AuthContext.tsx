@@ -34,6 +34,7 @@ interface AuthContextType {
   hasPrivilege: (resource: string, action: string) => boolean;
   logout: (options?: { redirect?: boolean }) => Promise<void>;
   complete2FA: (deviceToken?: string, expiresAt?: Date, sessionToken?: string) => void;
+  fetchUserProfile: () => Promise<void>;
 }
 
 const defaultAuthContextValue: AuthContextType = {
@@ -47,6 +48,7 @@ const defaultAuthContextValue: AuthContextType = {
   hasPrivilege: () => false, 
   logout: async () => {},
   complete2FA: () => {},
+  fetchUserProfile: async () => {},
 };
 
 const AuthContext = createContext<AuthContextType>(defaultAuthContextValue);
@@ -352,10 +354,42 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (userProfile.isSysadmin) return true;
     const RPr = userProfile.privileges?.[resource];
     return RPr && Array.isArray(RPr) && RPr.includes(action);
-  }, [userProfile, loading]); 
+  }, [userProfile, loading]);
+
+  const fetchUserProfile = useCallback(async (): Promise<void> => {
+    if (!sessionToken) {
+      console.warn('Cannot fetch user profile: No session token available');
+      return;
+    }
+
+    try {
+      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+      if (!backendUrl) {
+        console.error('Backend URL not configured');
+        return;
+      }
+
+      const response = await fetch(`${backendUrl}/users/me`, {
+        headers: { 
+          'Authorization': `Bearer ${sessionToken}`, 
+          'Content-Type': 'application/json' 
+        },
+      });
+
+      if (response.ok) {
+        const profileData = await response.json();
+        setUserProfile(profileData);
+        setError(null);
+      } else {
+        console.warn('Failed to fetch user profile:', response.status, response.statusText);
+      }
+    } catch (error) {
+      console.error('Error fetching user profile:', error);
+    }
+  }, [sessionToken]); 
 
   return (
-    <AuthContext.Provider value={{ user, idToken, sessionToken, userProfile, loading, error, requires2FA, hasPrivilege, logout: performLogout, complete2FA }}>
+    <AuthContext.Provider value={{ user, idToken, sessionToken, userProfile, loading, error, requires2FA, hasPrivilege, logout: performLogout, complete2FA, fetchUserProfile }}>
       {children}
     </AuthContext.Provider>
   );

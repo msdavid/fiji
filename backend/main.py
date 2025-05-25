@@ -18,7 +18,8 @@ from routers import assignments as assignments_router
 from routers import reports as reports_router 
 from routers.auth import router as auth_router
 from routers import two_factor as two_factor_router
-from routers import organization as organization_router 
+from routers import organization as organization_router
+from routers import uploads as uploads_router 
 
 load_dotenv()
 
@@ -38,6 +39,7 @@ async def lifespan(app_instance: FastAPI):
                 cred = credentials.ApplicationDefault()
                 firebase_admin.initialize_app(cred, {
                     'projectId': project_id_env,
+                    'storageBucket': f'{project_id_env}.firebasestorage.app'
                 })
                 effective_project_id = firebase_admin.get_app().project_id
                 print(f"Firebase Admin SDK initialized successfully for project: {effective_project_id} using Application Default Credentials.")
@@ -51,6 +53,7 @@ async def lifespan(app_instance: FastAPI):
                     cred_from_file = credentials.Certificate(gac_path)
                     firebase_admin.initialize_app(cred_from_file, {
                         'projectId': project_id_env,
+                        'storageBucket': f'{project_id_env}.firebasestorage.app'
                     })
                     effective_project_id = firebase_admin.get_app().project_id
                     print(f"Firebase Admin SDK initialized successfully for project: {effective_project_id} using GOOGLE_APPLICATION_CREDENTIALS.")
@@ -128,7 +131,8 @@ app.include_router(working_groups_router.router)
 app.include_router(donations_router.router)
 app.include_router(assignments_router.router)
 app.include_router(reports_router.router)
-app.include_router(organization_router.router) 
+app.include_router(organization_router.router)
+app.include_router(uploads_router.router) 
 
 
 @app.get("/")

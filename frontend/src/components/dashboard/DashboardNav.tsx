@@ -416,11 +416,17 @@ export default function DashboardNav() {
                 <button
                   id="user-menu-button"
                   onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-                  className="flex items-center justify-center w-10 h-10 bg-indigo-100 dark:bg-indigo-800 rounded-full text-indigo-600 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500 transition-colors duration-150 ease-in-out"
+                  className="flex items-center justify-center w-10 h-10 bg-indigo-100 dark:bg-indigo-800 rounded-full text-indigo-600 dark:text-indigo-300 hover:bg-indigo-200 dark:hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-offset-gray-100 dark:focus:ring-offset-gray-900 focus:ring-indigo-500 transition-colors duration-150 ease-in-out overflow-hidden"
                   aria-expanded={isDropdownOpen}
                   aria-haspopup="true"
                 >
-                  {avatarInitial ? (
+                  {userProfile?.profilePictureUrl ? (
+                    <img 
+                      src={userProfile.profilePictureUrl} 
+                      alt="Profile" 
+                      className="w-full h-full object-cover"
+                    />
+                  ) : avatarInitial ? (
                     <span className="text-lg font-medium">{avatarInitial}</span>
                   ) : (
                     <span className="material-icons text-xl">person</span> 
