@@ -218,6 +218,250 @@ This email was sent from an automated system. Please do not reply.
             print(f"Exception during sending 2FA verification code email to {to_email}: {str(e)}")
             return False
 
+    async def send_donation_status_email(
+        self,
+        to_email: str,
+        to_name: Optional[str],
+        donation_description: str,
+        old_status: str,
+        new_status: str,
+        admin_notes: Optional[str] = None
+    ) -> bool:
+        """
+        Sends a donation status update email to the donor.
+        """
+        if not to_email:
+            print("Error: Recipient email (to_email) cannot be empty.")
+            return False
+
+        status_messages = {
+            "verified": "Your donation has been verified and accepted! Thank you for your contribution.",
+            "rejected": "Unfortunately, your donation could not be accepted at this time.",
+            "could_not_verify": "We were unable to verify your donation. Please contact us for more information.",
+            "dropped": "Your donation has been withdrawn as requested."
+        }
+
+        subject = f"Donation Status Update - {new_status.replace('_', ' ').title()}"
+        status_message = status_messages.get(new_status, f"Your donation status has been updated to {new_status}.")
+        
+        html_content = f"""
+        <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .status-box {{ 
+                        background-color: {'#d4edda' if new_status == 'verified' else '#f8d7da' if new_status == 'rejected' else '#fff3cd'}; 
+                        border: 2px solid {'#28a745' if new_status == 'verified' else '#dc3545' if new_status == 'rejected' else '#ffc107'}; 
+                        border-radius: 8px; 
+                        padding: 20px; 
+                        margin: 20px 0; 
+                    }}
+                    .donation-details {{ 
+                        background-color: #f8f9fa; 
+                        border-radius: 5px; 
+                        padding: 15px; 
+                        margin: 15px 0; 
+                    }}
+                    .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>Donation Status Update</h2>
+                    <p>Hello{f" {to_name}" if to_name else ""},</p>
+                    
+                    <div class="status-box">
+                        <h3>Status Update</h3>
+                        <p><strong>{status_message}</strong></p>
+                    </div>
+                    
+                    <div class="donation-details">
+                        <h4>Donation Details:</h4>
+                        <p><strong>Description:</strong> {donation_description}</p>
+                        <p><strong>Previous Status:</strong> {old_status.replace('_', ' ').title()}</p>
+                        <p><strong>New Status:</strong> {new_status.replace('_', ' ').title()}</p>
+                    </div>
+                    
+                    {f'<div class="donation-details"><h4>Additional Notes:</h4><p>{admin_notes}</p></div>' if admin_notes else ''}
+                    
+                    <p>If you have any questions about this update, please don't hesitate to contact our support team.</p>
+                    
+                    <p>Thank you for your interest in supporting our cause!</p>
+                    
+                    <div class="footer">
+                        <p>This email was sent from an automated system. Please do not reply.</p>
+                        <p>© Fiji Platform Team</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        text_content = f"""
+Donation Status Update
+
+Hello{f" {to_name}" if to_name else ""},
+
+{status_message}
+
+Donation Details:
+Description: {donation_description}
+Previous Status: {old_status.replace('_', ' ').title()}
+New Status: {new_status.replace('_', ' ').title()}
+
+{f'Additional Notes: {admin_notes}' if admin_notes else ''}
+
+If you have any questions about this update, please don't hesitate to contact our support team.
+
+Thank you for your interest in supporting our cause!
+
+This email was sent from an automated system. Please do not reply.
+
+© Fiji Platform Team
+        """
+
+        print(f"Attempting to send donation status update email to: {to_email}")
+        try:
+            success = await self.send_email(
+                to_email=to_email,
+                to_name=to_name,
+                subject=subject,
+                html_content=html_content,
+                text_content=text_content,
+                custom_id=f"donation-status-{new_status}"
+            )
+            if success:
+                print(f"Donation status update email successfully sent to {to_email}.")
+                return True
+            else:
+                print(f"Failed to send donation status update email to {to_email}.")
+                return False
+        except Exception as e:
+            print(f"Exception during sending donation status update email to {to_email}: {str(e)}")
+            return False
+
+    async def send_admin_donation_notification_email(
+        self,
+        to_email: str,
+        to_name: Optional[str],
+        donor_name: str,
+        donation_description: str,
+        donation_type: str,
+        amount: Optional[float] = None,
+        currency: Optional[str] = None
+    ) -> bool:
+        """
+        Sends a notification to admins when a new donation is submitted.
+        """
+        if not to_email:
+            print("Error: Recipient email (to_email) cannot be empty.")
+            return False
+
+        subject = "New Donation Submission Pending Review"
+        
+        amount_str = f" of {currency} {amount}" if amount and currency else ""
+        
+        html_content = f"""
+        <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .notification-box {{ 
+                        background-color: #e7f3ff; 
+                        border: 2px solid #007bff; 
+                        border-radius: 8px; 
+                        padding: 20px; 
+                        margin: 20px 0; 
+                    }}
+                    .donation-details {{ 
+                        background-color: #f8f9fa; 
+                        border-radius: 5px; 
+                        padding: 15px; 
+                        margin: 15px 0; 
+                    }}
+                    .action-button {{ 
+                        background-color: #007bff; 
+                        color: white; 
+                        padding: 10px 20px; 
+                        text-decoration: none; 
+                        border-radius: 5px; 
+                        display: inline-block; 
+                        margin: 10px 0; 
+                    }}
+                    .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>New Donation Submission</h2>
+                    <p>Hello{f" {to_name}" if to_name else ""},</p>
+                    
+                    <div class="notification-box">
+                        <h3>Action Required</h3>
+                        <p>A new donation has been submitted and is waiting for your review and verification.</p>
+                    </div>
+                    
+                    <div class="donation-details">
+                        <h4>Donation Details:</h4>
+                        <p><strong>Donor:</strong> {donor_name}</p>
+                        <p><strong>Type:</strong> {donation_type.replace('_', ' ').title()}{amount_str}</p>
+                        <p><strong>Description:</strong> {donation_description}</p>
+                        <p><strong>Status:</strong> Pending Verification</p>
+                    </div>
+                    
+                    <p>Please log in to the admin panel to review this donation and update its status.</p>
+                    
+                    <div class="footer">
+                        <p>This email was sent from an automated system. Please do not reply.</p>
+                        <p>© Fiji Platform Team</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        text_content = f"""
+New Donation Submission
+
+Hello{f" {to_name}" if to_name else ""},
+
+A new donation has been submitted and is waiting for your review and verification.
+
+Donation Details:
+Donor: {donor_name}
+Type: {donation_type.replace('_', ' ').title()}{amount_str}
+Description: {donation_description}
+Status: Pending Verification
+
+Please log in to the admin panel to review this donation and update its status.
+
+This email was sent from an automated system. Please do not reply.
+
+© Fiji Platform Team
+        """
+
+        print(f"Attempting to send admin donation notification email to: {to_email}")
+        try:
+            success = await self.send_email(
+                to_email=to_email,
+                to_name=to_name,
+                subject=subject,
+                html_content=html_content,
+                text_content=text_content,
+                custom_id=f"admin-donation-notification"
+            )
+            if success:
+                print(f"Admin donation notification email successfully sent to {to_email}.")
+                return True
+            else:
+                print(f"Failed to send admin donation notification email to {to_email}.")
+                return False
+        except Exception as e:
+            print(f"Exception during sending admin donation notification email to {to_email}: {str(e)}")
+            return False
+
 # Example usage (for testing purposes, normally this would be in a different part of the app)
 # async def main_test():
 #     # Ensure .env is loaded if running this standalone for testing

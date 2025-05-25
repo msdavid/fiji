@@ -19,7 +19,11 @@ export default function DashboardNav() {
   const pathname = usePathname(); 
   const { user, userProfile, loading: authLoading, hasPrivilege } = useAuth();
   const [isDropdownOpen, setIsDropdownOpen] = useState(false);
+  const [isDonationsDropdownOpen, setIsDonationsDropdownOpen] = useState(false);
+  const [isAdminDropdownOpen, setIsAdminDropdownOpen] = useState(false);
   const dropdownRef = useRef<HTMLDivElement>(null); 
+  const donationsDropdownRef = useRef<HTMLDivElement>(null);
+  const adminDropdownRef = useRef<HTMLDivElement>(null);
   const [toastMessages, setToastMessages] = useState<ToastMessage[]>([]);
 
   const addToast = (message: string, type: 'success' | 'error') => {
@@ -66,9 +70,15 @@ export default function DashboardNav() {
       if (dropdownRef.current && !dropdownRef.current.contains(event.target as Node)) {
         setIsDropdownOpen(false);
       }
+      if (donationsDropdownRef.current && !donationsDropdownRef.current.contains(event.target as Node)) {
+        setIsDonationsDropdownOpen(false);
+      }
+      if (adminDropdownRef.current && !adminDropdownRef.current.contains(event.target as Node)) {
+        setIsAdminDropdownOpen(false);
+      }
     };
 
-    if (isDropdownOpen) {
+    if (isDropdownOpen || isDonationsDropdownOpen || isAdminDropdownOpen) {
       document.addEventListener('mousedown', handleClickOutside);
     } else {
       document.removeEventListener('mousedown', handleClickOutside);
@@ -77,7 +87,7 @@ export default function DashboardNav() {
     return () => {
       document.removeEventListener('mousedown', handleClickOutside);
     };
-  }, [isDropdownOpen]);
+  }, [isDropdownOpen, isDonationsDropdownOpen, isAdminDropdownOpen]);
 
   if (authLoading && !user) {
     return (
@@ -136,6 +146,37 @@ export default function DashboardNav() {
   };
 
 
+
+
+  const getDropdownLinkClassName = (path: string) => {
+    const baseStyle = "flex items-center px-4 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700 hover:text-gray-900 dark:hover:text-white";
+    const activeStyle = "flex items-center px-4 py-2 text-sm text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30";
+    
+    if (pathname === path || (path !== "/dashboard" && pathname.startsWith(path))) { 
+        return activeStyle;
+    }
+    return baseStyle;
+  };
+
+  const getDonationsClassName = () => {
+    const baseStyle = "text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-150 ease-in-out px-3 py-2 rounded-md flex items-center";
+    const activeStyle = "text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-md flex items-center";
+    
+    const donationPaths = ["/dashboard/donate", "/dashboard/my-donations", "/dashboard/donations"];
+    const isActive = donationPaths.some(path => pathname === path || pathname.startsWith(path));
+    
+    return isActive ? activeStyle : baseStyle;
+  };
+
+  const getAdminClassName = () => {
+    const baseStyle = "text-sm font-medium text-gray-700 dark:text-gray-300 hover:text-indigo-600 dark:hover:text-indigo-400 transition-colors duration-150 ease-in-out px-3 py-2 rounded-md flex items-center";
+    const activeStyle = "text-sm font-medium text-indigo-600 dark:text-indigo-400 bg-indigo-50 dark:bg-indigo-900/30 px-3 py-2 rounded-md flex items-center";
+    
+    const isActive = pathname.startsWith("/dashboard/admin/");
+    return isActive ? activeStyle : baseStyle;
+  };
+
+  // Main navigation items
   const navLinks = [];
 
   navLinks.push(
@@ -150,14 +191,54 @@ export default function DashboardNav() {
     </Link>
   );
 
-  if (hasPrivilege && hasPrivilege('donations', 'list')) {
-    navLinks.push(
-      <Link key="donations" href="/dashboard/donations" className={getLinkClassName("/dashboard/donations")} onClick={() => setIsDropdownOpen(false)}>
+  // Donations dropdown (available to all authenticated users)
+  navLinks.push(
+    <div key="donations" className="relative" ref={donationsDropdownRef}>
+      <button
+        onClick={() => setIsDonationsDropdownOpen(!isDonationsDropdownOpen)}
+        className={getDonationsClassName()}
+      >
         Donations
-      </Link>
-    );
-  }
+        <span className="material-icons ml-1 text-sm">
+          {isDonationsDropdownOpen ? 'expand_less' : 'expand_more'}
+        </span>
+      </button>
+      {isDonationsDropdownOpen && (
+        <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-gray-200 dark:ring-gray-700 z-50">
+          <div className="py-1">
+            <Link 
+              href="/dashboard/donate" 
+              className={getDropdownLinkClassName("/dashboard/donate")}
+              onClick={() => { setIsDonationsDropdownOpen(false); setIsDropdownOpen(false); }}
+            >
+              <span className="material-icons mr-2 text-sm">volunteer_activism</span>
+              Make Donation
+            </Link>
+            <Link 
+              href="/dashboard/my-donations" 
+              className={getDropdownLinkClassName("/dashboard/my-donations")}
+              onClick={() => { setIsDonationsDropdownOpen(false); setIsDropdownOpen(false); }}
+            >
+              <span className="material-icons mr-2 text-sm">list_alt</span>
+              My Donations
+            </Link>
+            {hasPrivilege && hasPrivilege('donations', 'list') && (
+              <Link 
+                href="/dashboard/donations" 
+                className={getDropdownLinkClassName("/dashboard/donations")}
+                onClick={() => { setIsDonationsDropdownOpen(false); setIsDropdownOpen(false); }}
+              >
+                <span className="material-icons mr-2 text-sm">admin_panel_settings</span>
+                Manage Donations
+              </Link>
+            )}
+          </div>
+        </div>
+      )}
+    </div>
+  );
 
+  // Reports (admin only)
   if (hasPrivilege && (hasPrivilege('reports', 'view_volunteer_hours') || hasPrivilege('reports', 'view_event_participation'))) {
     navLinks.push(
       <Link key="reports" href="/dashboard/reports" className={getLinkClassName("/dashboard/reports")} onClick={() => setIsDropdownOpen(false)}>
@@ -166,41 +247,74 @@ export default function DashboardNav() {
     );
   }
   
-  const adminLinks = [];
-  if (hasPrivilege && hasPrivilege('users', 'list')) { 
-    adminLinks.push(
-      <Link key="admin-users" href="/dashboard/admin/users" className={getLinkClassName("/dashboard/admin/users")} onClick={() => setIsDropdownOpen(false)}>
-        Users
-      </Link>
-    );
-  }
-  if (hasPrivilege && hasPrivilege('working_groups', 'list')) { 
-    adminLinks.push(
-      <Link key="admin-wg" href="/dashboard/admin/working-groups" className={getLinkClassName("/dashboard/admin/working-groups")} onClick={() => setIsDropdownOpen(false)}>
-        Working Groups
-      </Link>
-    );
-  }
-  if (hasPrivilege && hasPrivilege('roles', 'list')) { 
-    adminLinks.push(
-      <Link key="admin-roles" href="/dashboard/admin/roles" className={getLinkClassName("/dashboard/admin/roles")} onClick={() => setIsDropdownOpen(false)}>
-        Roles
-      </Link>
-    );
-  }
-  if (hasPrivilege && hasPrivilege('invitations', 'list')) { 
-    adminLinks.push(
-      <Link key="admin-invitations" href="/dashboard/admin/invitations" className={getLinkClassName("/dashboard/admin/invitations")} onClick={() => setIsDropdownOpen(false)}>
-        Invitations
-      </Link>
-    );
-  }
+  // Admin dropdown (only show if user has any admin privileges)
+  const hasAdminPrivileges = hasPrivilege && (
+    hasPrivilege('users', 'list') || 
+    hasPrivilege('working_groups', 'list') || 
+    hasPrivilege('roles', 'list') || 
+    hasPrivilege('invitations', 'list')
+  );
 
-  if (adminLinks.length > 0) {
+  if (hasAdminPrivileges) {
     navLinks.push(
-      <span key="admin-separator" className="text-gray-300 dark:text-gray-700 hidden md:inline">|</span>
+      <div key="admin" className="relative" ref={adminDropdownRef}>
+        <button
+          onClick={() => setIsAdminDropdownOpen(!isAdminDropdownOpen)}
+          className={getAdminClassName()}
+        >
+          Admin
+          <span className="material-icons ml-1 text-sm">
+            {isAdminDropdownOpen ? 'expand_less' : 'expand_more'}
+          </span>
+        </button>
+        {isAdminDropdownOpen && (
+          <div className="absolute left-0 mt-2 w-48 rounded-md shadow-lg bg-white dark:bg-gray-800 ring-1 ring-gray-200 dark:ring-gray-700 z-50">
+            <div className="py-1">
+              {hasPrivilege && hasPrivilege('users', 'list') && (
+                <Link 
+                  href="/dashboard/admin/users" 
+                  className={getDropdownLinkClassName("/dashboard/admin/users")}
+                  onClick={() => { setIsAdminDropdownOpen(false); setIsDropdownOpen(false); }}
+                >
+                  <span className="material-icons mr-2 text-sm">people</span>
+                  Users
+                </Link>
+              )}
+              {hasPrivilege && hasPrivilege('working_groups', 'list') && (
+                <Link 
+                  href="/dashboard/admin/working-groups" 
+                  className={getDropdownLinkClassName("/dashboard/admin/working-groups")}
+                  onClick={() => { setIsAdminDropdownOpen(false); setIsDropdownOpen(false); }}
+                >
+                  <span className="material-icons mr-2 text-sm">groups</span>
+                  Working Groups
+                </Link>
+              )}
+              {hasPrivilege && hasPrivilege('roles', 'list') && (
+                <Link 
+                  href="/dashboard/admin/roles" 
+                  className={getDropdownLinkClassName("/dashboard/admin/roles")}
+                  onClick={() => { setIsAdminDropdownOpen(false); setIsDropdownOpen(false); }}
+                >
+                  <span className="material-icons mr-2 text-sm">security</span>
+                  Roles
+                </Link>
+              )}
+              {hasPrivilege && hasPrivilege('invitations', 'list') && (
+                <Link 
+                  href="/dashboard/admin/invitations" 
+                  className={getDropdownLinkClassName("/dashboard/admin/invitations")}
+                  onClick={() => { setIsAdminDropdownOpen(false); setIsDropdownOpen(false); }}
+                >
+                  <span className="material-icons mr-2 text-sm">mail</span>
+                  Invitations
+                </Link>
+              )}
+            </div>
+          </div>
+        )}
+      </div>
     );
-    navLinks.push(...adminLinks);
   }
 
 
@@ -265,12 +379,99 @@ export default function DashboardNav() {
                   >
                     <div className="py-1 md:hidden"> 
                       {navLinks.map(link => {
-                        if (React.isValidElement(link) && typeof link.props.href === 'string') {
-                          if (link.key === "admin-separator") return null;
-                          return React.cloneElement(link as React.ReactElement<any>, {
-                            className: `${getLinkClassName(link.props.href)} w-full block px-4 py-2 text-left !bg-transparent hover:!bg-gray-100 dark:hover:!bg-gray-700`, 
-                            onClick: () => setIsDropdownOpen(false)
-                          });
+                        if (React.isValidElement(link)) {
+                          // Handle regular links
+                          if (typeof link.props.href === 'string') {
+                            return React.cloneElement(link as React.ReactElement<any>, {
+                              className: `${getLinkClassName(link.props.href)} w-full block px-4 py-2 text-left !bg-transparent hover:!bg-gray-100 dark:hover:!bg-gray-700`, 
+                              onClick: () => setIsDropdownOpen(false)
+                            });
+                          }
+                          // Handle dropdown sections (Donations and Admin)
+                          else if (link.key === "donations") {
+                            return (
+                              <div key="mobile-donations" className="border-b border-gray-200 dark:border-gray-700 pb-1 mb-1">
+                                <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                  Donations
+                                </div>
+                                <Link 
+                                  href="/dashboard/donate" 
+                                  className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  onClick={() => setIsDropdownOpen(false)}
+                                >
+                                  <span className="material-icons mr-2 text-sm">volunteer_activism</span>
+                                  Make Donation
+                                </Link>
+                                <Link 
+                                  href="/dashboard/my-donations" 
+                                  className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                  onClick={() => setIsDropdownOpen(false)}
+                                >
+                                  <span className="material-icons mr-2 text-sm">list_alt</span>
+                                  My Donations
+                                </Link>
+                                {hasPrivilege && hasPrivilege('donations', 'list') && (
+                                  <Link 
+                                    href="/dashboard/donations" 
+                                    className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    onClick={() => setIsDropdownOpen(false)}
+                                  >
+                                    <span className="material-icons mr-2 text-sm">admin_panel_settings</span>
+                                    Manage Donations
+                                  </Link>
+                                )}
+                              </div>
+                            );
+                          }
+                          else if (link.key === "admin") {
+                            return (
+                              <div key="mobile-admin" className="border-b border-gray-200 dark:border-gray-700 pb-1 mb-1">
+                                <div className="px-4 py-2 text-xs font-semibold text-gray-500 dark:text-gray-400 uppercase tracking-wider">
+                                  Admin
+                                </div>
+                                {hasPrivilege && hasPrivilege('users', 'list') && (
+                                  <Link 
+                                    href="/dashboard/admin/users" 
+                                    className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    onClick={() => setIsDropdownOpen(false)}
+                                  >
+                                    <span className="material-icons mr-2 text-sm">people</span>
+                                    Users
+                                  </Link>
+                                )}
+                                {hasPrivilege && hasPrivilege('working_groups', 'list') && (
+                                  <Link 
+                                    href="/dashboard/admin/working-groups" 
+                                    className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    onClick={() => setIsDropdownOpen(false)}
+                                  >
+                                    <span className="material-icons mr-2 text-sm">groups</span>
+                                    Working Groups
+                                  </Link>
+                                )}
+                                {hasPrivilege && hasPrivilege('roles', 'list') && (
+                                  <Link 
+                                    href="/dashboard/admin/roles" 
+                                    className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    onClick={() => setIsDropdownOpen(false)}
+                                  >
+                                    <span className="material-icons mr-2 text-sm">security</span>
+                                    Roles
+                                  </Link>
+                                )}
+                                {hasPrivilege && hasPrivilege('invitations', 'list') && (
+                                  <Link 
+                                    href="/dashboard/admin/invitations" 
+                                    className="flex items-center px-6 py-2 text-sm text-gray-700 dark:text-gray-200 hover:bg-gray-100 dark:hover:bg-gray-700"
+                                    onClick={() => setIsDropdownOpen(false)}
+                                  >
+                                    <span className="material-icons mr-2 text-sm">mail</span>
+                                    Invitations
+                                  </Link>
+                                )}
+                              </div>
+                            );
+                          }
                         }
                         return null;
                       })}

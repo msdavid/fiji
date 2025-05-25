@@ -2,6 +2,9 @@ from pydantic import BaseModel, Field, EmailStr, ConfigDict, field_validator
 from typing import Optional, Literal
 from datetime import datetime, date # Keep 'date' for strptime validation
 
+# Define donation status options
+DonationStatus = Literal["pending_verification", "verified", "rejected", "could_not_verify", "dropped"]
+
 class DonationBase(BaseModel):
     donorName: str = Field(..., description="Name of the donor (individual or organization).")
     donorEmail: EmailStr = Field(..., description="Email address of the donor.")
@@ -13,6 +16,7 @@ class DonationBase(BaseModel):
     description: str = Field(..., description="Description of the donation (e.g., items donated, hours contributed).")
     donationDate: str = Field(..., description="Date the donation was made or received (YYYY-MM-DD).")
     notes: Optional[str] = Field(None, description="Additional notes about the donation.")
+    status: DonationStatus = Field(default="pending_verification", description="Current status of the donation.")
     
     model_config = ConfigDict(from_attributes=True)
 
@@ -46,6 +50,7 @@ class DonationUpdate(BaseModel):
     description: Optional[str] = None
     donationDate: Optional[str] = Field(None, description="Date the donation was made or received (YYYY-MM-DD).")
     notes: Optional[str] = None
+    status: Optional[DonationStatus] = Field(None, description="Status of the donation (admin only).")
 
     model_config = ConfigDict(extra='forbid', from_attributes=True)
 
@@ -61,6 +66,40 @@ class DonationUpdate(BaseModel):
         except ValueError:
             raise ValueError("donationDate must be a valid date in YYYY-MM-DD format")
         return v
+
+class UserDonationUpdate(BaseModel):
+    """Update model for user donations - excludes status field"""
+    donorName: Optional[str] = None
+    donorEmail: Optional[EmailStr] = None
+    donorPhone: Optional[str] = None
+    donationType: Optional[Literal["monetary", "in_kind", "time_contribution"]] = None
+    amount: Optional[float] = Field(None, ge=0)
+    currency: Optional[str] = Field(None, max_length=3)
+    description: Optional[str] = None
+    donationDate: Optional[str] = Field(None, description="Date the donation was made or received (YYYY-MM-DD).")
+    notes: Optional[str] = None
+
+    model_config = ConfigDict(extra='forbid', from_attributes=True)
+
+    @field_validator('donationDate')
+    @classmethod
+    def validate_optional_donation_date_format(cls, v: Optional[str]) -> Optional[str]:
+        if v is None:
+            return None
+        if not isinstance(v, str):
+             raise ValueError("donationDate must be a string in YYYY-MM-DD format")
+        try:
+            datetime.strptime(v, "%Y-%m-%d")
+        except ValueError:
+            raise ValueError("donationDate must be a valid date in YYYY-MM-DD format")
+        return v
+
+class DonationStatusUpdate(BaseModel):
+    """Model for admin-only status updates"""
+    status: DonationStatus = Field(..., description="New status for the donation.")
+    notes: Optional[str] = Field(None, description="Optional notes about the status change.")
+
+    model_config = ConfigDict(extra='forbid')
 
 class DonationResponse(DonationBase): # donationDate will be str due to inheritance
     id: str = Field(..., description="Unique ID of the donation.")

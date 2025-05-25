@@ -268,62 +268,54 @@ async def list_donations(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
-# ===== USER DONATION ENDPOINTS =====
-
-@router.post("/user-submission", response_model=DonationResponse, status_code=status.HTTP_201_CREATED)
-async def submit_user_donation(
-    donation_data: DonationCreate,
+@router.get("/pending-verification", response_model=List[DonationResponse], dependencies=[Depends(require_permission("donations", "list"))])
+async def get_pending_donations(
     db: firestore.AsyncClient = Depends(get_db),
-    session_data: dict = Depends(get_current_session_user)
+    limit: int = Query(default=20, le=100, description="Maximum number of donations to return")
 ):
-    """Allow any authenticated user to submit a donation for verification"""
+    """Admin endpoint to get donations pending verification"""
     try:
-        new_donation_dict = donation_data.model_dump()
+        # First, get all donations and filter client-side for those with pending_verification status
+        # This is necessary because some old donations might not have the status field
+        query = db.collection(DONATIONS_COLLECTION)\
+            .order_by("createdAt", direction=firestore.Query.ASCENDING)
+            # Removed the where clause to get all donations first
         
-        # Set the donor user ID to current user
-        new_donation_dict["donorUserId"] = session_data["uid"]
-        new_donation_dict["recordedByUserId"] = session_data["uid"]
-        new_donation_dict["status"] = "pending_verification"  # Force pending status
-        new_donation_dict["createdAt"] = firestore.SERVER_TIMESTAMP
-        new_donation_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
-
-        # Validate donationType and amount/currency consistency
-        if new_donation_dict["donationType"] == "monetary":
-            if new_donation_dict.get("amount") is None or new_donation_dict.get("currency") is None:
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Monetary donations must include amount and currency."
-                )
-        else:
-            new_donation_dict["amount"] = None
-            new_donation_dict["currency"] = None
-            if not new_donation_dict.get("description"):
-                raise HTTPException(
-                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-                    detail="Non-monetary donations must include a description."
-                )
-
-        doc_ref = db.collection(DONATIONS_COLLECTION).document()
-        await doc_ref.set(new_donation_dict)
-
-        created_donation_doc = await doc_ref.get()
-        if created_donation_doc.exists:
-            response_data = created_donation_doc.to_dict()
-            response_data['id'] = created_donation_doc.id
+        docs = query.stream()
+        donations_list = []
+        user_details_cache = {}
+        
+        async for doc in docs:
+            donation_data = doc.to_dict()
+            donation_data['id'] = doc.id
             
-            recorder_details = await _get_user_details_for_donation(db, response_data.get("recordedByUserId"))
-            response_data["recordedByUserFirstName"] = recorder_details.get("firstName")
-            response_data["recordedByUserLastName"] = recorder_details.get("lastName")
+            # Filter for pending_verification status, or if status is missing (old donations), treat as pending
+            donation_status = donation_data.get("status", "pending_verification")
+            if donation_status != "pending_verification":
+                continue
+                
+            # Ensure status field exists in the data
+            donation_data["status"] = donation_status
             
-            # TODO: Send email notification to admins about new donation submission
+            recorded_by_user_id = donation_data.get("recordedByUserId")
+            if recorded_by_user_id:
+                if recorded_by_user_id not in user_details_cache:
+                    user_details_cache[recorded_by_user_id] = await _get_user_details_for_donation(db, recorded_by_user_id)
+                recorder_details = user_details_cache[recorded_by_user_id]
+                donation_data["recordedByUserFirstName"] = recorder_details.get("firstName")
+                donation_data["recordedByUserLastName"] = recorder_details.get("lastName")
             
-            return DonationResponse(**response_data)
-        else:
-            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve donation after creation.")
-    except HTTPException as http_exc:
-        raise http_exc
+            donations_list.append(DonationResponse(**donation_data))
+            
+            # Stop when we reach the limit
+            if len(donations_list) >= limit:
+                break
+        
+        return donations_list
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+# ===== USER DONATION ENDPOINTS =====
 
 @router.get("/my-submissions", response_model=List[DonationResponse])
 async def get_my_submitted_donations(
@@ -560,54 +552,203 @@ async def delete_donation(donation_id: str, db: firestore.AsyncClient = Depends(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
-# ===== ADMIN DONATION MANAGEMENT ENDPOINTS =====
+# ===== USER DONATION ENDPOINTS =====
 
-@router.get("/pending-verification", response_model=List[DonationResponse], dependencies=[Depends(require_permission("donations", "list"))])
-async def get_pending_donations(
+@router.post("/user-submission", response_model=DonationResponse, status_code=status.HTTP_201_CREATED)
+async def submit_user_donation(
+    donation_data: DonationCreate,
     db: firestore.AsyncClient = Depends(get_db),
-    limit: int = Query(default=20, le=100, description="Maximum number of donations to return")
+    session_data: dict = Depends(get_current_session_user)
 ):
-    """Admin endpoint to get donations pending verification"""
+    """Allow any authenticated user to submit a donation for verification"""
     try:
-        # First, get all donations and filter client-side for those with pending_verification status
-        # This is necessary because some old donations might not have the status field
+        new_donation_dict = donation_data.model_dump()
+        
+        # Set the donor user ID to current user
+        new_donation_dict["donorUserId"] = session_data["uid"]
+        new_donation_dict["recordedByUserId"] = session_data["uid"]
+        new_donation_dict["status"] = "pending_verification"  # Force pending status
+        new_donation_dict["createdAt"] = firestore.SERVER_TIMESTAMP
+        new_donation_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
+
+        # Validate donationType and amount/currency consistency
+        if new_donation_dict["donationType"] == "monetary":
+            if new_donation_dict.get("amount") is None or new_donation_dict.get("currency") is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Monetary donations must include amount and currency."
+                )
+        else:
+            new_donation_dict["amount"] = None
+            new_donation_dict["currency"] = None
+            if not new_donation_dict.get("description"):
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Non-monetary donations must include a description."
+                )
+
+        doc_ref = db.collection(DONATIONS_COLLECTION).document()
+        await doc_ref.set(new_donation_dict)
+
+        created_donation_doc = await doc_ref.get()
+        if created_donation_doc.exists:
+            response_data = created_donation_doc.to_dict()
+            response_data['id'] = created_donation_doc.id
+            
+            recorder_details = await _get_user_details_for_donation(db, response_data.get("recordedByUserId"))
+            response_data["recordedByUserFirstName"] = recorder_details.get("firstName")
+            response_data["recordedByUserLastName"] = recorder_details.get("lastName")
+            
+            # TODO: Send email notification to admins about new donation submission
+            
+            return DonationResponse(**response_data)
+        else:
+            raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to retrieve donation after creation.")
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+# ===== ADMIN STATUS MANAGEMENT ENDPOINTS =====
+
+@router.patch(
+    db: firestore.AsyncClient = Depends(get_db),
+    session_data: dict = Depends(get_current_session_user),
+    limit: int = Query(default=20, le=50, description="Maximum number of donations to return")
+):
+    """Get donations submitted by the current user"""
+    try:
         query = db.collection(DONATIONS_COLLECTION)\
-            .order_by("createdAt", direction=firestore.Query.ASCENDING)
-            # Removed the where clause to get all donations first
+            .where("donorUserId", "==", session_data["uid"])\
+            .order_by("createdAt", direction=firestore.Query.DESCENDING)\
+            .limit(limit)
         
         docs = query.stream()
         donations_list = []
-        user_details_cache = {}
         
         async for doc in docs:
             donation_data = doc.to_dict()
             donation_data['id'] = doc.id
             
-            # Filter for pending_verification status, or if status is missing (old donations), treat as pending
-            donation_status = donation_data.get("status", "pending_verification")
-            if donation_status != "pending_verification":
-                continue
-                
-            # Ensure status field exists in the data
-            donation_data["status"] = donation_status
-            
-            recorded_by_user_id = donation_data.get("recordedByUserId")
-            if recorded_by_user_id:
-                if recorded_by_user_id not in user_details_cache:
-                    user_details_cache[recorded_by_user_id] = await _get_user_details_for_donation(db, recorded_by_user_id)
-                recorder_details = user_details_cache[recorded_by_user_id]
-                donation_data["recordedByUserFirstName"] = recorder_details.get("firstName")
-                donation_data["recordedByUserLastName"] = recorder_details.get("lastName")
+            recorder_details = await _get_user_details_for_donation(db, donation_data.get("recordedByUserId"))
+            donation_data["recordedByUserFirstName"] = recorder_details.get("firstName")
+            donation_data["recordedByUserLastName"] = recorder_details.get("lastName")
             
             donations_list.append(DonationResponse(**donation_data))
-            
-            # Stop when we reach the limit
-            if len(donations_list) >= limit:
-                break
         
         return donations_list
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.put("/my-submissions/{donation_id}", response_model=DonationResponse)
+async def update_my_submitted_donation(
+    donation_id: str,
+    donation_update_data: UserDonationUpdate,
+    db: firestore.AsyncClient = Depends(get_db),
+    session_data: dict = Depends(get_current_session_user)
+):
+    """Allow users to edit their own donations while status is pending_verification"""
+    try:
+        doc_ref = db.collection(DONATIONS_COLLECTION).document(donation_id)
+        donation_doc = await doc_ref.get()
+        
+        if not donation_doc.exists:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Donation '{donation_id}' not found")
+        
+        donation_data = donation_doc.to_dict()
+        
+        # Check ownership
+        if donation_data.get("donorUserId") != session_data["uid"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only edit your own donations")
+        
+        # Check if donation is still editable
+        if donation_data.get("status") != "pending_verification":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="You can only edit donations that are pending verification"
+            )
+        
+        update_data_dict = donation_update_data.model_dump(exclude_unset=True)
+        if not update_data_dict:
+            raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="No update data provided.")
+
+        # Validate donationType and amount/currency consistency
+        final_donation_type = update_data_dict.get("donationType", donation_data.get("donationType"))
+        
+        if final_donation_type == "monetary":
+            final_amount = update_data_dict.get("amount", donation_data.get("amount"))
+            final_currency = update_data_dict.get("currency", donation_data.get("currency"))
+            if final_amount is None or final_currency is None:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Monetary donations must include amount and currency."
+                )
+        else:
+            update_data_dict["amount"] = None
+            update_data_dict["currency"] = None
+            final_description = update_data_dict.get("description", donation_data.get("description"))
+            if not final_description:
+                raise HTTPException(
+                    status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                    detail="Non-monetary donations must include a description."
+                )
+
+        update_data_dict["updatedAt"] = firestore.SERVER_TIMESTAMP
+        await doc_ref.update(update_data_dict)
+
+        updated_donation_doc = await doc_ref.get()
+        response_data = updated_donation_doc.to_dict()
+        response_data['id'] = updated_donation_doc.id
+        
+        recorder_details = await _get_user_details_for_donation(db, response_data.get("recordedByUserId"))
+        response_data["recordedByUserFirstName"] = recorder_details.get("firstName")
+        response_data["recordedByUserLastName"] = recorder_details.get("lastName")
+
+        return DonationResponse(**response_data)
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+@router.patch("/my-submissions/{donation_id}/withdraw")
+async def withdraw_my_donation(
+    donation_id: str,
+    db: firestore.AsyncClient = Depends(get_db),
+    session_data: dict = Depends(get_current_session_user)
+):
+    """Allow users to withdraw their pending donations"""
+    try:
+        doc_ref = db.collection(DONATIONS_COLLECTION).document(donation_id)
+        donation_doc = await doc_ref.get()
+        
+        if not donation_doc.exists:
+            raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail=f"Donation '{donation_id}' not found")
+        
+        donation_data = donation_doc.to_dict()
+        
+        # Check ownership
+        if donation_data.get("donorUserId") != session_data["uid"]:
+            raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="You can only withdraw your own donations")
+        
+        # Check if donation can be withdrawn
+        if donation_data.get("status") != "pending_verification":
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN, 
+                detail="You can only withdraw donations that are pending verification"
+            )
+        
+        await doc_ref.update({
+            "status": "dropped",
+            "updatedAt": firestore.SERVER_TIMESTAMP
+        })
+        
+        return {"message": "Donation successfully withdrawn"}
+    except HTTPException as http_exc:
+        raise http_exc
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+
+# ===== ADMIN STATUS MANAGEMENT ENDPOINTS =====
 
 @router.patch(
     "/{donation_id}/status",
@@ -656,3 +797,4 @@ async def update_donation_status(
         raise http_exc
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
+

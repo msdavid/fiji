@@ -6,6 +6,22 @@ import { useAuth } from '@/context/AuthContext';
 import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import { format, parseISO } from 'date-fns';
 
+const statusColors = {
+  pending_verification: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  verified: 'bg-green-100 text-green-800 dark:bg-green-900/30 dark:text-green-300',
+  rejected: 'bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300',
+  could_not_verify: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  dropped: 'bg-gray-100 text-gray-800 dark:bg-gray-900/30 dark:text-gray-300',
+};
+
+const statusLabels = {
+  pending_verification: 'Pending Verification',
+  verified: 'Verified',
+  rejected: 'Rejected',
+  could_not_verify: 'Could Not Verify',
+  dropped: 'Withdrawn',
+};
+
 interface Donation {
   id: string;
   donorName: string;
@@ -15,6 +31,7 @@ interface Donation {
   currency?: string | null;
   description: string;
   donationDate: string; // ISO date string
+  status: 'pending_verification' | 'verified' | 'rejected' | 'could_not_verify' | 'dropped';
   recordedByUserId: string;
   recordedByUserFirstName?: string | null;
   recordedByUserLastName?: string | null;
@@ -25,11 +42,24 @@ interface Donation {
 const DonationsPage = () => {
   const { user, idToken, loading: authLoading, hasPrivilege, userProfile, logout } = useAuth();
   const [donations, setDonations] = useState<Donation[]>([]);
+  const [filteredDonations, setFilteredDonations] = useState<Donation[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
+  const [statusFilter, setStatusFilter] = useState<string>('all');
 
   const canViewDonations = userProfile && (hasPrivilege ? hasPrivilege('donations', 'list') : userProfile.assignedRoleIds?.includes('sysadmin'));
   const canCreateDonations = userProfile && (hasPrivilege ? hasPrivilege('donations', 'create') : userProfile.assignedRoleIds?.includes('sysadmin'));
+
+  // Filter donations based on status
+  useEffect(() => {
+    if (statusFilter === 'all') {
+      setFilteredDonations(donations);
+    } else {
+      setFilteredDonations(donations.filter(donation => donation.status === statusFilter));
+    }
+  }, [donations, statusFilter]);
+
+  const pendingCount = donations.filter(d => d.status === 'pending_verification').length;
 
   const fetchDonations = useCallback(async () => {
     if (!idToken || !canViewDonations) { 
@@ -102,18 +132,58 @@ const DonationsPage = () => {
         <div className="flex justify-between items-center"> 
             <div>
                 <h1 className="text-3xl font-bold text-gray-900 dark:text-white">Donations</h1>
-                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">View and manage all recorded donations.</p>
+                <p className="mt-1 text-sm text-gray-500 dark:text-gray-400">
+                  View and manage all recorded donations.
+                  {pendingCount > 0 && (
+                    <span className="ml-2 inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300">
+                      {pendingCount} pending verification
+                    </span>
+                  )}
+                </p>
             </div>
-            {canCreateDonations && (
-            <div>
-              <Link href="/dashboard/donations/new">
-                  <button className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm inline-flex items-center text-sm">
-                      <span className="material-icons mr-2 text-base">add_circle_outline</span>
-                      Record New Donation
+            <div className="flex space-x-3">
+              {canCreateDonations && (
+                <Link href="/dashboard/donations/new">
+                    <button className="py-2 px-4 bg-indigo-600 hover:bg-indigo-700 text-white font-medium rounded-md shadow-sm inline-flex items-center text-sm">
+                        <span className="material-icons mr-2 text-base">add_circle_outline</span>
+                        Record New Donation
+                    </button>
+                </Link>
+              )}
+              <Link href="/dashboard/donations/pending-verification">
+                  <button className="py-2 px-4 bg-yellow-600 hover:bg-yellow-700 text-white font-medium rounded-md shadow-sm inline-flex items-center text-sm">
+                      <span className="material-icons mr-2 text-base">pending_actions</span>
+                      Review Pending ({pendingCount})
                   </button>
               </Link>
             </div>
-            )}
+        </div>
+        
+        {/* Status Filter */}
+        <div className="mt-4">
+          <div className="flex space-x-1">
+            {['all', 'pending_verification', 'verified', 'rejected', 'could_not_verify', 'dropped'].map((status) => (
+              <button
+                key={status}
+                onClick={() => setStatusFilter(status)}
+                className={`px-3 py-1 text-xs font-medium rounded-full transition-colors ${
+                  statusFilter === status
+                    ? 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900/30 dark:text-indigo-300'
+                    : 'bg-gray-100 text-gray-700 hover:bg-gray-200 dark:bg-gray-800 dark:text-gray-300 dark:hover:bg-gray-700'
+                }`}
+              >
+                {status === 'all' ? 'All' : statusLabels[status as keyof typeof statusLabels]}
+                {status !== 'all' && (
+                  <span className="ml-1 text-xs opacity-75">
+                    ({donations.filter(d => d.status === status).length})
+                  </span>
+                )}
+                {status === 'all' && (
+                  <span className="ml-1 text-xs opacity-75">({donations.length})</span>
+                )}
+              </button>
+            ))}
+          </div>
         </div>
       </header>
       
@@ -151,12 +221,13 @@ const DonationsPage = () => {
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Donor</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Type</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Amount/Details</th>
+                  <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Status</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Recorded By</th>
                   <th scope="col" className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-300 uppercase tracking-wider">Actions</th>
                 </tr>
               </thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-700">
-                {donations.map((donation) => (
+                {filteredDonations.map((donation) => (
                   <tr key={donation.id} className="hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors duration-150">
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">{format(parseISO(donation.donationDate), 'PPP')}</td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
@@ -166,6 +237,11 @@ const DonationsPage = () => {
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100 capitalize">{donation.donationType.replace('_', ' ')}</td>
                     <td className="px-6 py-4 text-sm text-gray-900 dark:text-gray-100">
                       {donation.donationType === 'monetary' && donation.amount ? `${donation.amount.toFixed(2)} ${donation.currency || ''}`.trim() : donation.description}
+                    </td>
+                    <td className="px-6 py-4 whitespace-nowrap">
+                      <span className={`inline-flex px-2 py-1 text-xs font-semibold rounded-full ${statusColors[donation.status]}`}>
+                        {statusLabels[donation.status]}
+                      </span>
                     </td>
                     <td className="px-6 py-4 whitespace-nowrap text-sm text-gray-900 dark:text-gray-100">
                       {donation.recordedByUserFirstName || donation.recordedByUserId} {donation.recordedByUserLastName || ''}

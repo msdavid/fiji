@@ -55,7 +55,7 @@ interface UserDonation {
 
 
 export default function DashboardPage() {
-  const { user, idToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege, logout } = useAuth(); 
+  const { user, idToken, sessionToken, loading: authContextLoading, userProfile: authUserProfile, hasPrivilege, logout } = useAuth(); 
   const [profile, setProfile] = useState<UserProfile | null>(null);
   const [upcomingEvents, setUpcomingEvents] = useState<Assignment[]>([]);
   const [activeWorkingGroups, setActiveWorkingGroups] = useState<Assignment[]>([]);
@@ -67,7 +67,7 @@ export default function DashboardPage() {
   const [error, setError] = useState<string | null>(null); 
 
   const fetchData = useCallback(async () => {
-    if (!idToken || !user) {
+    if (!idToken || !sessionToken || !user) {
       if (!authContextLoading) setLoadingData(false);
       return;
     }
@@ -146,8 +146,8 @@ export default function DashboardPage() {
     try {
       const donationsResult = await apiClient<UserDonation[]>({
         method: 'GET',
-        path: '/donations/my-contributions?limit=5',
-        token: idToken,
+        path: '/donations/my-submissions?limit=5',
+        token: sessionToken, // Use sessionToken instead of idToken
       });
       if (!donationsResult.ok) {
         console.error('Failed to load user donations:', donationsResult.error);
@@ -222,7 +222,7 @@ export default function DashboardPage() {
     if (criticalErrorOccurred) { setLoadingData(false); return; }
     
     setLoadingData(false); 
-  }, [idToken, user, authContextLoading, authUserProfile, hasPrivilege, logout]); 
+  }, [idToken, sessionToken, user, authContextLoading, authUserProfile, hasPrivilege, logout]); 
 
   useEffect(() => {
     if (!authContextLoading && user && authUserProfile) { // Ensure authUserProfile is also available for hasPrivilege check
@@ -233,8 +233,9 @@ export default function DashboardPage() {
   }, [authContextLoading, user, authUserProfile, fetchData]);
 
   const allQuickLinks: QuickLinkItem[] = [
+    { href: '/dashboard/donate', label: 'Make a Donation', icon: 'volunteer_activism' }, // Available to all users
     { href: '/dashboard/events/new', label: 'Create New Event', icon: 'add_circle_outline', privilege: { resource: 'events', action: 'create' } },
-    { href: '/dashboard/donations/new', label: 'Record New Donation', icon: 'volunteer_activism', privilege: { resource: 'donations', action: 'create' } },
+    { href: '/dashboard/donations/new', label: 'Record New Donation', icon: 'receipt_long', privilege: { resource: 'donations', action: 'create' } },
     { href: '/dashboard/admin/invitations/new', label: 'Invite New User', icon: 'person_add', privilege: { resource: 'invitations', action: 'create' } },
     { href: '/dashboard/admin/roles/new', label: 'Create New Role', icon: 'admin_panel_settings', privilege: { resource: 'roles', action: 'create' } },
     { href: '/dashboard/admin/working-groups/new', label: 'Create Working Group', icon: 'group_add', privilege: { resource: 'working_groups', action: 'create' } },
@@ -307,6 +308,25 @@ export default function DashboardPage() {
         </p>
       </section>
 
+      {/* Donation Call-to-Action */}
+      <div className="bg-white dark:bg-gray-800 border border-orange-200 dark:border-orange-700 p-4 rounded-lg shadow-sm">
+        <div className="flex items-center justify-between">
+          <div className="flex items-center">
+            <span className="material-icons text-orange-500 dark:text-orange-400 mr-3">volunteer_activism</span>
+            <div>
+              <h3 className="text-sm font-medium text-gray-900 dark:text-white">Support Our Mission</h3>
+              <p className="text-xs text-gray-500 dark:text-gray-400">Help us make a positive impact in our community</p>
+            </div>
+          </div>
+          <Link 
+            href="/dashboard/donate"
+            className="inline-flex items-center px-4 py-2 bg-orange-500 text-white text-sm font-medium rounded-md hover:bg-orange-600 transition-colors duration-200"
+          >
+            Donate
+          </Link>
+        </div>
+      </div>
+
       {/* Quick Stats & Links Grid */}
       <div className="grid grid-cols-1 md:grid-cols-3 gap-6">
         {/* User Stats Card */}
@@ -335,9 +355,14 @@ export default function DashboardPage() {
               <span className="font-bold text-indigo-600 dark:text-indigo-400 ml-1">{userDonations.length}</span>
             </p>
           </div>
-          <Link href="/dashboard/profile" className="mt-4 inline-block text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium">
-            View My Profile →
-          </Link>
+          <div className="mt-4 space-y-2">
+            <Link href="/dashboard/profile" className="block text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium">
+              View My Profile →
+            </Link>
+            <Link href="/dashboard/my-donations" className="block text-sm text-indigo-600 dark:text-indigo-400 hover:text-indigo-500 dark:hover:text-indigo-300 font-medium">
+              View My Donations →
+            </Link>
+          </div>
         </div>
 
         {/* Quick Links Card */}
