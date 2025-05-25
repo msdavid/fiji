@@ -18,7 +18,7 @@ export default function DeleteUserPage() {
   const params = useParams();
   const userId = params.userId as string;
   
-  const { user: currentUser, loading: authLoading, userProfile: adminUserProfile, hasPrivilege } = useAuth();
+  const { user: currentUser, loading: authLoading, userProfile: adminUserProfile, hasPrivilege, idToken } = useAuth();
   const [userToDelete, setUserToDelete] = useState<UserToDelete | null>(null);
   const [isLoading, setIsLoading] = useState(true);
   const [isDeleting, setIsDeleting] = useState(false);
@@ -31,10 +31,10 @@ export default function DeleteUserPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const token = await currentUser.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || idToken;
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const response = await fetch(`${backendUrl}/users/${userId}`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${authToken}` },
       });
       if (!response.ok) {
         const errorData = await response.json();
@@ -81,11 +81,11 @@ export default function DeleteUserPage() {
     const loadingToastId = toast.loading(`Deleting user ${userToDelete.firstName || userToDelete.email}...`);
     
     try {
-      const token = await currentUser.getIdToken();
+      const authToken = localStorage.getItem('sessionToken') || idToken;
       const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
       const response = await fetch(`${backendUrl}/users/${userToDelete.id}`, {
         method: 'DELETE',
-        headers: { 'Authorization': `Bearer ${token}` },
+        headers: { 'Authorization': `Bearer ${authToken}` },
       });
 
       if (!response.ok) {

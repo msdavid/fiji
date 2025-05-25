@@ -131,7 +131,7 @@ const UserDonatePage = () => {
     setIsSubmitting(false);
 
     if (result.ok) {
-      setSuccessMessage('Donation submitted successfully! Your donation is now pending verification. You will receive an email notification once it has been reviewed.');
+      setSuccessMessage('Donation declared successfully! Your donation is now pending verification. You will receive an email notification once it has been reviewed.');
       setFormData(prev => ({
         ...prev,
         donationType: 'monetary',
@@ -145,8 +145,8 @@ const UserDonatePage = () => {
         router.push('/dashboard/my-donations');
       }, 3000);
     } else {
-      console.error('Failed to submit donation:', result.error);
-      setError(result.error?.message || 'Failed to submit donation.');
+      console.error('Failed to declare donation:', result.error);
+      setError(result.error?.message || 'Failed to declare donation.');
     }
   };
   
@@ -170,7 +170,7 @@ const UserDonatePage = () => {
             <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-6 sm:p-8 text-center">
                 <span className="material-icons text-5xl text-red-500 dark:text-red-400 mx-auto mb-3">lock</span>
                 <h1 className="text-2xl font-semibold text-red-600 dark:text-red-400 mb-4">Access Denied</h1>
-                <p className="text-gray-700 dark:text-gray-300 mb-6">Please log in to submit a donation.</p>
+                <p className="text-gray-700 dark:text-gray-300 mb-6">Please log in to declare a donation.</p>
                 <Link href="/login" className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700">
                     Go to Login
                 </Link>
@@ -189,7 +189,7 @@ const UserDonatePage = () => {
       </div>
       
       <div className="text-center mb-8">
-        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Make a Donation</h1>
+        <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">Declare a Donation</h1>
         <p className="text-lg text-gray-600 dark:text-gray-400">
           Thank you for your generosity! Your donation will be reviewed and verified by our team.
         </p>
@@ -387,7 +387,7 @@ const UserDonatePage = () => {
               <div className="text-sm text-blue-700 dark:text-blue-300">
                 <p className="font-medium mb-1">What happens next?</p>
                 <ul className="list-disc list-inside space-y-1 text-xs">
-                  <li>Your donation will be submitted with a "Pending Verification" status</li>
+                  <li>Your donation will be declared with a "Pending Verification" status</li>
                   <li>Our team will review and verify your donation</li>
                   <li>You'll receive an email notification once the review is complete</li>
                   <li>You can view the status of your donations in your dashboard</li>
@@ -412,7 +412,7 @@ const UserDonatePage = () => {
               <span className={`material-icons mr-2 text-base ${isSubmitting ? 'animate-spin' : ''}`}>
                 {isSubmitting ? 'sync' : 'volunteer_activism'}
               </span>
-              {isSubmitting ? 'Submitting...' : 'Submit Donation'}
+              {isSubmitting ? 'Submitting...' : 'Declare Donation'}
             </button>
           </div>
         </form>

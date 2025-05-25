@@ -152,7 +152,7 @@ const MyDonationsPage = () => {
       <div className="mb-6 flex flex-col sm:flex-row sm:items-center sm:justify-between">
         <div>
           <h1 className="text-3xl font-bold text-gray-900 dark:text-white mb-2">My Donations</h1>
-          <p className="text-gray-600 dark:text-gray-400">Track the status of your submitted donations</p>
+          <p className="text-gray-600 dark:text-gray-400">Track the status of your declared donations</p>
         </div>
         <div className="mt-4 sm:mt-0">
           <Link 
@@ -160,7 +160,7 @@ const MyDonationsPage = () => {
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700 focus:outline-none focus:ring-2 focus:ring-offset-2 focus:ring-indigo-500"
           >
             <span className="material-icons mr-2 text-base">volunteer_activism</span>
-            Make New Donation
+            Declare New Donation
           </Link>
         </div>
       </div>
@@ -188,13 +188,13 @@ const MyDonationsPage = () => {
         <div className="bg-white dark:bg-gray-900 shadow-xl rounded-xl p-8 text-center">
           <span className="material-icons text-6xl text-gray-400 dark:text-gray-500 mx-auto mb-4">volunteer_activism</span>
           <h3 className="text-xl font-medium text-gray-900 dark:text-white mb-2">No Donations Yet</h3>
-          <p className="text-gray-600 dark:text-gray-400 mb-6">You haven't submitted any donations yet.</p>
+          <p className="text-gray-600 dark:text-gray-400 mb-6">You haven't declared any donations yet.</p>
           <Link 
             href="/dashboard/donate" 
             className="inline-flex items-center px-4 py-2 border border-transparent text-sm font-medium rounded-md text-white bg-indigo-600 hover:bg-indigo-700"
           >
             <span className="material-icons mr-2 text-base">add</span>
-            Submit Your First Donation
+            Declare Your First Donation
           </Link>
         </div>
       ) : (
@@ -360,7 +360,7 @@ const MyDonationsPage = () => {
               
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-xs text-gray-500 dark:text-gray-400">
                 <div>
-                  <label className="block font-medium">Submitted</label>
+                  <label className="block font-medium">Declared</label>
                   <p>{formatDate(selectedDonation.createdAt)}</p>
                 </div>
                 <div>

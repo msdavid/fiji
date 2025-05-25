@@ -233,7 +233,7 @@ export default function DashboardPage() {
   }, [authContextLoading, user, authUserProfile, fetchData]);
 
   const allQuickLinks: QuickLinkItem[] = [
-    { href: '/dashboard/donate', label: 'Make a Donation', icon: 'volunteer_activism' }, // Available to all users
+    { href: '/dashboard/donate', label: 'Declare a Donation', icon: 'volunteer_activism' }, // Available to all users
     { href: '/dashboard/events/new', label: 'Create New Event', icon: 'add_circle_outline', privilege: { resource: 'events', action: 'create' } },
     { href: '/dashboard/donations/new', label: 'Record New Donation', icon: 'receipt_long', privilege: { resource: 'donations', action: 'create' } },
     { href: '/dashboard/admin/invitations/new', label: 'Invite New User', icon: 'person_add', privilege: { resource: 'invitations', action: 'create' } },

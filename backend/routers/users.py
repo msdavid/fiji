@@ -319,16 +319,66 @@ async def delete_user_by_admin(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Firestore delete error: {str(e)}")
 
-    # Simplified cleanup for brevity, ensure robust error handling in production
+    # Comprehensive cleanup of user references across all collections
     try:
+        # 1. Delete all assignments where user is the assignee (all types: event, workingGroup, etc.)
         assignments_query = db.collection(ASSIGNMENTS_COLLECTION).where(filter=FieldFilter("userId", "==", user_id))
-        async for doc_snap in await assignments_query.get(): await doc_snap.reference.delete()
-        
-        events_created_query = db.collection(EVENTS_COLLECTION).where(filter=FieldFilter("createdByUserId", "==", user_id))
-        async for doc_snap in await events_created_query.get(): await doc_snap.reference.update({"createdByUserId": USER_DELETED_PLACEHOLDER_ID})
+        assignments_docs = await assignments_query.get()
+        for doc_snap in assignments_docs:
+            await doc_snap.reference.delete()
 
+        # 2. Update assignments where user was the assigner (except "self_signup")
+        assignments_by_user_query = db.collection(ASSIGNMENTS_COLLECTION).where(filter=FieldFilter("assignedByUserId", "==", user_id))
+        assignments_by_user_docs = await assignments_by_user_query.get()
+        for doc_snap in assignments_by_user_docs:
+            await doc_snap.reference.update({"assignedByUserId": USER_DELETED_PLACEHOLDER_ID})
+        
+        # 3. Update events created by this user
+        events_created_query = db.collection(EVENTS_COLLECTION).where(filter=FieldFilter("createdByUserId", "==", user_id))
+        events_created_docs = await events_created_query.get()
+        for doc_snap in events_created_docs:
+            await doc_snap.reference.update({"createdByUserId": USER_DELETED_PLACEHOLDER_ID})
+
+        # 4. Update events organized by this user
         events_organized_query = db.collection(EVENTS_COLLECTION).where(filter=FieldFilter("organizerUserId", "==", user_id))
-        async for doc_snap in await events_organized_query.get(): await doc_snap.reference.update({"organizerUserId": None, "organizerFirstName": None, "organizerLastName": None, "organizerEmail": None})
+        events_organized_docs = await events_organized_query.get()
+        for doc_snap in events_organized_docs:
+            await doc_snap.reference.update({
+                "organizerUserId": None, 
+                "organizerFirstName": None, 
+                "organizerLastName": None, 
+                "organizerEmail": None
+            })
+
+        # 5. Update working groups created by this user
+        wg_created_query = db.collection("working_groups").where(filter=FieldFilter("createdByUserId", "==", user_id))
+        wg_created_docs = await wg_created_query.get()
+        for doc_snap in wg_created_docs:
+            await doc_snap.reference.update({"createdByUserId": USER_DELETED_PLACEHOLDER_ID})
+
+        # 6. Remove user from working group member lists
+        wg_member_query = db.collection("working_groups").where(filter=FieldFilter("memberUserIds", "array_contains", user_id))
+        wg_member_docs = await wg_member_query.get()
+        for doc_snap in wg_member_docs:
+            await doc_snap.reference.update({"memberUserIds": firestore.ArrayRemove([user_id])})
+
+        # 7. Update donations recorded by this user
+        donations_recorded_query = db.collection("donations").where(filter=FieldFilter("recordedByUserId", "==", user_id))
+        donations_recorded_docs = await donations_recorded_query.get()
+        for doc_snap in donations_recorded_docs:
+            await doc_snap.reference.update({
+                "recordedByUserId": USER_DELETED_PLACEHOLDER_ID,
+                "recordedByUserFirstName": None,
+                "recordedByUserLastName": None
+            })
+
+        # 8. Update invitations created by this user  
+        invitations_created_query = db.collection("invitations").where(filter=FieldFilter("createdByUserId", "==", user_id))
+        invitations_created_docs = await invitations_created_query.get()
+        for doc_snap in invitations_created_docs:
+            await doc_snap.reference.update({"createdByUserId": USER_DELETED_PLACEHOLDER_ID})
+
+        print(f"Successfully cleaned up user data for deleted user: {user_id}")
     except Exception as e:
         print(f"Error during user data cleanup for {user_id}: {e}") # Log and continue
     return

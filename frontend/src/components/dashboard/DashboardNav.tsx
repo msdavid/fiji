@@ -212,7 +212,7 @@ export default function DashboardNav() {
               onClick={() => { setIsDonationsDropdownOpen(false); setIsDropdownOpen(false); }}
             >
               <span className="material-icons mr-2 text-sm">volunteer_activism</span>
-              Make Donation
+              Declare Donation
             </Link>
             <Link 
               href="/dashboard/my-donations" 
@@ -400,7 +400,7 @@ export default function DashboardNav() {
                                   onClick={() => setIsDropdownOpen(false)}
                                 >
                                   <span className="material-icons mr-2 text-sm">volunteer_activism</span>
-                                  Make Donation
+                                  Declare Donation
                                 </Link>
                                 <Link 
                                   href="/dashboard/my-donations" 
