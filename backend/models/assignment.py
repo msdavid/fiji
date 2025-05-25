@@ -83,6 +83,7 @@ class AssignmentResponse(AssignmentBase):
     userFirstName: Optional[str] = Field(None, description="First name of the assigned user")
     userLastName: Optional[str] = Field(None, description="Last name of the assigned user")
     userEmail: Optional[str] = Field(None, description="Email of the assigned user")
+    assignableName: Optional[str] = Field(None, description="Name of the assignable entity") # Added field
 
     # Ensure datetime fields are serialized to ISO format strings
     _serialize_datetime = validator(
