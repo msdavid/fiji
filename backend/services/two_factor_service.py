@@ -38,8 +38,8 @@ class TwoFactorService:
     
     @staticmethod
     def create_device_fingerprint(user_agent: Optional[str], ip_address: Optional[str]) -> str:
-        """Create a device fingerprint hash from user agent and IP"""
-        data = f"{user_agent or 'unknown'}|{ip_address or 'unknown'}"
+        """Create a device fingerprint hash from user agent only (IP can change)"""
+        data = f"{user_agent or 'unknown'}"
         return hashlib.sha256(data.encode()).hexdigest()[:16]
     
     async def create_verification_code(
