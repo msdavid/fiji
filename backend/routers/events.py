@@ -8,7 +8,8 @@ import json
 from dateutil import rrule 
 
 from dependencies.database import get_db
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission, is_sysadmin_check 
+from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission, is_sysadmin_check
+from dependencies.auth import get_current_session_user_with_rbac 
 from models.event import EventCreate, EventUpdate, EventResponse, EventWithSignupStatus
 from models.assignment import AssignmentCreate, AssignmentResponse, AssignmentUpdate 
 
@@ -58,7 +59,7 @@ async def _get_working_group_names_map(db: firestore.AsyncClient, wg_ids: List[s
 async def create_event(
     event_data: EventCreate, 
     db: firestore.AsyncClient = Depends(get_db), 
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     try:
         new_event_dict = event_data.model_dump()
@@ -269,7 +270,7 @@ async def update_event(
 @router.get("", response_model=List[EventWithSignupStatus])
 async def list_events(
     db: firestore.AsyncClient = Depends(get_db), 
-    current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac),
+    current_rbac_user: Optional[RBACUser] = Depends(get_current_session_user_with_rbac),
     status_filter: Optional[str] = Query(None, alias="status"),
     working_group_id: Optional[str] = Query(None, alias="working_group_id"), 
     q: Optional[str] = Query(None, alias="q", description="Search term for event name, description, venue"), 
@@ -278,7 +279,7 @@ async def list_events(
 ):
     try:
         query = db.collection(EVENTS_COLLECTION)
-        is_privileged_user = await is_sysadmin_check(current_rbac_user) 
+        is_privileged_user = current_rbac_user.is_sysadmin if current_rbac_user else False 
 
         user_wg_ids_for_auth_filter = []
         if not is_privileged_user and current_rbac_user:
@@ -492,7 +493,7 @@ async def get_event(
     event_id: str,
     instance_start_datetime_iso: Optional[str] = Query(None, alias="instanceStartDateTime", description="ISO datetime string for a specific recurring instance"),
     db: firestore.AsyncClient = Depends(get_db), 
-    current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac)
+    current_rbac_user: Optional[RBACUser] = Depends(get_current_session_user_with_rbac)
 ):
     try:
         doc_ref = db.collection(EVENTS_COLLECTION).document(event_id)
@@ -513,7 +514,7 @@ async def get_event(
              raise HTTPException(status_code=status.HTTP_422_UNPROCESSABLE_ENTITY, detail=f"Event {event_id} is invalid: missing working group association.")
 
 
-        is_privileged_user = await is_sysadmin_check(current_rbac_user) 
+        is_privileged_user = current_rbac_user.is_sysadmin if current_rbac_user else False 
         event_wg_ids_list = event_data_from_db.get("workingGroupIds") 
         
         authorized_to_view = False
@@ -648,7 +649,7 @@ async def self_signup_for_event(
     event_id: str,
     request: Request, 
     db: firestore.AsyncClient = Depends(get_db), 
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     try:
         body = await request.json()
@@ -680,7 +681,7 @@ async def self_signup_for_event(
 
     event_data_dict = event_doc.to_dict() 
     
-    is_privileged_user = await is_sysadmin_check(current_rbac_user)
+    is_privileged_user = current_rbac_user.is_sysadmin if current_rbac_user else False
     authorized_to_interact = False
     if is_privileged_user:
         authorized_to_interact = True
@@ -745,7 +746,7 @@ async def withdraw_event_signup(
     event_id: str,
     request: Request, 
     db: firestore.AsyncClient = Depends(get_db), 
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     try:
         body = await request.json()
@@ -847,7 +848,7 @@ async def admin_create_event_assignment(
     event_id: str,
     assignment_create_data: AssignmentCreate, 
     db: firestore.AsyncClient = Depends(get_db), 
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     event_ref = db.collection(EVENTS_COLLECTION).document(event_id)
     event_doc = await event_ref.get()

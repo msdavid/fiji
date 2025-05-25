@@ -5,7 +5,8 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO } from 'date-fns';
-import toast from 'react-hot-toast'; 
+import toast from 'react-hot-toast';
+import apiClient from '@/lib/apiClient'; 
 
 interface UserProfile {
   uid: string; 
@@ -22,7 +23,7 @@ interface UserProfile {
 
 export default function AdminUserManagementPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const { user, idToken, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
   const [users, setUsers] = useState<UserProfile[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null); 
@@ -47,23 +48,17 @@ export default function AdminUserManagementPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/users?limit=200`, { 
-        headers: { 'Authorization': `Bearer ${token}` },
+      const result = await apiClient<UserProfile[]>({
+        method: 'GET',
+        path: '/users?limit=200',
+        token: idToken,
       });
-      if (!response.ok) {
-        let errorDetail = `Failed to fetch users (status: ${response.status})`;
-        try {
-            const errorData = await response.json();
-            errorDetail = errorData.detail || errorDetail;
-        } catch (e) {
-            // response was not JSON, use default errorDetail
-        }
-        throw new Error(errorDetail);
+      
+      if (!result.ok) {
+        throw new Error(result.error?.message || 'Failed to fetch users');
       }
-      const data: UserProfile[] = await response.json();
-      const processedData = data.map(u => ({ ...u, id: u.id || u.uid })); 
+      
+      const processedData = result.data?.map(u => ({ ...u, id: u.id || u.uid })) || []; 
       setUsers(processedData);
     } catch (err: any) {
       const errorMessage = err.message || "An unexpected error occurred while fetching users.";
@@ -73,7 +68,7 @@ export default function AdminUserManagementPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, canListUsers, adminUserProfile, authLoading]); 
+  }, [user, idToken, canListUsers, adminUserProfile, authLoading]); 
 
   useEffect(() => {
     if (!authLoading && !user) {

@@ -26,18 +26,20 @@ interface UserProfileFromBackend {
 interface AuthContextType {
   user: User | null; 
   idToken: string | null; 
+  sessionToken: string | null; // Added session token
   userProfile: UserProfileFromBackend | null; 
   loading: boolean;
   error: Error | null;
   requires2FA: boolean;
   hasPrivilege: (resource: string, action: string) => boolean;
   logout: (options?: { redirect?: boolean }) => Promise<void>;
-  complete2FA: (deviceToken?: string, expiresAt?: Date) => void;
+  complete2FA: (deviceToken?: string, expiresAt?: Date, sessionToken?: string) => void;
 }
 
 const defaultAuthContextValue: AuthContextType = {
   user: null,
   idToken: null,
+  sessionToken: null,
   userProfile: null,
   loading: true,
   error: null,
@@ -52,18 +54,25 @@ const AuthContext = createContext<AuthContextType>(defaultAuthContextValue);
 export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [user, setUser] = useState<User | null>(null);
   const [idToken, setIdToken] = useState<string | null>(null);
+  const [sessionToken, setSessionToken] = useState<string | null>(null);
   const [userProfile, setUserProfile] = useState<UserProfileFromBackend | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
   const [requires2FA, setRequires2FA] = useState(false);
   const router = useRouter(); 
 
-  const complete2FA = useCallback((deviceToken?: string, expiresAt?: Date) => {
+  const complete2FA = useCallback((deviceToken?: string, expiresAt?: Date, sessionToken?: string) => {
     // Store device token if provided
     if (deviceToken && expiresAt) {
       import('@/lib/deviceFingerprint').then(({ storeDeviceToken }) => {
         storeDeviceToken(deviceToken, expiresAt);
       });
+    }
+    
+    // Store session token if provided
+    if (sessionToken) {
+      setSessionToken(sessionToken);
+      localStorage.setItem('sessionToken', sessionToken);
     }
     
     // Clear 2FA requirement and continue with normal flow
@@ -82,11 +91,13 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     } finally {
       setUser(null);
       setIdToken(null);
+      setSessionToken(null);
       setUserProfile(null);
       setRequires2FA(false);
       setLoading(false);
       
-      // Clear device token on logout
+      // Clear stored tokens on logout
+      localStorage.removeItem('sessionToken');
       import('@/lib/deviceFingerprint').then(({ clearDeviceToken }) => {
         clearDeviceToken();
       });
@@ -100,6 +111,12 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [router]);
 
   useEffect(() => {
+    // Load session token from localStorage on mount
+    const storedSessionToken = localStorage.getItem('sessionToken');
+    if (storedSessionToken) {
+      setSessionToken(storedSessionToken);
+    }
+
     const unsubscribe = auth.onIdTokenChanged(
       async (currentUser) => {
         setLoading(true); // Start loading for any auth state change
@@ -123,40 +140,86 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               return; 
             }
 
-            // Check if device is trusted first
-            const { generateDeviceFingerprint, isDeviceTokenValid } = await import('@/lib/deviceFingerprint');
-            const deviceFingerprint = generateDeviceFingerprint();
-            const hasValidDeviceToken = isDeviceTokenValid();
+            // Check if we have a valid session token first
+            let currentSessionToken = sessionToken || localStorage.getItem('sessionToken');
+            
+            if (!currentSessionToken) {
+              // No session token, need to perform session login
+              const { generateDeviceFingerprint, isDeviceTokenValid } = await import('@/lib/deviceFingerprint');
+              const deviceFingerprint = generateDeviceFingerprint();
+              const hasValidDeviceToken = isDeviceTokenValid();
 
-            if (!hasValidDeviceToken) {
-              // Check 2FA requirement with backend
+              if (!hasValidDeviceToken) {
+                // Check 2FA requirement with backend
+                try {
+                  const twoFAResponse = await fetch(`${backendUrl}/auth/2fa/check-requirement`, {
+                    method: 'POST',
+                    headers: { 
+                      'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                      user_id: currentUser.uid,
+                      device_fingerprint: deviceFingerprint
+                    })
+                  });
+                  
+                  if (twoFAResponse.ok) {
+                    const twoFAData = await twoFAResponse.json();
+                    if (twoFAData.requires_2fa && !twoFAData.trusted_device) {
+                      // 2FA is required, set state and stop here
+                      setRequires2FA(true);
+                      setLoading(false);
+                      return;
+                    }
+                  } else {
+                    const errorText = await twoFAResponse.text();
+                    console.warn("2FA check failed with status:", twoFAResponse.status, "Error:", errorText);
+                  }
+                } catch (twoFAError: any) {
+                  console.warn("Failed to check 2FA requirement:", twoFAError.message);
+                  // Continue with normal flow if 2FA check fails
+                }
+              }
+
+              // Perform session login to get backend session token
               try {
-                const twoFAResponse = await fetch(`${backendUrl}/auth/2fa/check-requirement`, {
+                const sessionLoginResponse = await fetch(`${backendUrl}/auth/session-login`, {
                   method: 'POST',
                   headers: { 
                     'Content-Type': 'application/json'
                   },
                   body: JSON.stringify({
-                    user_id: currentUser.uid,
+                    firebase_id_token: token,
                     device_fingerprint: deviceFingerprint
                   })
                 });
-                
-                if (twoFAResponse.ok) {
-                  const twoFAData = await twoFAResponse.json();
-                  if (twoFAData.requires_2fa && !twoFAData.trusted_device) {
+
+                if (sessionLoginResponse.ok) {
+                  const sessionData = await sessionLoginResponse.json();
+                  
+                  if (sessionData.requires_2fa) {
                     // 2FA is required, set state and stop here
                     setRequires2FA(true);
                     setLoading(false);
                     return;
+                  } else if (sessionData.backend_session_token) {
+                    // Got session token, store it
+                    currentSessionToken = sessionData.backend_session_token;
+                    setSessionToken(currentSessionToken);
+                    localStorage.setItem('sessionToken', currentSessionToken);
                   }
                 } else {
-                  const errorText = await twoFAResponse.text();
-                  console.warn("2FA check failed with status:", twoFAResponse.status, "Error:", errorText);
+                  const errorText = await sessionLoginResponse.text();
+                  console.warn("AuthContext: Session login failed:", sessionLoginResponse.status, errorText);
+                  setError(new Error(`Session login failed: ${errorText}`));
+                  setLoading(false);
+                  return;
                 }
-              } catch (twoFAError: any) {
-                console.warn("Failed to check 2FA requirement:", twoFAError.message);
-                // Continue with normal flow if 2FA check fails
+              } catch (sessionError: any) {
+                console.error("AuthContext: Session login error:", sessionError.message);
+                setError(new Error(`Session login error: ${sessionError.message}`));
+                setLoading(false);
+                return;
               }
             }
 
@@ -164,8 +227,15 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
             setRequires2FA(false);
 
             try {
+              // Use session token if available, otherwise we have a problem since /users/me requires session tokens
+              if (!currentSessionToken) {
+                console.error('AuthContext: No session token available for /users/me call');
+                setError(new Error('Authentication failed: No session token available'));
+                setLoading(false);
+                return;
+              }
               const response = await fetch(`${backendUrl}/users/me`, {
-                headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                headers: { 'Authorization': `Bearer ${currentSessionToken}`, 'Content-Type': 'application/json' },
               });
 
               if (!response.ok) {
@@ -173,12 +243,18 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
                 try { const errorData = await response.json(); errorDetails += `: ${errorData.detail || errorData.message || response.statusText}`; } 
                 catch (e) { errorDetails += `: ${response.statusText}`; }
                 
+                console.warn(`AuthContext: Profile fetch failed (${errorDetails}).`);
+                
                 if (response.status === 401) {
-                  console.warn(`AuthContext: Unauthorized (401) fetching profile (${errorDetails}). Logging out.`);
+                  // Clear invalid session token
+                  setSessionToken(null);
+                  localStorage.removeItem('sessionToken');
+                  console.warn(`AuthContext: Session token invalid (401). Logging out to restart authentication flow.`);
+                  
                   setError(null); 
                   setUser(null); setIdToken(null); setUserProfile(null); setLoading(false);
-                  router.push('/login'); // Attempt redirect immediately
-                  await performLogout({ redirect: false }); // Ensure signOut and state cleanup, but redirect already attempted
+                  router.push('/login');
+                  await performLogout({ redirect: false });
                   return; 
                 }
                 setError(new Error(`Failed to fetch user profile. ${errorDetails}`));
@@ -233,7 +309,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [userProfile, loading]); 
 
   return (
-    <AuthContext.Provider value={{ user, idToken, userProfile, loading, error, requires2FA, hasPrivilege, logout: performLogout, complete2FA }}>
+    <AuthContext.Provider value={{ user, idToken, sessionToken, userProfile, loading, error, requires2FA, hasPrivilege, logout: performLogout, complete2FA }}>
       {children}
     </AuthContext.Provider>
   );

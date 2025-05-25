@@ -5,7 +5,7 @@ import { useRouter } from 'next/navigation';
 
 interface TwoFactorVerificationProps {
   userEmail: string;
-  onVerificationSuccess: (deviceToken?: string, expiresAt?: Date) => void;
+  onVerificationSuccess: (deviceToken?: string, expiresAt?: Date, sessionToken?: string) => void;
   onVerificationError: (error: string) => void;
   onCancel: () => void;
 }
@@ -21,6 +21,7 @@ interface TwoFactorVerifyResponse {
   success: boolean;
   device_token?: string;
   expires_at?: string;
+  backend_session_token?: string;
 }
 
 export default function TwoFactorVerification({
@@ -208,7 +209,8 @@ export default function TwoFactorVerification({
         
         onVerificationSuccess(
           data.device_token,
-          data.expires_at ? new Date(data.expires_at) : undefined
+          data.expires_at ? new Date(data.expires_at) : undefined,
+          data.backend_session_token
         );
       } else {
         throw new Error('Verification failed');

@@ -4,6 +4,7 @@ import { useState, useEffect, useCallback } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
+import apiClient from '@/lib/apiClient';
 // import { format, parseISO } from 'date-fns'; 
 // TODO: Define Role interface in a shared models directory, e.g., import { Role } from '@/models/role';
 
@@ -18,7 +19,7 @@ interface Role {
 
 export default function AdminRoleManagementPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const { user, idToken, loading: authLoading, userProfile: adminUserProfile, fetchUserProfile, hasPrivilege } = useAuth();
   const [roles, setRoles] = useState<Role[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -50,20 +51,17 @@ export default function AdminRoleManagementPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/roles`, { 
-        headers: { 'Authorization': `Bearer ${token}` },
+      const result = await apiClient<Role[]>({
+        method: 'GET',
+        path: '/roles',
+        token: idToken,
       });
 
-      console.log("API Response Status:", response.status);
-      if (!response.ok) {
-        const errorData = await response.json().catch(() => ({ detail: "Failed to parse error response" }));
-        console.error("API Error Data:", errorData);
-        throw new Error(errorData.detail || `Failed to fetch roles, status: ${response.status}`);
+      if (!result.ok) {
+        throw new Error(result.error?.message || 'Failed to fetch roles');
       }
       
-      const rawData: Role[] = await response.json();
+      const rawData: Role[] = result.data || [];
       console.log("Raw data from /roles API:", rawData);
       
       const validRoles = rawData.filter(role => {
@@ -82,7 +80,7 @@ export default function AdminRoleManagementPage() {
     } finally {
       setIsLoading(false);
     }
-  }, [user, adminUserProfile, canListRoles]); 
+  }, [user, idToken, adminUserProfile, canListRoles]); 
 
   useEffect(() => {
     if (!authLoading && !user) {

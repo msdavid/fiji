@@ -6,7 +6,8 @@ import datetime # Required for fallback datetime
 
 from models.assignment import AssignmentResponse
 from dependencies.database import get_db
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission 
+from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
+from dependencies.auth import get_current_session_user_with_rbac 
 
 router = APIRouter(
     prefix="/assignments",
@@ -103,7 +104,7 @@ async def list_assignments(
     assignable_type: Optional[Literal["event", "workingGroup"]] = Query(None, description="Filter assignments by type (event or workingGroup)."),
     assignable_id: Optional[str] = Query(None, description="Filter assignments by the ID of the assignable entity (event or working group ID)."),
     db: firestore.AsyncClient = Depends(get_db),
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     actual_user_id = current_rbac_user.uid if user_id == "me" else user_id
 

@@ -139,8 +139,15 @@ const ReportsPage: NextPage = () => {
     const fetchApiData = async (endpoint: string, setter: Function, loaderSetter: Function, errorPrefix: string) => {
       loaderSetter(true);
       try {
+        // Get session token from localStorage or fall back to idToken
+        const authToken = localStorage.getItem('sessionToken') || idToken;
+        const headers: HeadersInit = { 'Content-Type': 'application/json' };
+        if (authToken) {
+          headers['Authorization'] = `Bearer ${authToken}`;
+        }
+        
         const response = await fetch(`${backendUrl}${endpoint}`, {
-          headers: { 'Authorization': `Bearer ${idToken}`, 'Content-Type': 'application/json' },
+          headers,
         });
         if (!response.ok) {
           const errorData = await response.json().catch(() => ({ detail: response.statusText }));

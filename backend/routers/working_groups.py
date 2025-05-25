@@ -6,6 +6,7 @@ from pydantic import BaseModel, Field
 
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission, is_sysadmin_check
+from dependencies.auth import get_current_session_user_with_rbac, get_current_session_user
 from models.working_group import WorkingGroupCreate, WorkingGroupUpdate, WorkingGroupResponse
 from models.assignment import AssignmentCreate, AssignmentResponse, AssignmentUpdate # Using AssignmentResponse from models
 # Removed UserResponse import as it's not directly used here, user details are in AssignmentResponse
@@ -39,7 +40,7 @@ async def _get_user_details(db: firestore.AsyncClient, user_id: str) -> Optional
 async def create_working_group(
     group_data: WorkingGroupCreate,
     db: firestore.AsyncClient = Depends(get_db),
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     try:
         new_group_dict = group_data.model_dump()
@@ -66,14 +67,15 @@ async def create_working_group(
     except Exception as e:
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
-@router.get("", response_model=List[WorkingGroupResponse], dependencies=[Depends(require_permission("working_groups", "view"))])
+
+@router.get("", response_model=List[WorkingGroupResponse])
 async def list_working_groups(
     db: firestore.AsyncClient = Depends(get_db),
-    current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(require_permission("working_groups", "view"))
 ):
     try:
         # Check if user is sysadmin
-        is_privileged_user = await is_sysadmin_check(current_rbac_user)
+        is_privileged_user = current_rbac_user.is_sysadmin if current_rbac_user else False
         
         # For non-sysadmin users, filter working groups by user assignments
         allowed_wg_ids = []
@@ -217,7 +219,7 @@ async def assign_user_to_working_group(
     group_id: str,
     assignment_data: WorkingGroupAssignmentCreate,
     db: firestore.AsyncClient = Depends(get_db),
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     group_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
     group_doc = await group_ref.get()

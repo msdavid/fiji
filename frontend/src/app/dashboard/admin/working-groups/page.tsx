@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import { format, parseISO } from 'date-fns';
+import apiClient from '@/lib/apiClient';
 
 interface WorkingGroup {
   id: string;
@@ -20,7 +21,7 @@ interface WorkingGroup {
 
 export default function WorkingGroupsListPage() {
   const router = useRouter();
-  const { user, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth();
+  const { user, idToken, loading: authLoading, userProfile, fetchUserProfile, hasPrivilege } = useAuth();
   const [workingGroups, setWorkingGroups] = useState<WorkingGroup[]>([]);
   const [isLoading, setIsLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -38,25 +39,24 @@ export default function WorkingGroupsListPage() {
     setIsLoading(true);
     setError(null);
     try {
-      const token = await user.getIdToken();
-      const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
-      const response = await fetch(`${backendUrl}/working-groups`, {
-        headers: { 'Authorization': `Bearer ${token}` },
+      const result = await apiClient<WorkingGroup[]>({
+        method: 'GET',
+        path: '/working-groups',
+        token: idToken,
       });
 
-      if (!response.ok) {
-        const errorData = await response.json();
-        throw new Error(errorData.detail || 'Failed to fetch working groups');
+      if (!result.ok) {
+        throw new Error(result.error?.message || 'Failed to fetch working groups');
       }
-      const data: WorkingGroup[] = await response.json();
-      setWorkingGroups(data);
+      
+      setWorkingGroups(result.data || []);
     } catch (err: any) {
       setError(err.message);
       console.error("Fetch working groups error:", err);
     } finally {
       setIsLoading(false);
     }
-  }, [user, canViewWorkingGroups]);
+  }, [user, idToken, canViewWorkingGroups]);
 
   useEffect(() => {
     if (!authLoading && !user) {

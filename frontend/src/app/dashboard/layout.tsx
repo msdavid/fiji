@@ -77,8 +77,8 @@ export default function DashboardLayout({
     return (
       <TwoFactorVerification
         userEmail={user.email || ''}
-        onVerificationSuccess={(deviceToken, expiresAt) => {
-          complete2FA(deviceToken, expiresAt);
+        onVerificationSuccess={(deviceToken, expiresAt, sessionToken) => {
+          complete2FA(deviceToken, expiresAt, sessionToken);
         }}
         onVerificationError={(error) => {
           console.error('2FA verification error:', error);

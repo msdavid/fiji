@@ -1,15 +1,17 @@
-from fastapi import APIRouter, HTTPException, Depends, status
+from fastapi import APIRouter, HTTPException, Depends, status, Request
 from pydantic import BaseModel, EmailStr, Field
-from typing import List, Optional, Dict, Set 
+from typing import List, Optional, Dict, Set
 from firebase_admin import auth, firestore
-from datetime import datetime, timezone 
+# Removed datetime import as timezone is now used with firestore.SERVER_TIMESTAMP
 
-from models.user import UserResponse 
-from models.invitation import InvitationValidateResponse 
+from models.user import UserResponse
+from models.invitation import InvitationValidateResponse
 from dependencies.database import get_db
+from services.two_factor_service import TwoFactorService
+from services.session_service import SessionService # Added SessionService import
 
 USERS_COLLECTION = "users"
-ROLES_COLLECTION = "roles" 
+ROLES_COLLECTION = "roles"
 INVITATIONS_COLLECTION = "registrationInvitations"
 
 
@@ -17,6 +19,75 @@ router = APIRouter(
     prefix="/auth",
     tags=["authentication"]
 )
+
+# Helper function (can be moved to a common utils later)
+def get_client_info(request: Request) -> tuple[Optional[str], Optional[str]]:
+    """Extract client IP and User-Agent from request"""
+    ip_address = (
+        request.headers.get("X-Forwarded-For", "").split(",")[0].strip() or
+        request.headers.get("X-Real-IP") or
+        request.client.host if request.client else None
+    )
+    user_agent = request.headers.get("User-Agent")
+    return ip_address, user_agent
+
+# Removed local _create_backend_session_token placeholder
+
+class SessionLoginRequest(BaseModel):
+    firebase_id_token: str
+    device_fingerprint: Optional[str] = None
+
+class SessionLoginResponse(BaseModel):
+    requires_2fa: bool
+    backend_session_token: Optional[str] = None
+    message: Optional[str] = None
+
+
+@router.post("/session-login", response_model=SessionLoginResponse)
+async def session_login(
+    login_request: SessionLoginRequest,
+    request: Request,
+    db: firestore.AsyncClient = Depends(get_db)
+):
+    try:
+        decoded_token = auth.verify_id_token(login_request.firebase_id_token, check_revoked=True)
+    except auth.RevokedIdTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Firebase ID token has been revoked.")
+    except auth.UserDisabledError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="User account has been disabled.")
+    except auth.InvalidIdTokenError:
+        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid Firebase ID token.")
+    except Exception as e:
+        raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"Error verifying Firebase token: {str(e)}")
+
+    user_id = decoded_token.get("uid")
+    if not user_id:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="UID not found in Firebase token.")
+
+    ip_address, user_agent = get_client_info(request)
+    two_factor_service = TwoFactorService(db)
+    session_service = SessionService(db) # Instantiate SessionService
+
+    device_fingerprint = login_request.device_fingerprint
+    if not device_fingerprint:
+        device_fingerprint = TwoFactorService.create_device_fingerprint(user_agent, ip_address)
+
+    trusted_device = await two_factor_service.check_device_trust(user_id, device_fingerprint)
+
+    if trusted_device:
+        # Use SessionService to create token (which also updates lastLoginAt)
+        backend_token = await session_service.create_session_token(user_id)
+        return SessionLoginResponse(
+            requires_2fa=False,
+            backend_session_token=backend_token,
+            message="Login successful. Device trusted."
+        )
+    else:
+        return SessionLoginResponse(
+            requires_2fa=True,
+            message="Device not trusted. Two-factor authentication required."
+        )
+
 
 class RegistrationPayload(BaseModel):
     email: EmailStr
@@ -27,18 +98,19 @@ class RegistrationPayload(BaseModel):
 
 async def _get_role_names_for_auth(db: firestore.AsyncClient, role_ids: List[str]) -> List[str]:
     role_names = []
-    if not isinstance(role_ids, list): 
+    if not isinstance(role_ids, list):
         return role_names
     for role_id in role_ids:
         role_doc = await db.collection(ROLES_COLLECTION).document(role_id).get()
         if role_doc.exists:
             role_data = role_doc.to_dict()
-            role_names.append(role_data.get("roleName", role_id)) 
+            role_names.append(role_data.get("roleName", role_id))
         else:
-            role_names.append(role_id) 
+            role_names.append(role_id)
     return role_names
 
 async def _validate_invitation_for_registration(token: str, db: firestore.AsyncClient) -> Optional[dict]:
+    from datetime import datetime, timezone # Moved import here as it's only used here now
     if not token:
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation token is required.")
 
@@ -50,7 +122,7 @@ async def _validate_invitation_for_registration(token: str, db: firestore.AsyncC
 
     invitation_doc = invitation_docs_snap[0]
     invitation_data = invitation_doc.to_dict()
-    invitation_data["id"] = invitation_doc.id 
+    invitation_data["id"] = invitation_doc.id
 
     if invitation_data.get("status") != "pending":
         raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Invitation has already been used or revoked.")
@@ -60,7 +132,7 @@ async def _validate_invitation_for_registration(token: str, db: firestore.AsyncC
         print(f"Warning: Invitation {invitation_doc.id} has invalid expiresAt field: {expires_at}")
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Invitation has an invalid expiration date format.")
     
-    if expires_at.tzinfo is None: 
+    if expires_at.tzinfo is None:
         expires_at = expires_at.replace(tzinfo=timezone.utc)
     
     if expires_at < datetime.now(timezone.utc):
@@ -85,7 +157,7 @@ async def register_user_with_invitation(
             email=payload.email,
             password=payload.password,
             display_name=f"{payload.firstName} {payload.lastName}",
-            email_verified=False 
+            email_verified=False
         )
     except auth.EmailAlreadyExistsError:
         raise HTTPException(status_code=status.HTTP_409_CONFLICT, detail="An account with this email already exists in Firebase Authentication.")
@@ -101,14 +173,14 @@ async def register_user_with_invitation(
         "email": payload.email.lower(),
         "firstName": payload.firstName,
         "lastName": payload.lastName,
-        "status": "active", 
+        "status": "active",
         "assignedRoleIds": assigned_role_ids,
         "createdAt": firestore.SERVER_TIMESTAMP,
         "updatedAt": firestore.SERVER_TIMESTAMP,
         "skills": [], "qualifications": [], "preferences": None,
         "emergencyContactDetails": None, "profilePictureUrl": None, "notes": None,
-        "availability": { "general_rules": [], "specific_slots": [] }, 
-        "lastLoginAt": None,
+        "availability": { "general_rules": [], "specific_slots": [] },
+        "lastLoginAt": None, 
     }
 
     user_doc_ref = db.collection(USERS_COLLECTION).document(firebase_user.uid)
@@ -124,7 +196,7 @@ async def register_user_with_invitation(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail="Failed to save user profile after authentication creation.")
 
     try:
-        invitation_doc_id = invitation_data["id"] 
+        invitation_doc_id = invitation_data["id"]
         await db.collection(INVITATIONS_COLLECTION).document(invitation_doc_id).update({
             "status": "accepted",
             "acceptedByUserId": firebase_user.uid,
@@ -138,12 +210,10 @@ async def register_user_with_invitation(
         raise HTTPException(status_code=500, detail="Failed to retrieve newly created user profile.")
 
     user_response_data = final_user_doc.to_dict()
-    user_response_data["id"] = final_user_doc.id # UID from Firebase Auth
+    user_response_data["id"] = final_user_doc.id 
     
-    # Populate assignedRoleNames
     user_response_data["assignedRoleNames"] = await _get_role_names_for_auth(db, assigned_role_ids)
     
-    # Calculate privileges and isSysadmin
     is_sysadmin = "sysadmin" in assigned_role_ids
     consolidated_privileges: Dict[str, Set[str]] = {}
 
@@ -163,12 +233,9 @@ async def register_user_with_invitation(
     user_response_data["privileges"] = {resource: list(actions) for resource, actions in consolidated_privileges.items()}
     user_response_data["isSysadmin"] = is_sysadmin
     
-    # Ensure all fields required by UserResponse are present, providing defaults if necessary
-    # This loop ensures that fields defined in UserInDBBase (parent of UserResponse)
-    # but not explicitly set during firestore_user_data creation are defaulted.
     default_user_in_db_fields = {
-        "phone": None, "emergencyContactDetails": None, "skills": [], 
-        "qualifications": [], "preferences": None, "profilePictureUrl": None, 
+        "phone": None, "emergencyContactDetails": None, "skills": [],
+        "qualifications": [], "preferences": None, "profilePictureUrl": None,
         "notes": None, "availability": { "general_rules": [], "specific_slots": [] },
         "lastLoginAt": None
     }
@@ -176,8 +243,7 @@ async def register_user_with_invitation(
         if field not in user_response_data:
             user_response_data[field] = default_value
             
-    # Ensure status is present (it should be from firestore_user_data)
     if "status" not in user_response_data:
-        user_response_data["status"] = "active" # Fallback status
+        user_response_data["status"] = "active"
 
     return UserResponse(**user_response_data)

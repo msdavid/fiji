@@ -6,6 +6,7 @@ from models.donation import DonationCreate, DonationUpdate, DonationResponse
 # Removed: from models.user import UserAvailability 
 from dependencies.database import get_db
 from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
+from dependencies.auth import get_current_session_user_with_rbac
 
 router = APIRouter(
     prefix="/donations",
@@ -38,7 +39,7 @@ async def _get_user_details_for_donation(db: firestore.AsyncClient, user_id: Opt
 async def create_donation(
     donation_data: DonationCreate,
     db: firestore.AsyncClient = Depends(get_db),
-    current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
+    current_rbac_user: RBACUser = Depends(get_current_session_user_with_rbac)
 ):
     try:
         new_donation_dict = donation_data.model_dump()
