@@ -1,0 +1,142 @@
+{
+  "A7iTUUTNI6Sz7jIF5uBNMFcJRcD3": {
+    "qualifications": [],
+    "lastName": "Caca",
+    "firstName": "Nono",
+    "status": "active",
+    "skills": [],
+    "updatedAt": "2025-05-18T03:22:35.480000+00:00",
+    "lastLoginAt": null,
+    "notes": null,
+    "assignedRoleIds": [
+      "associate"
+    ],
+    "emergencyContactDetails": null,
+    "preferences": null,
+    "availability": {
+      "general_rules": [],
+      "specific_slots": []
+    },
+    "createdAt": "2025-05-18T03:22:35.480000+00:00",
+    "email": "nono@caca.com",
+    "profilePictureUrl": null
+  },
+  "NlbTOubbNQXC3bJp2h46U209xBl2": {
+    "qualifications": [],
+    "assignedRoleIds": [
+      "associate"
+    ],
+    "lastName": "Sauco",
+    "firstName": "Damian",
+    "availability": {
+      "general_rules": [],
+      "specific_slots": []
+    },
+    "createdAt": "2025-05-18T02:19:00.143000+00:00",
+    "status": "active",
+    "skills": [],
+    "updatedAt": "2025-05-18T02:19:00.143000+00:00",
+    "email": "damian@sauco.net"
+  },
+  "c5HnwbsloAd3tbEmfowS0p8Z2z02": {
+    "qualifications": [],
+    "lastName": "America",
+    "firstName": "Captain",
+    "status": "active",
+    "skills": [],
+    "updatedAt": "2025-05-18T15:36:27.032000+00:00",
+    "lastLoginAt": null,
+    "notes": null,
+    "assignedRoleIds": [
+      "associate"
+    ],
+    "emergencyContactDetails": null,
+    "preferences": null,
+    "availability": {
+      "general_rules": [],
+      "specific_slots": []
+    },
+    "createdAt": "2025-05-18T15:36:27.032000+00:00",
+    "email": "mauro.sauco@gmail.com",
+    "profilePictureUrl": null
+  },
+  "cS8pPGSGC9Uw7wftEMmszXdY12c2": {
+    "qualifications": [],
+    "uid": "cS8pPGSGC9Uw7wftEMmszXdY12c2",
+    "lastName": "Sauco",
+    "firstName": "Comon",
+    "assignedRoleIds": [
+      "associate",
+      "manager"
+    ],
+    "phone": "",
+    "availability": {
+      "general_rules": [
+        {
+          "to_time": "17:00",
+          "from_time": "09:00",
+          "weekday": "Monday"
+        }
+      ],
+      "specific_slots": [
+        {
+          "slot_type": "unavailable",
+          "date": "2025-05-17"
+        }
+      ]
+    },
+    "createdAt": "2025-05-12T06:35:15.715000+00:00",
+    "status": "active",
+    "skills": [],
+    "updatedAt": "2025-05-18T01:59:10.396000+00:00",
+    "email": "common@sauco.net"
+  },
+  "jtYKkOSHUHZWawn9asVBA54fINv1": {
+    "qualifications": [
+      "B saga"
+    ],
+    "lastName": "Sauco",
+    "firstName": "Mauro",
+    "displayName": "Mauro Sauco",
+    "status": "active",
+    "skills": [
+      "A nanu"
+    ],
+    "updatedAt": "2025-05-18T09:29:25.042000+00:00",
+    "assignedRoleIds": [
+      "sysadmin",
+      "associate"
+    ],
+    "phoneNumber": "94522504",
+    "phone": "",
+    "preferences": "my preferences",
+    "availability": {
+      "general_rules": [
+        {
+          "to_time": "17:00",
+          "from_time": "09:00",
+          "weekday": "Friday"
+        },
+        {
+          "to_time": "17:00",
+          "from_time": "09:00",
+          "weekday": "Wednesday"
+        }
+      ],
+      "specific_slots": [
+        {
+          "to_time": "05:50",
+          "slot_type": "unavailable",
+          "date": "2025-05-17",
+          "from_time": "05:20"
+        },
+        {
+          "slot_type": "unavailable",
+          "date": "2025-06-19"
+        }
+      ]
+    },
+    "createdAt": "2025-05-12T01:22:42.024000+00:00",
+    "email": "mauro@sauco.net"
+  }
+}

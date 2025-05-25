@@ -5,7 +5,7 @@ from google.cloud.firestore_v1.base_query import FieldFilter
 from pydantic import BaseModel, Field
 
 from dependencies.database import get_db
-from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission
+from dependencies.rbac import RBACUser, get_current_user_with_rbac, require_permission, is_sysadmin_check
 from models.working_group import WorkingGroupCreate, WorkingGroupUpdate, WorkingGroupResponse
 from models.assignment import AssignmentCreate, AssignmentResponse, AssignmentUpdate # Using AssignmentResponse from models
 # Removed UserResponse import as it's not directly used here, user details are in AssignmentResponse
@@ -20,7 +20,7 @@ WORKING_GROUPS_COLLECTION = "workingGroups"
 USERS_COLLECTION = "users"
 ASSIGNMENTS_COLLECTION = "assignments"
 
-async def _get_user_details(db: firestore.Client, user_id: str) -> Optional[dict]:
+async def _get_user_details(db: firestore.AsyncClient, user_id: str) -> Optional[dict]:
     """Helper function to fetch user details."""
     if not user_id:
         return None
@@ -38,7 +38,7 @@ async def _get_user_details(db: firestore.Client, user_id: str) -> Optional[dict
 )
 async def create_working_group(
     group_data: WorkingGroupCreate,
-    db: firestore.Client = Depends(get_db),
+    db: firestore.AsyncClient = Depends(get_db),
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
     try:
@@ -67,8 +67,27 @@ async def create_working_group(
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.get("", response_model=List[WorkingGroupResponse], dependencies=[Depends(require_permission("working_groups", "view"))])
-async def list_working_groups(db: firestore.Client = Depends(get_db)):
+async def list_working_groups(
+    db: firestore.AsyncClient = Depends(get_db),
+    current_rbac_user: Optional[RBACUser] = Depends(get_current_user_with_rbac)
+):
     try:
+        # Check if user is sysadmin
+        is_privileged_user = await is_sysadmin_check(current_rbac_user)
+        
+        # For non-sysadmin users, filter working groups by user assignments
+        allowed_wg_ids = []
+        if not is_privileged_user and current_rbac_user:
+            user_wg_assignments_query = db.collection(ASSIGNMENTS_COLLECTION) \
+                .where(filter=FieldFilter("userId", "==", current_rbac_user.uid)) \
+                .where(filter=FieldFilter("assignableType", "==", "workingGroup"))
+            
+            allowed_wg_ids = [doc.to_dict()["assignableId"] async for doc in user_wg_assignments_query.stream()]
+            
+            # If user has no working group assignments, return empty list
+            if not allowed_wg_ids:
+                return []
+        
         groups_query = db.collection(WORKING_GROUPS_COLLECTION).order_by("groupName", direction=firestore.Query.ASCENDING)
         docs_snapshot = groups_query.stream()
         
@@ -78,6 +97,10 @@ async def list_working_groups(db: firestore.Client = Depends(get_db)):
         async for doc in docs_snapshot:
             group_data = doc.to_dict()
             group_data['id'] = doc.id
+            
+            # Filter by user assignments for non-sysadmin users
+            if not is_privileged_user and doc.id not in allowed_wg_ids:
+                continue
             
             created_by_user_id = group_data.get("createdByUserId")
             if created_by_user_id:
@@ -94,7 +117,7 @@ async def list_working_groups(db: firestore.Client = Depends(get_db)):
         raise HTTPException(status_code=status.HTTP_500_INTERNAL_SERVER_ERROR, detail=f"An unexpected error occurred: {str(e)}")
 
 @router.get("/{group_id}", response_model=WorkingGroupResponse, dependencies=[Depends(require_permission("working_groups", "view"))])
-async def get_working_group(group_id: str, db: firestore.Client = Depends(get_db)):
+async def get_working_group(group_id: str, db: firestore.AsyncClient = Depends(get_db)):
     try:
         doc_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
         group_doc = await doc_ref.get()
@@ -121,7 +144,7 @@ async def get_working_group(group_id: str, db: firestore.Client = Depends(get_db
 async def update_working_group(
     group_id: str,
     group_update_data: WorkingGroupUpdate,
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db)
 ):
     try:
         doc_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
@@ -154,7 +177,7 @@ async def update_working_group(
     status_code=status.HTTP_204_NO_CONTENT,
     dependencies=[Depends(require_permission("working_groups", "delete"))]
 )
-async def delete_working_group(group_id: str, db: firestore.Client = Depends(get_db)):
+async def delete_working_group(group_id: str, db: firestore.AsyncClient = Depends(get_db)):
     try:
         group_doc_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
         group_doc = await group_doc_ref.get()
@@ -193,7 +216,7 @@ class WorkingGroupAssignmentCreate(BaseModel):
 async def assign_user_to_working_group(
     group_id: str,
     assignment_data: WorkingGroupAssignmentCreate,
-    db: firestore.Client = Depends(get_db),
+    db: firestore.AsyncClient = Depends(get_db),
     current_rbac_user: RBACUser = Depends(get_current_user_with_rbac)
 ):
     group_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
@@ -255,7 +278,7 @@ async def assign_user_to_working_group(
     response_model=List[AssignmentResponse], # Using global AssignmentResponse
     dependencies=[Depends(require_permission("working_groups", "manage_assignments"))] # Or a more general view permission
 )
-async def list_working_group_assignments(group_id: str, db: firestore.Client = Depends(get_db)):
+async def list_working_group_assignments(group_id: str, db: firestore.AsyncClient = Depends(get_db)):
     group_ref = db.collection(WORKING_GROUPS_COLLECTION).document(group_id)
     group_doc = await group_ref.get()
     if not group_doc.exists:
@@ -295,7 +318,7 @@ async def list_working_group_assignments(group_id: str, db: firestore.Client = D
 async def remove_user_from_working_group(
     group_id: str,
     assignment_id: str,
-    db: firestore.Client = Depends(get_db)
+    db: firestore.AsyncClient = Depends(get_db)
 ):
     assignment_ref = db.collection(ASSIGNMENTS_COLLECTION).document(assignment_id)
     assignment_doc = await assignment_ref.get()

@@ -94,11 +94,11 @@ async def get_current_user_with_rbac(
     
     consolidated_privileges: Dict[str, Set[str]] = {}
 
-    if not is_sysadmin and assigned_role_ids: # Only fetch role privileges if not sysadmin and has roles
-        role_refs = [db.collection("roles").document(role_id) for role_id in assigned_role_ids]
-        if role_refs:
-            role_docs = await db.get_all(role_refs) # Batch fetch role documents
-            for role_doc in role_docs:
+    if not is_sysadmin:
+        # Fetch role-based privileges
+        if assigned_role_ids:
+            for role_id in assigned_role_ids:
+                role_doc = await db.collection("roles").document(role_id).get()
                 if role_doc.exists:
                     role_data = role_doc.to_dict()
                     privileges_for_role = role_data.get("privileges", {})
@@ -109,11 +109,30 @@ async def get_current_user_with_rbac(
                         if resource not in consolidated_privileges:
                             consolidated_privileges[resource] = set()
                         consolidated_privileges[resource].update(actions)
-                else:
-                    # Find which role_id was not found, if needed for logging
-                    # This part is a bit tricky with get_all, as it returns docs that exist.
-                    # A simple approach is to log a general warning or re-check individually if critical.
-                    print(f"Warning: A role assigned to user '{uid}' was not found during privilege consolidation.")
+        
+        # Check for working group memberships and auto-grant permissions
+        try:
+            assignments_query = db.collection("assignments").where("userId", "==", uid).where("assignableType", "==", "workingGroup").where("status", "==", "active")
+            assignments_docs = assignments_query.stream()
+            
+            has_working_group_assignment = False
+            async for assignment_doc in assignments_docs:
+                has_working_group_assignment = True
+                break  # We just need to know if there's at least one
+            
+            if has_working_group_assignment:
+                # Auto-grant working group view permissions for working group members
+                if "working_groups" not in consolidated_privileges:
+                    consolidated_privileges["working_groups"] = set()
+                consolidated_privileges["working_groups"].add("view")
+                
+                # Also grant assignments view_own permission to see their own assignments
+                if "assignments" not in consolidated_privileges:
+                    consolidated_privileges["assignments"] = set()
+                consolidated_privileges["assignments"].add("view_own")
+        except Exception as e:
+            print(f"Warning: Failed to check working group assignments for user {uid}: {e}")
+            # Continue without working group permissions if check fails
     
     return RBACUser(
         uid=uid,

@@ -6,6 +6,7 @@ import apiClient, { ApiResponse } from '@/lib/apiClient'; // Import ApiResponse
 import { useRouter } from 'next/navigation';
 import Link from 'next/link'; 
 import { format, parseISO, isValid } from 'date-fns';
+import TwoFactorSettings from '@/components/profile/TwoFactorSettings';
 
 // --- Availability Interfaces ---
 type Weekday = "Monday" | "Tuesday" | "Wednesday" | "Thursday" | "Friday" | "Saturday" | "Sunday";
@@ -468,6 +469,13 @@ const ProfilePage = () => {
             <div className="text-center p-4 text-gray-700 dark:text-gray-300">Could not load profile information.</div>
         )}
       </div>
+
+      {/* 2FA Settings - Only show when not editing profile */}
+      {!isEditing && currentProfileData && currentProfileData.id && (
+        <div className="mt-8">
+          <TwoFactorSettings />
+        </div>
+      )}
     </main>
   );
 };

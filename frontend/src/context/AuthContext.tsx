@@ -29,8 +29,10 @@ interface AuthContextType {
   userProfile: UserProfileFromBackend | null; 
   loading: boolean;
   error: Error | null;
+  requires2FA: boolean;
   hasPrivilege: (resource: string, action: string) => boolean;
-  logout: (options?: { redirect?: boolean }) => Promise<void>; 
+  logout: (options?: { redirect?: boolean }) => Promise<void>;
+  complete2FA: (deviceToken?: string, expiresAt?: Date) => void;
 }
 
 const defaultAuthContextValue: AuthContextType = {
@@ -39,8 +41,10 @@ const defaultAuthContextValue: AuthContextType = {
   userProfile: null,
   loading: true,
   error: null,
+  requires2FA: false,
   hasPrivilege: () => false, 
-  logout: async () => {}, 
+  logout: async () => {},
+  complete2FA: () => {},
 };
 
 const AuthContext = createContext<AuthContextType>(defaultAuthContextValue);
@@ -51,7 +55,20 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [userProfile, setUserProfile] = useState<UserProfileFromBackend | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<Error | null>(null);
+  const [requires2FA, setRequires2FA] = useState(false);
   const router = useRouter(); 
+
+  const complete2FA = useCallback((deviceToken?: string, expiresAt?: Date) => {
+    // Store device token if provided
+    if (deviceToken && expiresAt) {
+      import('@/lib/deviceFingerprint').then(({ storeDeviceToken }) => {
+        storeDeviceToken(deviceToken, expiresAt);
+      });
+    }
+    
+    // Clear 2FA requirement and continue with normal flow
+    setRequires2FA(false);
+  }, []);
 
   const performLogout = useCallback(async (options?: { redirect?: boolean }) => {
     const { redirect = true } = options || {};
@@ -66,7 +83,14 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
       setUser(null);
       setIdToken(null);
       setUserProfile(null);
-      setLoading(false); 
+      setRequires2FA(false);
+      setLoading(false);
+      
+      // Clear device token on logout
+      import('@/lib/deviceFingerprint').then(({ clearDeviceToken }) => {
+        clearDeviceToken();
+      });
+      
       if (redirect) {
         if (typeof window !== 'undefined' && window.location.pathname !== '/login') {
             router.push('/login');
@@ -98,6 +122,46 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
               setLoading(false);
               return; 
             }
+
+            // Check if device is trusted first
+            const { generateDeviceFingerprint, isDeviceTokenValid } = await import('@/lib/deviceFingerprint');
+            const deviceFingerprint = generateDeviceFingerprint();
+            const hasValidDeviceToken = isDeviceTokenValid();
+
+            if (!hasValidDeviceToken) {
+              // Check 2FA requirement with backend
+              try {
+                const twoFAResponse = await fetch(`${backendUrl}/auth/2fa/check-requirement`, {
+                  method: 'POST',
+                  headers: { 
+                    'Content-Type': 'application/json'
+                  },
+                  body: JSON.stringify({
+                    user_id: currentUser.uid,
+                    device_fingerprint: deviceFingerprint
+                  })
+                });
+                
+                if (twoFAResponse.ok) {
+                  const twoFAData = await twoFAResponse.json();
+                  if (twoFAData.requires_2fa && !twoFAData.trusted_device) {
+                    // 2FA is required, set state and stop here
+                    setRequires2FA(true);
+                    setLoading(false);
+                    return;
+                  }
+                } else {
+                  const errorText = await twoFAResponse.text();
+                  console.warn("2FA check failed with status:", twoFAResponse.status, "Error:", errorText);
+                }
+              } catch (twoFAError: any) {
+                console.warn("Failed to check 2FA requirement:", twoFAError.message);
+                // Continue with normal flow if 2FA check fails
+              }
+            }
+
+            // If we reach here, either device is trusted or 2FA not required
+            setRequires2FA(false);
 
             try {
               const response = await fetch(`${backendUrl}/users/me`, {
@@ -169,7 +233,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   }, [userProfile, loading]); 
 
   return (
-    <AuthContext.Provider value={{ user, idToken, userProfile, loading, error, hasPrivilege, logout: performLogout }}>
+    <AuthContext.Provider value={{ user, idToken, userProfile, loading, error, requires2FA, hasPrivilege, logout: performLogout, complete2FA }}>
       {children}
     </AuthContext.Provider>
   );

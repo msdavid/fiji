@@ -1,7 +1,7 @@
 from fastapi import Request, HTTPException, status
-from firebase_admin import firestore # For type hinting firestore.Client
+from firebase_admin import firestore # For type hinting firestore.AsyncClient
 
-async def get_db(request: Request) -> firestore.Client:
+async def get_db(request: Request) -> firestore.AsyncClient:
     """
     Dependency to get the Firestore client.
     The client is initialized during app startup and stored in app.state.db.

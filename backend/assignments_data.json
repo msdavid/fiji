@@ -1,0 +1,44 @@
+{
+  "FHqLX5d2xCjVZS3UoCcS": {
+    "assignableId": "0xbwmXCPqgOz4fhuTyPC",
+    "userId": "jtYKkOSHUHZWawn9asVBA54fINv1",
+    "createdAt": "2025-05-18T18:44:15.239000+00:00",
+    "assignedByUserId": "self_signup",
+    "status": "confirmed",
+    "assignmentDate": "2025-05-18T18:44:15.239000+00:00",
+    "updatedAt": "2025-05-18T18:44:15.239000+00:00",
+    "assignableType": "event"
+  },
+  "OtP5i6W1jHFbCpRuNnsJ": {
+    "assignableId": "0xbwmXCPqgOz4fhuTyPC",
+    "assignedByUserId": "jtYKkOSHUHZWawn9asVBA54fINv1",
+    "userId": "c5HnwbsloAd3tbEmfowS0p8Z2z02",
+    "performanceNotes": null,
+    "assignmentDate": "2025-05-19T01:02:40.095473+00:00",
+    "status": "confirmed_admin",
+    "hoursContributed": null,
+    "updatedAt": "2025-05-19T01:02:40.161000+00:00",
+    "createdAt": "2025-05-19T01:02:40.161000+00:00",
+    "assignableType": "event"
+  },
+  "iEhtx0JzYnaC1rvAYIIT": {
+    "assignableId": "BgCR4nx2oSDEPUpctUDZ",
+    "userId": "jtYKkOSHUHZWawn9asVBA54fINv1",
+    "createdAt": "2025-05-18T18:12:35.952000+00:00",
+    "assignedByUserId": "self_signup",
+    "status": "confirmed",
+    "assignmentDate": "2025-05-18T18:12:35.952000+00:00",
+    "updatedAt": "2025-05-18T18:12:35.952000+00:00",
+    "assignableType": "event"
+  },
+  "mhbgmcJQHakV66EltXXt": {
+    "assignableId": "I6gbTNLjjCtVBoG2uJMz",
+    "userId": "c5HnwbsloAd3tbEmfowS0p8Z2z02",
+    "createdAt": "2025-05-25T02:56:13.101000+00:00",
+    "assignedByUserId": "jtYKkOSHUHZWawn9asVBA54fINv1",
+    "status": "active",
+    "assignmentDate": "2025-05-25T02:56:13.101000+00:00",
+    "updatedAt": "2025-05-25T02:56:13.101000+00:00",
+    "assignableType": "workingGroup"
+  }
+}

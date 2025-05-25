@@ -16,7 +16,8 @@ from routers import working_groups as working_groups_router
 from routers import donations as donations_router
 from routers import assignments as assignments_router
 from routers import reports as reports_router 
-from routers.auth import router as auth_router 
+from routers.auth import router as auth_router
+from routers import two_factor as two_factor_router 
 
 load_dotenv()
 
@@ -104,7 +105,7 @@ app = FastAPI(
     lifespan=lifespan
 )
 
-origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3002")
+origins_env = os.getenv("CORS_ALLOWED_ORIGINS", "http://localhost:3001")
 origins = [origin.strip() for origin in origins_env.split(',')]
 
 app.add_middleware(
@@ -116,6 +117,7 @@ app.add_middleware(
 )
 
 app.include_router(auth_router) 
+app.include_router(two_factor_router.router)
 app.include_router(roles_router.router)
 app.include_router(invitations_admin_router)
 app.include_router(invitations_public_router)

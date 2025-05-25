@@ -101,6 +101,123 @@ class EmailService:
             print(f"An error occurred while sending email: {str(e)}")
             return False
 
+    async def send_2fa_code_email(
+        self,
+        to_email: str,
+        to_name: Optional[str],
+        verification_code: str,
+        device_name: Optional[str] = None,
+        ip_address: Optional[str] = None,
+        expires_in_minutes: int = 10
+    ) -> bool:
+        """
+        Sends a 2FA verification code email.
+        """
+        if not to_email:
+            print("Error: Recipient email (to_email) cannot be empty.")
+            return False
+
+        subject = "Your verification code for Fiji Platform"
+        
+        # Format device and location info
+        device_info = ""
+        if device_name and ip_address:
+            device_info = f" from {device_name} (IP: {ip_address})"
+        elif device_name:
+            device_info = f" from {device_name}"
+        elif ip_address:
+            device_info = f" (IP: {ip_address})"
+        
+        html_content = f"""
+        <html>
+            <head>
+                <style>
+                    body {{ font-family: Arial, sans-serif; line-height: 1.6; color: #333; }}
+                    .container {{ max-width: 600px; margin: 0 auto; padding: 20px; }}
+                    .code-box {{ 
+                        background-color: #f8f9fa; 
+                        border: 2px solid #007bff; 
+                        border-radius: 8px; 
+                        padding: 20px; 
+                        text-align: center; 
+                        margin: 20px 0; 
+                    }}
+                    .code {{ 
+                        font-size: 32px; 
+                        font-weight: bold; 
+                        color: #007bff; 
+                        letter-spacing: 5px; 
+                        font-family: 'Courier New', monospace; 
+                    }}
+                    .warning {{ color: #dc3545; font-weight: bold; }}
+                    .footer {{ margin-top: 30px; font-size: 12px; color: #666; }}
+                </style>
+            </head>
+            <body>
+                <div class="container">
+                    <h2>Verification Code Required</h2>
+                    <p>Hello{f" {to_name}" if to_name else ""},</p>
+                    <p>A sign-in attempt was made to your Fiji Platform account{device_info}.</p>
+                    
+                    <div class="code-box">
+                        <p>Your verification code is:</p>
+                        <div class="code">{verification_code}</div>
+                        <p><small>This code will expire in {expires_in_minutes} minutes</small></p>
+                    </div>
+                    
+                    <p>If you didn't request this code, please secure your account immediately by changing your password.</p>
+                    
+                    <p class="warning">Never share this code with anyone. Fiji Platform will never ask for your verification code.</p>
+                    
+                    <div class="footer">
+                        <p>This email was sent from an automated system. Please do not reply.</p>
+                        <p>© Fiji Platform Team</p>
+                    </div>
+                </div>
+            </body>
+        </html>
+        """
+        
+        text_content = f"""
+Verification Code Required
+
+Hello{f" {to_name}" if to_name else ""},
+
+A sign-in attempt was made to your Fiji Platform account{device_info}.
+
+Your verification code is: {verification_code}
+
+This code will expire in {expires_in_minutes} minutes.
+
+If you didn't request this code, please secure your account immediately by changing your password.
+
+Never share this code with anyone. Fiji Platform will never ask for your verification code.
+
+This email was sent from an automated system. Please do not reply.
+
+© Fiji Platform Team
+        """
+
+        print(f"Attempting to send 2FA verification code email to: {to_email}")
+        try:
+            success = await self.send_email(
+                to_email=to_email,
+                to_name=to_name,
+                subject=subject,
+                html_content=html_content,
+                text_content=text_content,
+                custom_id=f"2fa-code-{verification_code}"
+            )
+            if success:
+                print(f"2FA verification code email successfully sent to {to_email}.")
+                return True
+            else:
+                print(f"Failed to send 2FA verification code email to {to_email}.")
+                return False
+        except Exception as e:
+            print(f"Exception during sending 2FA verification code email to {to_email}: {str(e)}")
+            return False
+
 # Example usage (for testing purposes, normally this would be in a different part of the app)
 # async def main_test():
 #     # Ensure .env is loaded if running this standalone for testing

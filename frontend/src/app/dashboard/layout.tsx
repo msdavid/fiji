@@ -4,6 +4,7 @@ import { useEffect } from 'react';
 import { useRouter } from 'next/navigation';
 import { useAuth } from '@/context/AuthContext';
 import DashboardNav from '@/components/dashboard/DashboardNav';
+import TwoFactorVerification from '@/components/auth/TwoFactorVerification';
 import { Toaster } from 'react-hot-toast'; 
 
 export default function DashboardLayout({
@@ -11,7 +12,7 @@ export default function DashboardLayout({
 }: {
   children: React.ReactNode;
 }) {
-  const { user, loading, error: authError } = useAuth();
+  const { user, loading, error: authError, requires2FA, complete2FA, logout } = useAuth();
   const router = useRouter();
 
   useEffect(() => {
@@ -68,6 +69,25 @@ export default function DashboardLayout({
                 </button>
             </div>
         </div>
+    );
+  }
+
+  // If 2FA is required, show the 2FA verification component
+  if (requires2FA) {
+    return (
+      <TwoFactorVerification
+        userEmail={user.email || ''}
+        onVerificationSuccess={(deviceToken, expiresAt) => {
+          complete2FA(deviceToken, expiresAt);
+        }}
+        onVerificationError={(error) => {
+          console.error('2FA verification error:', error);
+          // Could show a toast or error message here
+        }}
+        onCancel={async () => {
+          await logout();
+        }}
+      />
     );
   }
 

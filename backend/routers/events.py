@@ -284,7 +284,7 @@ async def list_events(
         if not is_privileged_user and current_rbac_user:
             user_wg_assignments_query = db.collection(ASSIGNMENTS_COLLECTION) \
                 .where(filter=FieldFilter("userId", "==", current_rbac_user.uid)) \
-                .where(filter=FieldFilter("assignableType", "==", "working_group"))
+                .where(filter=FieldFilter("assignableType", "==", "workingGroup"))
             
             user_wg_ids_for_auth_filter = [doc.to_dict()["assignableId"] async for doc in user_wg_assignments_query.stream()]
 
@@ -299,7 +299,7 @@ async def list_events(
             elif working_group_id and working_group_id not in user_wg_ids_for_auth_filter:
                 return [] 
 
-            query = query.where(filter=FieldFilter("workingGroupIds", "array-contains-any", user_wg_ids_for_auth_filter))
+            query = query.where(filter=FieldFilter("workingGroupIds", "array_contains_any", user_wg_ids_for_auth_filter))
         
         elif is_privileged_user and working_group_id: 
             query = query.where(filter=FieldFilter("workingGroupIds", "array_contains", working_group_id)) 
@@ -319,7 +319,9 @@ async def list_events(
             query = query.where(filter=FieldFilter("status", "==", status_filter))
         
         query = query.order_by("dateTime", direction=firestore.Query.ASCENDING)
-        query = query.where(filter=FieldFilter("dateTime", "<=", to_datetime_utc)) 
+        # Temporarily disabled date filters to show all events for debugging
+        # query = query.where(filter=FieldFilter("dateTime", ">=", from_datetime_utc))
+        # query = query.where(filter=FieldFilter("dateTime", "<=", to_datetime_utc)) 
 
         if q:
             query = query.where(filter=FieldFilter("eventName", ">=", q)).where(filter=FieldFilter("eventName", "<=", q + '\uf8ff'))
@@ -520,7 +522,7 @@ async def get_event(
         elif current_rbac_user:
             user_wg_assignments_query = db.collection(ASSIGNMENTS_COLLECTION) \
                 .where(filter=FieldFilter("userId", "==", current_rbac_user.uid)) \
-                .where(filter=FieldFilter("assignableType", "==", "working_group"))
+                .where(filter=FieldFilter("assignableType", "==", "workingGroup"))
             user_member_of_wg_ids = {doc.to_dict()["assignableId"] async for doc in user_wg_assignments_query.stream()}
 
             if any(wg_id in user_member_of_wg_ids for wg_id in event_wg_ids_list):
@@ -685,7 +687,7 @@ async def self_signup_for_event(
     elif current_rbac_user:
         user_wg_assignments_query = db.collection(ASSIGNMENTS_COLLECTION) \
             .where(filter=FieldFilter("userId", "==", current_rbac_user.uid)) \
-            .where(filter=FieldFilter("assignableType", "==", "working_group"))
+            .where(filter=FieldFilter("assignableType", "==", "workingGroup"))
         user_member_of_wg_ids = {doc.to_dict()["assignableId"] async for doc in user_wg_assignments_query.stream()}
 
         event_wg_ids_list = event_data_dict.get("workingGroupIds", []) 
