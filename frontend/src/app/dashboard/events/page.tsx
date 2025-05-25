@@ -33,7 +33,7 @@ interface EventWithSignupStatus {
   workingGroupNames?: string[]; 
   currentVolunteerCount?: number; 
   volunteerNames?: string[]; 
-  recurrenceRule?: string; 
+  recurrence_rule?: string; 
 }
 
 interface WorkingGroup {
@@ -88,6 +88,170 @@ function debounce<F extends (...args: any[]) => void>(func: F, waitFor: number) 
     timeout = setTimeout(() => func(...args), waitFor);
   };
   return debounced;
+}
+
+// Utility function to parse RRULE and create human-readable recurrence description
+function parseRecurrenceRule(rrule: string, startTime?: string, endTime?: string): string {
+  try {
+    // Parse DTSTART and RRULE parts
+    const lines = rrule.split('\n');
+    const ruleMap: { [key: string]: string } = {};
+    
+    lines.forEach(line => {
+      if (line.startsWith('RRULE:')) {
+        const rulePart = line.substring(6); // Remove 'RRULE:'
+        const parts = rulePart.split(';');
+        parts.forEach(part => {
+          const [key, value] = part.split('=');
+          if (key && value) {
+            ruleMap[key] = value;
+          }
+        });
+      }
+    });
+
+    const freq = ruleMap['FREQ'];
+    const interval = parseInt(ruleMap['INTERVAL'] || '1', 10);
+    const byDay = ruleMap['BYDAY'];
+    const count = ruleMap['COUNT'];
+    const until = ruleMap['UNTIL'];
+
+    let description = '';
+    
+    // Format time range if available
+    const timeRange = formatTimeRange(startTime, endTime);
+    
+    // Parse frequency
+    if (freq === 'DAILY') {
+      if (interval === 1) {
+        description = 'Daily';
+      } else {
+        description = `Every ${interval} days`;
+      }
+    } else if (freq === 'WEEKLY') {
+      if (byDay) {
+        const days = parseDays(byDay);
+        if (interval === 1) {
+          description = `Weekly on ${days}`;
+        } else {
+          description = `Every ${interval} weeks on ${days}`;
+        }
+      } else {
+        // Use the start day from startTime if no BYDAY specified
+        const dayName = startTime ? format(parseISO(startTime), 'EEEE') : '';
+        if (interval === 1) {
+          description = dayName ? `Weekly on ${dayName}` : 'Weekly';
+        } else {
+          description = dayName ? `Every ${interval} weeks on ${dayName}` : `Every ${interval} weeks`;
+        }
+      }
+    } else if (freq === 'MONTHLY') {
+      if (interval === 1) {
+        description = 'Monthly';
+      } else {
+        description = `Every ${interval} months`;
+      }
+    } else if (freq === 'YEARLY') {
+      if (interval === 1) {
+        description = 'Yearly';
+      } else {
+        description = `Every ${interval} years`;
+      }
+    } else {
+      description = 'Recurring';
+    }
+
+    // Add time range if available
+    if (timeRange) {
+      description += ` ${timeRange}`;
+    }
+
+    // Add end condition
+    if (count) {
+      description += ` (${count} occurrences)`;
+    } else if (until) {
+      try {
+        const endDate = parseISO(until.replace(/(\d{4})(\d{2})(\d{2})T(\d{2})(\d{2})(\d{2})Z?/, '$1-$2-$3T$4:$5:$6Z'));
+        description += ` (until ${format(endDate, 'MMM d, yyyy')})`;
+      } catch {
+        // Ignore invalid until date
+      }
+    }
+
+    return description;
+  } catch (error) {
+    // Fallback for unparseable rules
+    return 'Recurring event';
+  }
+}
+
+// Helper to parse BYDAY values
+function parseDays(byDay: string): string {
+  const dayMap: { [key: string]: string } = {
+    'MO': 'Monday', 'TU': 'Tuesday', 'WE': 'Wednesday', 'TH': 'Thursday', 
+    'FR': 'Friday', 'SA': 'Saturday', 'SU': 'Sunday'
+  };
+  
+  const days = byDay.split(',').map(day => {
+    // Remove any numeric prefixes (e.g., "1MO" -> "MO")
+    const cleanDay = day.replace(/^-?\d+/, '');
+    return dayMap[cleanDay] || cleanDay;
+  });
+  
+  if (days.length === 1) {
+    return days[0];
+  } else if (days.length === 2) {
+    return `${days[0]} and ${days[1]}`;
+  } else if (days.length > 2) {
+    const lastDay = days.pop();
+    return `${days.join(', ')}, and ${lastDay}`;
+  }
+  
+  return 'selected days';
+}
+
+// Helper to format time range
+function formatTimeRange(startTime?: string, endTime?: string): string {
+  try {
+    if (!startTime) return '';
+    
+    const start = parseISO(startTime);
+    const startFormatted = format(start, 'h:mm a');
+    
+    if (endTime) {
+      const end = parseISO(endTime);
+      const endFormatted = format(end, 'h:mm a');
+      return `from ${startFormatted} to ${endFormatted}`;
+    }
+    
+    return `at ${startFormatted}`;
+  } catch {
+    return '';
+  }
+}
+
+// Component for recurring event indicator
+interface RecurringIndicatorProps {
+  recurrenceRule: string;
+  startTime?: string;
+  endTime?: string;
+}
+
+function RecurringIndicator({ recurrenceRule, startTime, endTime }: RecurringIndicatorProps) {
+  const description = parseRecurrenceRule(recurrenceRule, startTime, endTime);
+  
+  return (
+    <Tippy 
+      content={description}
+      placement="top"
+      theme="translucent"
+    >
+      <span className="inline-flex items-center gap-1 text-xs text-blue-600 dark:text-blue-400 cursor-help">
+        <span className="material-icons text-sm">repeat</span>
+        <span>Recurring</span>
+      </span>
+    </Tippy>
+  );
 }
 
 
@@ -443,11 +607,19 @@ export default function EventsPage() {
                         <span className="material-icons text-gray-600 dark:text-gray-300 text-lg" title={eventInstance.icon || 'event'}>{eventInstance.icon || 'event'}</span> 
                       </td>
                       <td className="px-3 py-1 text-sm text-gray-700 dark:text-gray-200 whitespace-normal break-words"> 
-                        <Link href={viewLink} className="font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
-                          {eventInstance.eventName}
-                        </Link>
+                        <div className="flex items-center gap-2">
+                          <Link href={viewLink} className="font-medium text-indigo-600 hover:text-indigo-800 dark:text-indigo-400 dark:hover:text-indigo-300">
+                            {eventInstance.eventName}
+                          </Link>
+                          {eventInstance.recurrence_rule && (
+                            <RecurringIndicator 
+                              recurrenceRule={eventInstance.recurrence_rule}
+                              startTime={ensureDateString(eventInstance.dateTime)}
+                              endTime={ensureDateString(eventInstance.endTime)}
+                            />
+                          )}
+                        </div>
                         {eventInstance.eventType && <div className="text-xs text-gray-500 dark:text-gray-400">{eventInstance.eventType}</div>}
-                        {eventInstance.recurrenceRule && <div className="text-xs text-blue-500 dark:text-blue-400" title={eventInstance.recurrenceRule}>(Recurring)</div>}
                       </td>
                       <td className="px-3 py-1 text-xs sm:text-sm text-gray-500 dark:text-gray-300 whitespace-normal"> 
                         {formattedDate !== 'Invalid Date' ? (
