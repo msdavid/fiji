@@ -35,12 +35,35 @@ function RegistrationFormComponent() {
   
   const [error, setError] = useState<string | null>(null);
   const [successMessage, setSuccessMessage] = useState<string | null>(null);
-  const [loading, setLoading] = useState(false); 
+  const [loading, setLoading] = useState(false);
+  const [passwordValidation, setPasswordValidation] = useState({
+    length: false,
+    uppercase: false,
+    lowercase: false,
+    number: false,
+    special: false,
+  }); 
   
   const [tokenStatus, setTokenStatus] = useState<'loading' | 'valid' | 'invalid' | 'not_found'>('loading');
   const [tokenValidationMessage, setTokenValidationMessage] = useState<string | null>('Validating invitation token...');
 
   const backendConfigured = !!process.env.NEXT_PUBLIC_BACKEND_URL;
+
+  const validatePassword = (pwd: string) => {
+    setPasswordValidation({
+      length: pwd.length >= 8,
+      uppercase: /[A-Z]/.test(pwd),
+      lowercase: /[a-z]/.test(pwd),
+      number: /\d/.test(pwd),
+      special: /[!@#$%^&*(),.?":{}|<>]/.test(pwd),
+    });
+  };
+
+  const handlePasswordChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const newPassword = e.target.value;
+    setPassword(newPassword);
+    validatePassword(newPassword);
+  };
 
   useEffect(() => {
     const tokenFromUrl = searchParams.get('token');
@@ -123,8 +146,29 @@ function RegistrationFormComponent() {
       setError('Please fill in all required fields: First Name, Last Name, Email, and Password.');
       return;
     }
-    if (password.length < 6) {
-        setError('Password must be at least 6 characters long.');
+    // Password validation
+    if (password.length < 8) {
+        setError('Password must be at least 8 characters long.');
+        return;
+    }
+    
+    if (!/[A-Z]/.test(password)) {
+        setError('Password must contain at least one uppercase letter.');
+        return;
+    }
+    
+    if (!/[a-z]/.test(password)) {
+        setError('Password must contain at least one lowercase letter.');
+        return;
+    }
+    
+    if (!/\d/.test(password)) {
+        setError('Password must contain at least one number.');
+        return;
+    }
+    
+    if (!/[!@#$%^&*(),.?":{}|<>]/.test(password)) {
+        setError('Password must contain at least one special character (!@#$%^&*(),.?":{}|<>).');
         return;
     }
 
@@ -224,8 +268,33 @@ function RegistrationFormComponent() {
             </div>
             <div>
               <label htmlFor="password" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Password <span className="text-red-500">*</span></label>
-              <input id="password" name="password" type="password" autoComplete="new-password" required value={password} onChange={(e) => setPassword(e.target.value)}
-                className="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" placeholder="Password (min. 6 characters)" />
+              <input id="password" name="password" type="password" autoComplete="new-password" required value={password} onChange={handlePasswordChange}
+                className="mt-1 appearance-none rounded-md relative block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 placeholder-gray-500 dark:placeholder-gray-400 text-gray-900 dark:text-white bg-white dark:bg-gray-700 focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 focus:z-10 sm:text-sm" placeholder="Enter a strong password" />
+              <div className="mt-1 text-xs">
+                <p className="font-medium mb-1 text-gray-700 dark:text-gray-300">Password must contain:</p>
+                <ul className="space-y-1 ml-2">
+                  <li className={`flex items-center space-x-2 ${passwordValidation.length ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    <span className="material-icons text-sm">{passwordValidation.length ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    <span>At least 8 characters</span>
+                  </li>
+                  <li className={`flex items-center space-x-2 ${passwordValidation.uppercase ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    <span className="material-icons text-sm">{passwordValidation.uppercase ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    <span>One uppercase letter (A-Z)</span>
+                  </li>
+                  <li className={`flex items-center space-x-2 ${passwordValidation.lowercase ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    <span className="material-icons text-sm">{passwordValidation.lowercase ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    <span>One lowercase letter (a-z)</span>
+                  </li>
+                  <li className={`flex items-center space-x-2 ${passwordValidation.number ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    <span className="material-icons text-sm">{passwordValidation.number ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    <span>One number (0-9)</span>
+                  </li>
+                  <li className={`flex items-center space-x-2 ${passwordValidation.special ? 'text-green-600 dark:text-green-400' : 'text-gray-500 dark:text-gray-400'}`}>
+                    <span className="material-icons text-sm">{passwordValidation.special ? 'check_circle' : 'radio_button_unchecked'}</span>
+                    <span>One special character (!@#$%^&*(),.?":{}|&lt;&gt;)</span>
+                  </li>
+                </ul>
+              </div>
             </div>
             <div>
               <label htmlFor="confirmPassword" className="block text-sm font-medium text-gray-700 dark:text-gray-300">Confirm Password <span className="text-red-500">*</span></label>
