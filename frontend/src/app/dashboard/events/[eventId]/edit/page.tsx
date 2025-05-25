@@ -21,6 +21,7 @@ interface EventFormData {
   workingGroupIds: string[]; 
   workingGroupId?: string | null; 
   recurrenceRule?: string; 
+  recurrence_rule?: string; // Allow snake_case from API response
 
   id?: string;
   createdByUserId?: string;
@@ -169,7 +170,7 @@ export default function EditEventPage() {
         organizerUserId: eventData.organizerUserId || null, 
         icon: iconToSet,
         workingGroupIds: wgIdsToSet, 
-        recurrenceRule: eventData.recurrenceRule || '', 
+        recurrenceRule: eventData.recurrence_rule || '', 
       };
 
       const storedDraftKey = `eventFormDraft-${eventId}`;
@@ -182,8 +183,9 @@ export default function EditEventPage() {
           } else if (!parsedDraft.workingGroupIds) {
             parsedDraft.workingGroupIds = [];
           }
-          draftData = { ...eventData, ...parsedDraft, venue: parsedDraft.venue || venue, icon: currentSelectedIcon, workingGroupIds: parsedDraft.workingGroupIds || wgIdsToSet, recurrenceRule: parsedDraft.recurrenceRule || eventData.recurrenceRule || '' }; 
-        } catch (e) { /* console.error("Failed to parse stored event form draft for edit:", e); */ }
+          const recurrenceRuleFromDraft = parsedDraft.recurrence_rule || parsedDraft.recurrenceRule || '';
+          draftData = { ...eventData, ...parsedDraft, venue: parsedDraft.venue || venue, icon: currentSelectedIcon, workingGroupIds: parsedDraft.workingGroupIds || wgIdsToSet, recurrenceRule: recurrenceRuleFromDraft || eventData.recurrence_rule || '' }; 
+        } catch (e) { console.error("[EditEventPage] Failed to parse stored event form draft for edit:", e); }
       }
       
       setFormData(draftData);
@@ -202,7 +204,10 @@ export default function EditEventPage() {
         setSelectedOrganizerName(null);
       }
 
-    } catch (err: any) { setError(err.message); } 
+    } catch (err: any) { 
+        console.error('[EditEventPage] Error in fetchEventData:', err);
+        setError(err.message); 
+    } 
     finally { if (initialLoad) setIsLoadingEvent(false); }
   }, [idToken, eventId, searchParams]); 
 
@@ -227,7 +232,7 @@ export default function EditEventPage() {
                     }
                     draftData = { ...parsedDraft, icon: selectedIcon }; 
                 }
-                catch (e) { /* console.error("Failed to parse stored event form draft for edit:", e); */ }
+                catch (e) { console.error("[EditEventPage] Failed to parse stored event form draft for edit (icon flow):", e); }
             }
             setFormData(prev => ({ ...prev, ...draftData })); 
             localStorage.removeItem(storedDraftKey);
@@ -244,7 +249,7 @@ export default function EditEventPage() {
                 }
                 setFormData(parsedDraft); 
             }
-            catch (e) { /* console.error("Failed to parse stored event form draft on rehydration (edit):", e); */ }
+            catch (e) { console.error("[EditEventPage] Failed to parse stored event form draft on rehydration (edit):", e); }
             if(isLoadingEvent) setIsLoadingEvent(false);
         } else if (Object.keys(formData).length <= 4 || formData.id !== eventId) { 
             fetchEventData(); 
@@ -366,6 +371,12 @@ export default function EditEventPage() {
   const handleSubmit = async (e: FormEvent) => {
     e.preventDefault();
     if (!canEditEvent) { setError("Unauthorized action."); return; }
+
+    if (!eventId || typeof eventId !== 'string' || eventId.trim() === '') {
+        setError("Event ID is missing or invalid. Cannot update.");
+        setSubmitting(false);
+        return;
+    }
     
     if (!formData.workingGroupIds || formData.workingGroupIds.length === 0) {
         setError("At least one Working Group must be selected."); return;
@@ -403,7 +414,7 @@ export default function EditEventPage() {
       if ("organizerUserId" in formData && formData.organizerUserId === null) {
         payloadToSend.organizerUserId = null;
       }
-      if (formData.recurrenceRule === "") {
+      if (formData.recurrenceRule === "") { 
         payloadToSend.recurrence_rule = null;
       }
 
@@ -438,6 +449,12 @@ export default function EditEventPage() {
 
   const handleDelete = async () => { 
     if (!idToken || !eventId || !canDeleteEvent) return;
+
+    if (!eventId || typeof eventId !== 'string' || eventId.trim() === '') {
+        setError("Event ID is missing or invalid. Cannot delete.");
+        return;
+    }
+
     if (window.confirm(`Are you sure you want to delete the event "${formData.eventName || 'this event'}"? This action cannot be undone.`)) {
       setDeleting(true); setError(null); setSuccessMessage(null);
       try {
@@ -456,7 +473,7 @@ export default function EditEventPage() {
   }
 
   const defaultInputStyle = "mt-1 block w-full px-3 py-2 border border-gray-300 dark:border-gray-600 rounded-md shadow-sm focus:outline-none focus:ring-indigo-500 focus:border-indigo-500 sm:text-sm dark:bg-gray-700 dark:text-white";
-
+  
   return (
     <main className="max-w-3xl mx-auto py-8 px-4 sm:px-6 lg:px-8"> 
       <div className="mb-6">

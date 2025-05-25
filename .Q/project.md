@@ -13,6 +13,16 @@
 - if you need to create temporary scirpts, files, etc. use the tmp directory.
 - the root directory for the backend is backend/. use direct imports from the backend directory.
 - when adding placehoders for future code, use the TODO comment format.
-- DO NOT under any circumstances modify the pyproject.toml file.- use uv to manage packages. e.g `uv add <package_name>`, `uv run <py_file>`, `uv test <package_name>`, etc.
+- DO NOT under any circumstances modify the pyproject.toml file.- use uv to manage packages. e.g `uv add <package_name>`, `uv run <py_file>`, etc.
 - always use -m for git commits. e.g `git commit -m "your message"`.
 - you must escape backtcks and other special characters in commit messages.
+
+## firestore
+- to explore collections, use the following command:
+```bash 
+ uv run backend/utils/firestore_backup_restore.py download myCollection -
+```
+- to update a collection, use the following command:
+```bash 
+<cat json data> | uv run backend/utils/firestore_backup_restore.py upload myCollection 
+```

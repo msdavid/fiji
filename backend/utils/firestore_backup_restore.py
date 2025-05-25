@@ -38,6 +38,20 @@ def initialize_firestore(service_account_key_path: str = None):
         print("Please ensure you have set up Google Application Credentials correctly.", file=sys.stderr)
         return None
 
+def list_collections(db):
+    """Lists all collections in Firestore."""
+    if not db:
+        print("Firestore client not initialized. Aborting list collections.", file=sys.stderr)
+        return
+
+    print("Available collections:", file=sys.stderr)
+    collections = db.collections()
+    if not collections:
+        print("No collections found.")
+        return
+    for collection in collections:
+        print(collection.id)
+
 def json_serial(obj):
     """JSON serializer for objects not serializable by default json code."""
     if isinstance(obj, (datetime.datetime, datetime.date)):
@@ -54,7 +68,6 @@ ISO_DATETIME_REGEX = re.compile(
 )
 
 KNOWN_DATETIME_FIELDS = {"dateTime", "endTime", "createdAt", "updatedAt", "assignmentDate", "event_instance_start_date_time", "event_instance_end_date_time"}
-
 
 def convert_known_datetime_fields(data):
     """Recursively searches for known datetime fields and converts ISO strings to datetime objects."""
@@ -80,7 +93,6 @@ def convert_known_datetime_fields(data):
         for item in data:
             convert_known_datetime_fields(item) 
     return data
-
 
 def download_collection(db, collection_name: str, output_target: str):
     """Downloads all documents from a collection to a JSON file or stdout."""
@@ -116,7 +128,6 @@ def download_collection(db, collection_name: str, output_target: str):
         print(f"Error writing to output: {e}", file=sys.stderr)
     except Exception as e:
         print(f"An unexpected error occurred during JSON serialization or writing: {e}", file=sys.stderr)
-
 
 def upload_collection(db, collection_name: str, input_source: str, merge: bool = False):
     """Uploads data from a JSON file or stdin to a collection.
@@ -198,24 +209,29 @@ def upload_collection(db, collection_name: str, input_source: str, merge: bool =
     input_name_display = "stdin" if input_source == '-' else f"'{input_source}'"
     print(f"Successfully uploaded {count} documents from {input_name_display} to '{collection_name}'.", file=sys.stderr)
 
-
 def main():
     parser = argparse.ArgumentParser(description="Firestore Collection Backup/Restore Tool")
-    parser.add_argument("action", choices=["download", "upload"], help="Action to perform: download or upload.")
-    parser.add_argument("collection", help="Name of the Firestore collection.")
-    parser.add_argument("file", help="Path to the JSON file. Use '-' for stdout if downloading, or for stdin if uploading.")
+    parser.add_argument("--list-collections", action="store_true", help="List all collections in Firestore and exit.")
+    parser.add_argument("action", nargs='?', choices=["download", "upload"], help="Action to perform: download or upload. Not required if --list-collections is used.")
+    parser.add_argument("collection", nargs='?', help="Name of the Firestore collection. Not required if --list-collections is used.")
+    parser.add_argument("file", nargs='?', help="Path to the JSON file. Use '-' for stdout if downloading, or for stdin if uploading. Not required if --list-collections is used.")
     parser.add_argument("--keyfile", help="Path to your Google Cloud service account key JSON file (optional).", default=None)
     parser.add_argument("--merge", action="store_true", help="For upload action: Merge data with existing documents instead of overwriting. Default is False (overwrite).")
 
     args = parser.parse_args()
     key_path_to_use = args.keyfile
     
-    # Redirect print statements in initialize_firestore to stderr if not already
-    # This is now handled by adding file=sys.stderr to print calls in initialize_firestore
-    
     db = initialize_firestore(service_account_key_path=key_path_to_use)
     if not db:
         sys.exit(1) # Exit if DB initialization fails
+
+    if args.list_collections:
+        list_collections(db)
+        sys.exit(0)
+
+    # Ensure action, collection, and file are provided if not listing collections
+    if not args.action or not args.collection or not args.file:
+        parser.error("the following arguments are required: action, collection, file (unless --list-collections is used)")
 
     if args.action == "download":
         download_collection(db, args.collection, args.file)

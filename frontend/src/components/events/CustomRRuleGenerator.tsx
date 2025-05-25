@@ -1,8 +1,15 @@
 'use client';
 
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect } from 'react';
 import { RRule, RRuleSet, rrulestr, Weekday, Frequency as RRuleFrequency } from 'rrule';
 import { format, parseISO, isValid as isValidDate } from 'date-fns'; 
+
+// Placeholder deepEqual for now - REPLACE WITH A ROBUST ONE from '@/lib/utils' or a library
+const deepEqual = (obj1: any, obj2: any): boolean => {
+  // Basic check, consider a more robust library for production
+  return JSON.stringify(obj1) === JSON.stringify(obj2); 
+};
+
 
 interface CustomRRuleGeneratorProps {
   value: string; 
@@ -30,34 +37,34 @@ const dayMap: { name: string, rruleConst: Weekday, value: number }[] = [
   { name: 'Sun', rruleConst: RRule.SU, value: 6 },
 ];
 
-const getValidDtStart = (eventStartDateString: string): Date => {
-  let dtStart = new Date(); 
-  if (eventStartDateString) {
-    const parsedDate = parseISO(eventStartDateString); 
-    if (isValidDate(parsedDate)) dtStart = parsedDate;
-    else {
-      const simpleParsedDate = new Date(eventStartDateString);
-      if (isValidDate(simpleParsedDate)) dtStart = simpleParsedDate;
-    }
-  }
-  return dtStart;
+const getValidDtStart = (eventStartDateString: string): Date | null => {
+  if (!eventStartDateString) return null;
+  const parsedDate = parseISO(eventStartDateString); 
+  if (isValidDate(parsedDate)) return parsedDate;
+  
+  const simpleParsedDate = new Date(eventStartDateString);
+  if (isValidDate(simpleParsedDate)) return simpleParsedDate;
+  
+  return null;
 };
 
 const rruleFreqMap: { [key: number]: FrequencyOption } = {
   [RRule.DAILY]: 'DAILY', [RRule.WEEKLY]: 'WEEKLY', [RRule.MONTHLY]: 'MONTHLY',
 };
 
-const calculateDefaultOptions = (dtStart: Date): RRuleOptionsState => {
-    const isValidDt = dtStart && isValidDate(dtStart);
-    return {
-        freq: 'WEEKLY', 
+const calculateDefaultOptions = (dtStartInput: Date | null): RRuleOptionsState => {
+    const dtStart = dtStartInput || new Date(); 
+    const isValidDt = dtStartInput && isValidDate(dtStartInput);
+    const defaultOpts = {
+        freq: 'WEEKLY' as FrequencyOption, 
         interval: 1,
         byweekday: isValidDt ? [dtStart.getDay() === 0 ? 6 : dtStart.getDay() -1] : [], 
         bymonthday: isValidDt ? dtStart.getDate() : null,
-        endCondition: 'NEVER',
+        endCondition: 'NEVER' as EndCondition,
         until: '',
         count: null,
     };
+    return defaultOpts;
 };
 
 const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
@@ -68,21 +75,34 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
   const [isMounted, setIsMounted] = useState(false);
   const [recurrenceEnabled, setRecurrenceEnabled] = useState(() => !!value); 
 
-  const [options, setOptions] = useState<RRuleOptionsState>(() => calculateDefaultOptions(getValidDtStart(eventStartDate)));
+  const [options, setOptions] = useState<RRuleOptionsState>(() => 
+    calculateDefaultOptions(getValidDtStart(eventStartDate))
+  );
 
   useEffect(() => {
     setIsMounted(true);
-  // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []); 
 
+  // Effect to parse RRULE value or set defaults based on eventStartDate and current value
   useEffect(() => {
     if (!isMounted) return;
 
     const currentDtStart = getValidDtStart(eventStartDate);
 
+    if (!currentDtStart) {
+        if (!value) { 
+            const defaultOpts = calculateDefaultOptions(null);
+            if (!deepEqual(options, defaultOpts)) setOptions(defaultOpts);
+            if (recurrenceEnabled) setRecurrenceEnabled(false);
+        }
+        return; 
+    }
+
     if (value) { 
+      let successfullyParsed = false;
+      let newOptionsState: RRuleOptionsState | null = null;
       try {
-        const ruleInput = rrulestr(value, { unfold: true });
+        const ruleInput = rrulestr(value, { unfold: true, dtstart: currentDtStart });
         let parsedRRuleOpts: RRule.Options | null = null;
 
         if (ruleInput instanceof RRule) parsedRRuleOpts = ruleInput.options;
@@ -93,32 +113,46 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
         
         if (parsedRRuleOpts) {
           const freqOption = rruleFreqMap[parsedRRuleOpts.freq as RRuleFrequency] || 'WEEKLY';
-          const currentUntil = parsedRRuleOpts.until ? new Date(parsedRRuleOpts.until) : null;
-          const newOptionsState: RRuleOptionsState = {
-            freq: freqOption,
-            interval: parsedRRuleOpts.interval || 1,
-            byweekday: parsedRRuleOpts.byweekday || [],
-            bymonthday: parsedRRuleOpts.bymonthday && parsedRRuleOpts.bymonthday.length > 0 ? parsedRRuleOpts.bymonthday[0] : null,
+          const parsedUntil = parsedRRuleOpts.until ? new Date(parsedRRuleOpts.until) : null;
+          let byweekdayNumbers: number[] = [];
+          if (parsedRRuleOpts.byweekday) {
+            if (Array.isArray(parsedRRuleOpts.byweekday)) byweekdayNumbers = parsedRRuleOpts.byweekday.map(wd => (typeof wd === 'number' ? wd : wd.weekday)).sort((a,b) => a-b);
+            else byweekdayNumbers = [typeof parsedRRuleOpts.byweekday === 'number' ? parsedRRuleOpts.byweekday : parsedRRuleOpts.byweekday.weekday];
+          }
+          let bymonthdayValue: number | null = null;
+          if (parsedRRuleOpts.bymonthday) {
+            if (Array.isArray(parsedRRuleOpts.bymonthday) && parsedRRuleOpts.bymonthday.length > 0) bymonthdayValue = parsedRRuleOpts.bymonthday[0];
+            else if (typeof parsedRRuleOpts.bymonthday === 'number') bymonthdayValue = parsedRRuleOpts.bymonthday;
+          }
+          newOptionsState = {
+            freq: freqOption, interval: parsedRRuleOpts.interval || 1, byweekday: byweekdayNumbers, bymonthday: bymonthdayValue,
             endCondition: parsedRRuleOpts.until ? 'ON_DATE' : parsedRRuleOpts.count ? 'AFTER_OCCURRENCES' : 'NEVER',
-            until: currentUntil && isValidDate(currentUntil) ? format(currentUntil, 'yyyy-MM-dd') : '',
+            until: parsedUntil && isValidDate(parsedUntil) ? format(parsedUntil, 'yyyy-MM-dd') : '',
             count: parsedRRuleOpts.count || null,
           };
-          setOptions(newOptionsState); // Directly set options based on parsed value
-          if (!recurrenceEnabled) setRecurrenceEnabled(true);
-        } else { 
-          setOptions(calculateDefaultOptions(currentDtStart)); // Use defaults if parsing fails (rrulestr returned null)
+          if (!deepEqual(options, newOptionsState)) { 
+            setOptions(newOptionsState);
+          }
+          successfullyParsed = true;
         }
-      } catch (e) { 
-        console.error("Error parsing RRULE string:", e, "Input value:", value);
-        setOptions(calculateDefaultOptions(currentDtStart)); // Use defaults on error
+      } catch (e) { console.error("[CustomRRuleGenerator] Error parsing RRULE string:", e, "Input value:", value); }
+
+      if (recurrenceEnabled !== successfullyParsed) setRecurrenceEnabled(successfullyParsed);
+      
+      if (!successfullyParsed) {
+        const defaultOpts = calculateDefaultOptions(currentDtStart);
+        if (!deepEqual(options, defaultOpts)) setOptions(defaultOpts);
+        if (value !== "" && currentDtStart) onChange(""); 
       }
     } else { 
-      setOptions(calculateDefaultOptions(currentDtStart)); // Value is empty, set defaults
+      const defaultOpts = calculateDefaultOptions(currentDtStart);
+      if (!deepEqual(options, defaultOpts)) setOptions(defaultOpts);
       if (recurrenceEnabled) setRecurrenceEnabled(false); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value, eventStartDate, isMounted]); // recurrenceEnabled is managed based on value, so not a direct dep here.
+  }, [value, eventStartDate, isMounted]); 
 
+  // Effect to generate RRULE string when options change OR recurrenceEnabled changes
   useEffect(() => {
     if (!isMounted) return;
 
@@ -128,9 +162,9 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
     }
 
     const dtStart = getValidDtStart(eventStartDate);
-    if (!isValidDate(dtStart)) {
-      if (value !== "") onChange(""); 
-      return;
+    if (!dtStart) {
+        if (value !== "") onChange(""); 
+        return;
     }
     
     if ((options.freq === 'WEEKLY' && options.byweekday.length === 0) ||
@@ -140,16 +174,15 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
       return; 
     }
 
-    const rruleOptions: RRule.Options = {
+    const rruleOptions: Partial<RRule.Options> = { 
       freq: RRule[options.freq] as RRuleFrequency,
       interval: options.interval,
-      dtstart: dtStart, byweekday: null, bymonthday: null, until: null, count: null,
-      bymonth: null, bysetpos: null, byyearday: null, byweekno: null, 
-      byhour: null, byminute: null, bysecond: null, wkst: RRule.SU, 
+      dtstart: dtStart, 
+      wkst: RRule.SU, 
     };
 
-    if (options.freq === 'WEEKLY') rruleOptions.byweekday = options.byweekday; 
-    if (options.freq === 'MONTHLY') rruleOptions.bymonthday = options.bymonthday;
+    if (options.freq === 'WEEKLY' && options.byweekday.length > 0) rruleOptions.byweekday = options.byweekday;
+    if (options.freq === 'MONTHLY' && options.bymonthday !== null) rruleOptions.bymonthday = options.bymonthday;
 
     if (options.endCondition === 'ON_DATE' && options.until) {
       const untilDate = parseISO(options.until + "T23:59:59Z"); 
@@ -159,33 +192,69 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
     }
     
     try {
-      const rule = new RRule(rruleOptions);
+      const rule = new RRule(rruleOptions as RRule.Options); 
       const newRuleString = rule.toString();
-      if (newRuleString !== value) onChange(newRuleString);
+      if (newRuleString !== value) {
+        // Check if re-parsing newRuleString results in the same options
+        // to prevent loops from minor string formatting differences.
+        let reParsedOptsFromNewString: RRuleOptionsState | null = null;
+        try {
+            const tempRuleInput = rrulestr(newRuleString, { unfold: true, dtstart: dtStart });
+            let tempParsedRRuleOpts: RRule.Options | null = null;
+            if (tempRuleInput instanceof RRule) tempParsedRRuleOpts = tempRuleInput.options;
+            else if (tempRuleInput instanceof RRuleSet) {
+                const rrules = tempRuleInput.rrules();
+                if (rrules.length > 0) tempParsedRRuleOpts = rrules[0].options;
+            }
+            if (tempParsedRRuleOpts) {
+                const freqOpt = rruleFreqMap[tempParsedRRuleOpts.freq as RRuleFrequency] || 'WEEKLY';
+                const pUntil = tempParsedRRuleOpts.until ? new Date(tempParsedRRuleOpts.until) : null;
+                let bwday: number[] = [];
+                if (tempParsedRRuleOpts.byweekday) {
+                    if (Array.isArray(tempParsedRRuleOpts.byweekday)) bwday = tempParsedRRuleOpts.byweekday.map(wd => (typeof wd === 'number' ? wd : wd.weekday)).sort((a,b) => a-b);
+                    else bwday = [typeof tempParsedRRuleOpts.byweekday === 'number' ? tempParsedRRuleOpts.byweekday : tempParsedRRuleOpts.byweekday.weekday];
+                }
+                let bmday: number | null = null;
+                if (tempParsedRRuleOpts.bymonthday) {
+                    if (Array.isArray(tempParsedRRuleOpts.bymonthday) && tempParsedRRuleOpts.bymonthday.length > 0) bmday = tempParsedRRuleOpts.bymonthday[0];
+                    else if (typeof tempParsedRRuleOpts.bymonthday === 'number') bmday = tempParsedRRuleOpts.bymonthday;
+                }
+                reParsedOptsFromNewString = {
+                    freq: freqOpt, interval: tempParsedRRuleOpts.interval || 1, byweekday: bwday, bymonthday: bmday,
+                    endCondition: tempParsedRRuleOpts.until ? 'ON_DATE' : tempParsedRRuleOpts.count ? 'AFTER_OCCURRENCES' : 'NEVER',
+                    until: pUntil && isValidDate(pUntil) ? format(pUntil, 'yyyy-MM-dd') : '',
+                    count: tempParsedRRuleOpts.count || null,
+                };
+            }
+        } catch { /* ignore parsing error of self-generated string */ }
+
+        if (!reParsedOptsFromNewString || !deepEqual(options, reParsedOptsFromNewString)) {
+            onChange(newRuleString);
+        }
+      }
     } catch (e) {
-      console.error("Error generating RRULE string:", e, "Options:", rruleOptions);
+      console.error("[CustomRRuleGenerator] Error generating RRULE string:", e, "Options:", rruleOptions);
       if (value !== "") onChange(""); 
     }
   // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [options, eventStartDate, recurrenceEnabled, isMounted]); 
+  }, [options, eventStartDate, recurrenceEnabled, isMounted]);
 
   const handleToggleRecurrence = () => {
-    const newEnabledState = !recurrenceEnabled;
-    setRecurrenceEnabled(newEnabledState);
+    setRecurrenceEnabled(prev => !prev);
   };
 
   const handleFrequencyChange = (e: React.ChangeEvent<HTMLSelectElement>) => {
     const newFreq = e.target.value as FrequencyOption;
     const dtStart = getValidDtStart(eventStartDate); 
     setOptions(() => { 
-      const freshDefaults = calculateDefaultOptions(dtStart);
+      const freshDefaults = calculateDefaultOptions(dtStart); 
       return {
         ...freshDefaults, 
         freq: newFreq,
         byweekday: newFreq === 'WEEKLY' ? freshDefaults.byweekday : [],
         bymonthday: newFreq === 'MONTHLY' ? freshDefaults.bymonthday : null,
         interval: 1, 
-        endCondition: 'NEVER',
+        endCondition: 'NEVER', 
         until: '',
         count: null,
       };
@@ -233,7 +302,7 @@ const CustomRRuleGenerator: React.FC<CustomRRuleGeneratorProps> = ({
   const smallInputClass = `${inputBaseClass} w-20 text-center`;
 
   if (!isMounted) return null;
-
+  
   return (
     <div className="p-4 border border-gray-200 dark:border-gray-700 rounded-lg bg-gray-50 dark:bg-gray-800/50 shadow">
       <div className="flex items-center mb-4">
