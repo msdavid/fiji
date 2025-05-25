@@ -61,7 +61,7 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
   const [requires2FA, setRequires2FA] = useState(false);
   const router = useRouter(); 
 
-  const complete2FA = useCallback((deviceToken?: string, expiresAt?: Date, sessionToken?: string) => {
+  const complete2FA = useCallback(async (deviceToken?: string, expiresAt?: Date, sessionToken?: string) => {
     // Store device token if provided
     if (deviceToken && expiresAt) {
       import('@/lib/deviceFingerprint').then(({ storeDeviceToken }) => {
@@ -73,10 +73,31 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (sessionToken) {
       setSessionToken(sessionToken);
       localStorage.setItem('sessionToken', sessionToken);
+      
+      // Fetch user profile with the new session token
+      try {
+        const backendUrl = process.env.NEXT_PUBLIC_BACKEND_URL;
+        if (backendUrl) {
+          const response = await fetch(`${backendUrl}/users/me`, {
+            headers: { 'Authorization': `Bearer ${sessionToken}`, 'Content-Type': 'application/json' },
+          });
+
+          if (response.ok) {
+            const profileData = await response.json();
+            setUserProfile(profileData);
+            setError(null);
+          } else {
+            console.warn('Failed to fetch user profile after 2FA completion');
+          }
+        }
+      } catch (error) {
+        console.warn('Error fetching user profile after 2FA completion:', error);
+      }
     }
     
     // Clear 2FA requirement and continue with normal flow
     setRequires2FA(false);
+    setLoading(false);
   }, []);
 
   const performLogout = useCallback(async (options?: { redirect?: boolean }) => {
@@ -116,7 +137,6 @@ export const AuthProvider = ({ children }: { children: ReactNode }) => {
     if (storedSessionToken) {
       setSessionToken(storedSessionToken);
     }
-
     const unsubscribe = auth.onIdTokenChanged(
       async (currentUser) => {
         setLoading(true); // Start loading for any auth state change

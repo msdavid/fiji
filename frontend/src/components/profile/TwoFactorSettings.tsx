@@ -84,6 +84,14 @@ export default function TwoFactorSettings() {
 
       // Remove the device from the list
       setTrustedDevices(devices => devices.filter(device => device.id !== deviceId));
+      
+      // Clear session token to force re-authentication on next page load
+      localStorage.removeItem('sessionToken');
+      
+      // Clear device token as well since the device is no longer trusted
+      import('@/lib/deviceFingerprint').then(({ clearDeviceToken }) => {
+        clearDeviceToken();
+      });
     } catch (err: any) {
       console.error('Error revoking device:', err);
       setError(err.message || 'Failed to revoke device trust');
